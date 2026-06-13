@@ -17,8 +17,7 @@ body { margin:0; font-family:-apple-system,"Hiragino Sans","Meiryo",sans-serif;
   padding-top:max(14px,env(safe-area-inset-top)); flex-shrink:0; }
 #app-title { margin:0 0 10px; font-size:16px; font-weight:700; letter-spacing:.04em;
   display:flex; align-items:center; justify-content:space-between; }
-#save-btn { background:#66BB6A; color:#fff; border:none; border-radius:8px;
-  padding:5px 12px; font-size:12px; cursor:pointer; font-weight:700; }
+#save-indicator { font-size:11px; color:rgba(255,255,255,.5); letter-spacing:.02em; }
 #tabs { display:flex; }
 .tab-btn { padding:9px 12px; border:none; background:none; cursor:pointer;
   color:rgba(255,255,255,.4); font-weight:400; font-size:13px;
@@ -136,7 +135,7 @@ textarea.field-input { height:70px; resize:vertical; }
   <div id="header">
     <p id="app-title">
       📋 週間トラッカー
-      <button id="save-btn">💾 保存</button>
+      <span id="save-indicator"></span>
     </p>
     <div id="tabs">
       <button class="tab-btn active" data-tab="schedule">リスト</button>
@@ -146,9 +145,9 @@ textarea.field-input { height:70px; resize:vertical; }
     </div>
   </div>
   <div id="week-nav">
-    <button class="nav-btn" id="prev-week">← 前週</button>
+    <button type="button" class="nav-btn" id="prev-week">← 前週</button>
     <span id="week-label"></span>
-    <button class="nav-btn" id="next-week">次週 →</button>
+    <button type="button" class="nav-btn" id="next-week">次週 →</button>
   </div>
   <div id="content"></div>
 </div>
@@ -197,12 +196,9 @@ textarea.field-input { height:70px; resize:vertical; }
   </div>
 </div>
 
-<div id="toast">✅ ファイルを保存しました</div>
+<div id="toast">✅ 保存しました</div>
 
 <script>
-// ── DATA (ここにデータが埋め込まれます) ──────────────────────────────────────
-var EMBEDDED = {"schedules":{},"records":{}};
-
 // ── Constants ────────────────────────────────────────────────────────────────
 const DAYS    = ["月","火","水","木","金","土","日"];
 const DAY_KEYS= ["mon","tue","wed","thu","fri","sat","sun"];
@@ -235,8 +231,8 @@ const catById  = id=>CAT_MAP[id];
 // ── State ─────────────────────────────────────────────────────────────────────
 let tab       = "schedule";
 let weekKey   = getWeekKey(new Date());
-let schedules = JSON.parse(JSON.stringify(EMBEDDED.schedules));
-let records   = JSON.parse(JSON.stringify(EMBEDDED.records));
+let schedules = JSON.parse(localStorage.getItem("wt_schedules")||"{}");
+let records   = JSON.parse(localStorage.getItem("wt_records")||"{}");
 let addCtx    = null;
 let recCtx    = null;
 let addCat    = "workout_chest";
@@ -246,11 +242,12 @@ let recRating = 0;
 function getWeekKey(date){
   const d=new Date(date); d.setHours(0,0,0,0);
   const day=d.getDay(); d.setDate(d.getDate()-(day===0?6:day-1));
-  return d.toISOString().slice(0,10);
+  const y=d.getFullYear(), m=String(d.getMonth()+1).padStart(2,"0"), dd=String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${dd}`;
 }
 function getWeekDates(wk){
-  const s=new Date(wk);
-  return DAY_KEYS.map((_,i)=>{const d=new Date(s);d.setDate(d.getDate()+i);return d;});
+  const [y,m,d]=wk.split("-").map(Number);
+  return DAY_KEYS.map((_,i)=>new Date(y,m-1,d+i));
 }
 function todayDK(){const d=new Date().getDay();return DAY_KEYS[d===0?6:d-1];}
 function timeToMin(t){const[h,m]=t.split(":").map(Number);return h*60+m;}
@@ -270,27 +267,16 @@ function starsHTML(val,interactive){
   ).join("");
 }
 
-// ── Save / Download ───────────────────────────────────────────────────────────
-document.getElementById("save-btn").addEventListener("click",saveFile);
-function saveFile(){
-  const data=JSON.stringify({schedules,records});
-  // Read the current HTML source and replace the EMBEDDED line
-  const src=document.documentElement.outerHTML;
-  const updated=src.replace(
-    /var EMBEDDED = \{.*?\};/s,
-    `var EMBEDDED = ${data};`
-  );
-  const blob=new Blob([updated],{type:"text/html;charset=utf-8"});
-  const url=URL.createObjectURL(blob);
-  const a=document.createElement("a");
-  a.href=url; a.download="tracker.html"; a.click();
-  URL.revokeObjectURL(url);
+// ── Save to localStorage ──────────────────────────────────────────────────────
+function saveData(){
+  localStorage.setItem("wt_schedules", JSON.stringify(schedules));
+  localStorage.setItem("wt_records",   JSON.stringify(records));
   showToast();
 }
 function showToast(){
   const t=document.getElementById("toast");
   t.style.display="block";
-  setTimeout(()=>t.style.display="none",2500);
+  setTimeout(()=>t.style.display="none",1800);
 }
 
 // ── Week nav ──────────────────────────────────────────────────────────────────
@@ -303,9 +289,11 @@ function renderNav(){
     (isNow?`<span class="badge">今週</span>`:"");
 }
 document.getElementById("prev-week").addEventListener("click",()=>{
-  const d=new Date(weekKey);d.setDate(d.getDate()-7);weekKey=getWeekKey(d);render();});
+  const [y,m,d]=weekKey.split("-").map(Number);
+  const dt=new Date(y,m-1,d-7);weekKey=getWeekKey(dt);render();});
 document.getElementById("next-week").addEventListener("click",()=>{
-  const d=new Date(weekKey);d.setDate(d.getDate()+7);weekKey=getWeekKey(d);render();});
+  const [y,m,d]=weekKey.split("-").map(Number);
+  const dt=new Date(y,m-1,d+7);weekKey=getWeekKey(dt);render();});
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.getElementById("tabs").addEventListener("click",e=>{
@@ -365,7 +353,7 @@ function renderList(){
       }
       if(tab==="schedule"){
         const db=el("button","del-btn","✕");
-        db.onclick=()=>{ws[dk].splice(ei,1);schedules[weekKey]=ws;render();};
+        db.onclick=()=>{ws[dk].splice(ei,1);schedules[weekKey]=ws;saveData();render();};
         row.appendChild(db);
       }
       card.appendChild(row);
@@ -557,7 +545,7 @@ document.getElementById("add-save").onclick=()=>{
   schedules[weekKey][dk].push({cat:addCat,time,endTime,label,id:Date.now()});
   schedules[weekKey][dk].sort((a,b)=>a.time.localeCompare(b.time));
   document.getElementById("add-modal").style.display="none";
-  render();
+  saveData();render();
 };
 
 // ── Record Modal ──────────────────────────────────────────────────────────────
@@ -590,7 +578,7 @@ function toggleDone(dk,entry){
   if(!records[weekKey])records[weekKey]={};
   if(!records[weekKey][dk])records[weekKey][dk]={};
   records[weekKey][dk][entry.cat]={...rec,done:!rec.done};
-  render();
+  saveData();render();
 }
 document.getElementById("rec-cancel").onclick=()=>document.getElementById("rec-modal").style.display="none";
 document.getElementById("rec-modal").addEventListener("click",e=>{if(e.target===e.currentTarget)e.currentTarget.style.display="none";});
@@ -606,7 +594,7 @@ document.getElementById("rec-save").onclick=()=>{
     rating:recRating,
   };
   document.getElementById("rec-modal").style.display="none";
-  render();
+  saveData();render();
 };
 
 // ── Render ────────────────────────────────────────────────────────────────────
