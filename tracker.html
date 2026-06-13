@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="週間トラッカー">
+<title>週間トラッカー</title>
+<style>
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+body { margin:0; font-family:-apple-system,"Hiragino Sans","Meiryo",sans-serif;
+  background:#F7F8FA; color:#1A1D23; height:100dvh; overflow:hidden; }
+#app { display:flex; flex-direction:column; height:100dvh; }
+
+#header { background:#1A1D23; color:#fff; padding:14px 16px 0;
+  padding-top:max(14px,env(safe-area-inset-top)); flex-shrink:0; }
+#app-title { margin:0 0 10px; font-size:16px; font-weight:700; letter-spacing:.04em;
+  display:flex; align-items:center; justify-content:space-between; }
+#save-btn { background:#66BB6A; color:#fff; border:none; border-radius:8px;
+  padding:5px 12px; font-size:12px; cursor:pointer; font-weight:700; }
+#tabs { display:flex; }
+.tab-btn { padding:9px 12px; border:none; background:none; cursor:pointer;
+  color:rgba(255,255,255,.4); font-weight:400; font-size:13px;
+  border-bottom:2px solid transparent; }
+.tab-btn.active { color:#fff; font-weight:700; border-bottom-color:#66BB6A; }
+
+#week-nav { display:flex; align-items:center; justify-content:space-between;
+  padding:10px 14px; background:#fff; border-bottom:1px solid #EAEAEA; flex-shrink:0; }
+.nav-btn { background:none; border:1px solid #DDD; border-radius:6px;
+  padding:5px 10px; cursor:pointer; font-size:13px; color:#555; }
+#week-label { font-weight:600; font-size:13px; color:#333; }
+.badge { font-size:10px; background:#66BB6A; color:#fff;
+  border-radius:10px; padding:1px 7px; margin-left:6px; }
+
+#content { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+
+/* List */
+#list-view { flex:1; overflow-y:auto; padding:12px; }
+.day-card { background:#fff; border-radius:10px; margin-bottom:10px;
+  border:1px solid #EAEAEA; overflow:hidden; }
+.day-card.today { border:2px solid #66BB6A; }
+.day-header { display:flex; align-items:center; justify-content:space-between;
+  padding:8px 12px; background:#FAFAFA; border-bottom:1px solid #EAEAEA; }
+.day-card.today .day-header { background:#E8F5E9; }
+.day-label { font-weight:700; font-size:13px; }
+.day-date { font-weight:400; font-size:11px; color:#999; margin-left:5px; }
+.today-badge { font-size:10px; background:#66BB6A; color:#fff;
+  border-radius:8px; padding:1px 6px; margin-left:6px; }
+.add-btn { background:#66BB6A; color:#fff; border:none;
+  border-radius:6px; padding:4px 11px; font-size:12px; cursor:pointer; }
+.entry-row { display:flex; align-items:center; padding:8px 12px;
+  border-bottom:1px solid #F5F5F5; gap:7px; }
+.entry-row:last-child { border-bottom:none; }
+.entry-time { font-size:11px; color:#aaa; min-width:80px; flex-shrink:0; }
+.entry-name { flex:1; font-size:13px; font-weight:500;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.entry-name.done { text-decoration:line-through; color:#bbb; }
+.cat-chip { font-size:10px; border-radius:8px; padding:2px 7px;
+  white-space:nowrap; flex-shrink:0; }
+.rec-btn { background:none; border:1px solid #DDD; border-radius:6px;
+  padding:3px 8px; font-size:11px; cursor:pointer; color:#666; flex-shrink:0; }
+.del-btn { background:none; border:none; color:#ddd; cursor:pointer;
+  font-size:18px; flex-shrink:0; line-height:1; padding:0 2px; }
+.empty-day { padding:10px 14px; font-size:12px; color:#bbb; margin:0; }
+.stars-r { display:inline-flex; gap:2px; flex-shrink:0; font-size:13px; }
+
+/* Calendar */
+#cal-view { flex:1; overflow:hidden; display:flex; flex-direction:column; }
+#cal-header { display:flex; background:#fff; border-bottom:1px solid #EAEAEA;
+  flex-shrink:0; padding-left:36px; }
+.cal-day-hdr { flex:1; text-align:center; padding:5px 1px;
+  font-size:11px; color:#555; line-height:1.4; }
+.cal-day-hdr.today { color:#66BB6A; font-weight:700; }
+#cal-scroll { flex:1; overflow-y:auto; }
+#cal-grid { display:flex; }
+#hour-col { width:36px; flex-shrink:0; }
+.hour-cell { height:48px; border-bottom:1px solid #F0F0F0; display:flex;
+  align-items:flex-start; justify-content:flex-end; padding:2px 4px 0;
+  font-size:10px; color:#bbb; }
+.cal-day-col { flex:1; position:relative; border-left:1px solid #F0F0F0;
+  min-height:1152px; }
+.cal-day-col.today-col { background:rgba(102,187,106,.03); }
+.cal-slot { height:48px; border-bottom:1px solid #F0F0F0; cursor:pointer; }
+.cal-event { position:absolute; left:1px; right:1px; border-radius:4px;
+  padding:2px 4px; overflow:hidden; cursor:pointer; opacity:.9;
+  box-shadow:0 1px 3px rgba(0,0,0,.15); }
+.cal-event-title { font-size:10px; color:#fff; font-weight:700;
+  line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.cal-event-time { font-size:9px; color:rgba(255,255,255,.85); }
+
+/* Stats */
+#stats-view { flex:1; overflow-y:auto; padding:12px; }
+.stats-card { background:#fff; border-radius:10px; padding:14px;
+  margin-bottom:10px; border:1px solid #EAEAEA; }
+.progress-bar { background:#F0F0F0; border-radius:99px; height:6px;
+  margin-bottom:8px; overflow:hidden; }
+.progress-fill { height:100%; border-radius:99px; }
+.stats-meta { display:flex; gap:14px; font-size:11px; color:#888; }
+.part-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:3px; }
+
+/* Modals */
+.overlay { position:fixed; inset:0; background:rgba(0,0,0,.45);
+  display:flex; align-items:center; justify-content:center; z-index:100; }
+.modal-box { background:#fff; border-radius:12px; padding:22px; width:340px;
+  max-width:93vw; box-shadow:0 8px 32px rgba(0,0,0,.18);
+  max-height:90dvh; overflow-y:auto; }
+.modal-title { margin:0 0 14px; font-size:15px; font-weight:700; }
+.modal-sub { font-size:12px; color:#888; margin:0 0 14px; }
+.field-label { font-size:11px; color:#777; margin-bottom:4px; display:block; }
+.field-input { width:100%; border:1px solid #DDD; border-radius:6px;
+  padding:8px 10px; font-size:13px; margin-bottom:10px; font-family:inherit; }
+textarea.field-input { height:70px; resize:vertical; }
+.chip-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.chip { padding:4px 10px; border-radius:20px; font-size:12px; cursor:pointer;
+  border:1.5px solid; }
+.part-row { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px; }
+.part-chip { padding:3px 10px; border-radius:20px; font-size:12px;
+  cursor:pointer; border:1.5px solid; }
+.btn-row { display:flex; gap:8px; margin-top:14px; }
+.btn { flex:1; padding:9px; border:none; border-radius:7px;
+  cursor:pointer; font-size:14px; font-family:inherit; }
+.btn-primary { background:#1A1D23; color:#fff; font-weight:700; }
+.btn-secondary { background:#F0F0F0; color:#444; }
+.check-row { display:flex; align-items:center; gap:7px; font-size:13px; cursor:pointer; }
+.check-row input { width:16px; height:16px; accent-color:#66BB6A; cursor:pointer; }
+
+/* Save toast */
+#toast { position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+  background:#1A1D23; color:#fff; border-radius:10px; padding:10px 20px;
+  font-size:13px; z-index:200; display:none; box-shadow:0 4px 16px rgba(0,0,0,.3); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="header">
+    <p id="app-title">
+      📋 週間トラッカー
+      <button id="save-btn">💾 保存</button>
+    </p>
+    <div id="tabs">
+      <button class="tab-btn active" data-tab="schedule">リスト</button>
+      <button class="tab-btn" data-tab="calendar">カレンダー</button>
+      <button class="tab-btn" data-tab="log">成果記録</button>
+      <button class="tab-btn" data-tab="stats">統計</button>
+    </div>
+  </div>
+  <div id="week-nav">
+    <button class="nav-btn" id="prev-week">← 前週</button>
+    <span id="week-label"></span>
+    <button class="nav-btn" id="next-week">次週 →</button>
+  </div>
+  <div id="content"></div>
+</div>
+
+<!-- Add Modal -->
+<div class="overlay" id="add-modal" style="display:none">
+  <div class="modal-box">
+    <h3 class="modal-title" id="add-modal-title"></h3>
+    <span class="field-label">カテゴリ</span>
+    <div class="chip-row" id="cat-chips"></div>
+    <div id="part-section" style="display:none">
+      <span class="field-label">部位</span>
+      <div class="part-row" id="part-chips"></div>
+    </div>
+    <span class="field-label">開始時間</span>
+    <input type="time" class="field-input" id="add-time" value="07:00">
+    <span class="field-label">終了時間</span>
+    <input type="time" class="field-input" id="add-endtime" value="08:00">
+    <span class="field-label">メモ（任意）</span>
+    <input type="text" class="field-input" id="add-label" placeholder="例：デッドリフト3set">
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="add-cancel">キャンセル</button>
+      <button class="btn btn-primary" id="add-save">追加</button>
+    </div>
+  </div>
+</div>
+
+<!-- Record Modal -->
+<div class="overlay" id="rec-modal" style="display:none">
+  <div class="modal-box">
+    <h3 class="modal-title" id="rec-title"></h3>
+    <p class="modal-sub" id="rec-sub"></p>
+    <span class="field-label">実施時間（分）</span>
+    <input type="number" min="0" class="field-input" id="rec-duration" placeholder="例: 45">
+    <span class="field-label">評価</span>
+    <div id="rec-stars" style="margin-bottom:12px;font-size:22px;display:flex;gap:4px"></div>
+    <span class="field-label">メモ</span>
+    <textarea class="field-input" id="rec-note" placeholder="内容・気づき・体調など…"></textarea>
+    <label class="check-row">
+      <input type="checkbox" id="rec-done"> 完了としてマーク
+    </label>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="rec-cancel">キャンセル</button>
+      <button class="btn btn-primary" id="rec-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast">✅ ファイルを保存しました</div>
+
+<script>
+// ── DATA (ここにデータが埋め込まれます) ──────────────────────────────────────
+var EMBEDDED = {"schedules":{},"records":{}};
+
+// ── Constants ────────────────────────────────────────────────────────────────
+const DAYS    = ["月","火","水","木","金","土","日"];
+const DAY_KEYS= ["mon","tue","wed","thu","fri","sat","sun"];
+const HOUR_H  = 48;
+
+const WORKOUT_PARTS = [
+  {id:"chest",    label:"胸",   color:"#EF5350"},
+  {id:"back",     label:"背中", color:"#E53935"},
+  {id:"shoulder", label:"肩",   color:"#F44336"},
+  {id:"arm",      label:"腕",   color:"#EF9A9A"},
+  {id:"leg",      label:"脚",   color:"#C62828"},
+  {id:"core",     label:"体幹", color:"#B71C1C"},
+  {id:"full",     label:"全身", color:"#FF5252"},
+];
+const BASE_CATS = [
+  {id:"instrument",label:"楽器練習",icon:"🎵",color:"#7986CB",light:"#E8EAF6"},
+  {id:"cooking",   label:"自炊",    icon:"🍳",color:"#66BB6A",light:"#E8F5E9"},
+  {id:"medicine",  label:"専門医勉強",icon:"🧠",color:"#FFA726",light:"#FFF3E0"},
+  {id:"english",   label:"英語学習",icon:"🌐",color:"#26C6DA",light:"#E0F7FA"},
+];
+const WORKOUT_CATS = WORKOUT_PARTS.map(p=>({
+  id:`workout_${p.id}`,label:`筋トレ（${p.label}）`,icon:"💪",
+  color:p.color,light:"#FFEBEE",part:p,
+}));
+const ALL_CATS = [...WORKOUT_CATS,...BASE_CATS];
+const CAT_MAP  = {};
+ALL_CATS.forEach(c=>CAT_MAP[c.id]=c);
+const catById  = id=>CAT_MAP[id];
+
+// ── State ─────────────────────────────────────────────────────────────────────
+let tab       = "schedule";
+let weekKey   = getWeekKey(new Date());
+let schedules = JSON.parse(JSON.stringify(EMBEDDED.schedules));
+let records   = JSON.parse(JSON.stringify(EMBEDDED.records));
+let addCtx    = null;
+let recCtx    = null;
+let addCat    = "workout_chest";
+let recRating = 0;
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getWeekKey(date){
+  const d=new Date(date); d.setHours(0,0,0,0);
+  const day=d.getDay(); d.setDate(d.getDate()-(day===0?6:day-1));
+  return d.toISOString().slice(0,10);
+}
+function getWeekDates(wk){
+  const s=new Date(wk);
+  return DAY_KEYS.map((_,i)=>{const d=new Date(s);d.setDate(d.getDate()+i);return d;});
+}
+function todayDK(){const d=new Date().getDay();return DAY_KEYS[d===0?6:d-1];}
+function timeToMin(t){const[h,m]=t.split(":").map(Number);return h*60+m;}
+function emptyWeek(){const w={};DAY_KEYS.forEach(d=>w[d]=[]);return w;}
+function getRec(dk,cat){return records?.[weekKey]?.[dk]?.[cat]||{done:false,note:"",duration:"",rating:0};}
+
+function el(tag,cls,html){
+  const e=document.createElement(tag);
+  if(cls)e.className=cls;
+  if(html!==undefined)e.innerHTML=html;
+  return e;
+}
+function starsHTML(val,interactive){
+  return[1,2,3,4,5].map(n=>
+    `<span style="color:${n<=val?"#FFA726":"#ccc"};cursor:${interactive?"pointer":"default"};user-select:none"
+      ${interactive?`data-n="${n}"`:""}>${n<=val?"★":"☆"}</span>`
+  ).join("");
+}
+
+// ── Save / Download ───────────────────────────────────────────────────────────
+document.getElementById("save-btn").addEventListener("click",saveFile);
+function saveFile(){
+  const data=JSON.stringify({schedules,records});
+  // Read the current HTML source and replace the EMBEDDED line
+  const src=document.documentElement.outerHTML;
+  const updated=src.replace(
+    /var EMBEDDED = \{.*?\};/s,
+    `var EMBEDDED = ${data};`
+  );
+  const blob=new Blob([updated],{type:"text/html;charset=utf-8"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement("a");
+  a.href=url; a.download="tracker.html"; a.click();
+  URL.revokeObjectURL(url);
+  showToast();
+}
+function showToast(){
+  const t=document.getElementById("toast");
+  t.style.display="block";
+  setTimeout(()=>t.style.display="none",2500);
+}
+
+// ── Week nav ──────────────────────────────────────────────────────────────────
+function renderNav(){
+  const dates=getWeekDates(weekKey);
+  const isNow=weekKey===getWeekKey(new Date());
+  document.getElementById("week-label").innerHTML=
+    `${dates[0].getMonth()+1}/${dates[0].getDate()} 〜 `+
+    `${dates[6].getMonth()+1}/${dates[6].getDate()}`+
+    (isNow?`<span class="badge">今週</span>`:"");
+}
+document.getElementById("prev-week").addEventListener("click",()=>{
+  const d=new Date(weekKey);d.setDate(d.getDate()-7);weekKey=getWeekKey(d);render();});
+document.getElementById("next-week").addEventListener("click",()=>{
+  const d=new Date(weekKey);d.setDate(d.getDate()+7);weekKey=getWeekKey(d);render();});
+
+// ── Tabs ──────────────────────────────────────────────────────────────────────
+document.getElementById("tabs").addEventListener("click",e=>{
+  const b=e.target.closest(".tab-btn");if(!b)return;
+  tab=b.dataset.tab;
+  document.querySelectorAll(".tab-btn").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));
+  render();
+});
+
+// ── List View ─────────────────────────────────────────────────────────────────
+function renderList(){
+  const cont=document.getElementById("content");
+  cont.innerHTML="";
+  const wrap=el("div","");wrap.id="list-view";
+  const ws=schedules[weekKey]||emptyWeek();
+  const dates=getWeekDates(weekKey);
+  const isNow=weekKey===getWeekKey(new Date());
+  const tdk=todayDK();
+
+  DAY_KEYS.forEach((dk,di)=>{
+    const isToday=isNow&&dk===tdk;
+    const entries=ws[dk]||[];
+    const card=el("div","day-card"+(isToday?" today":""));
+
+    const hdr=el("div","day-header");
+    hdr.appendChild(el("span","day-label",
+      DAYS[di]+`<span class="day-date">${dates[di].getMonth()+1}/${dates[di].getDate()}</span>`+
+      (isToday?`<span class="today-badge">今日</span>`:"")));
+    const ab=el("button","add-btn","＋ 予定");
+    ab.onclick=()=>openAdd(di,dk);
+    hdr.appendChild(ab);
+    card.appendChild(hdr);
+
+    if(!entries.length){card.appendChild(el("p","empty-day","予定なし"));}
+    else entries.forEach((e,ei)=>{
+      const c=catById(e.cat);
+      const rec=getRec(dk,e.cat);
+      const row=el("div","entry-row");
+
+      if(tab==="log"){
+        const cb=document.createElement("input");
+        cb.type="checkbox";cb.checked=rec.done;
+        cb.style.cssText=`accent-color:${c?.color||"#999"};width:16px;height:16px;cursor:pointer;flex-shrink:0`;
+        cb.onchange=()=>toggleDone(dk,e);
+        row.appendChild(cb);
+      }
+      row.appendChild(el("span","",c?.icon||""));
+      row.appendChild(el("span","entry-time",e.time+(e.endTime?`〜${e.endTime}`:"")));
+      row.appendChild(el("span","entry-name"+(tab==="log"&&rec.done?" done":""),e.label||c?.label||""));
+      const chip=el("span","cat-chip",c?.label||"");
+      chip.style.background=c?.light||"#eee";chip.style.color=c?.color||"#333";
+      row.appendChild(chip);
+      if(tab==="log"){
+        if(rec.rating>0)row.appendChild(el("span","stars-r",starsHTML(rec.rating,false)));
+        const rb=el("button","rec-btn",rec.note||rec.duration?"編集":"記録");
+        rb.onclick=()=>openRec(di,dk,e);row.appendChild(rb);
+      }
+      if(tab==="schedule"){
+        const db=el("button","del-btn","✕");
+        db.onclick=()=>{ws[dk].splice(ei,1);schedules[weekKey]=ws;render();};
+        row.appendChild(db);
+      }
+      card.appendChild(row);
+    });
+    wrap.appendChild(card);
+  });
+  cont.appendChild(wrap);
+}
+
+// ── Calendar View ─────────────────────────────────────────────────────────────
+function renderCalendar(){
+  const cont=document.getElementById("content");
+  cont.innerHTML="";
+  const ws=schedules[weekKey]||emptyWeek();
+  const dates=getWeekDates(weekKey);
+  const isNow=weekKey===getWeekKey(new Date());
+  const tdk=todayDK();
+
+  const calWrap=el("div","");calWrap.id="cal-view";
+
+  const calHdr=el("div","");calHdr.id="cal-header";
+  DAY_KEYS.forEach((dk,di)=>{
+    const isToday=isNow&&dk===tdk;
+    calHdr.appendChild(el("div","cal-day-hdr"+(isToday?" today":""),
+      `${DAYS[di]}<br><span style="font-size:10px">${dates[di].getMonth()+1}/${dates[di].getDate()}</span>`));
+  });
+  calWrap.appendChild(calHdr);
+
+  const scroll=el("div","");scroll.id="cal-scroll";
+  const grid=el("div","");grid.id="cal-grid";
+  const hcol=el("div","");hcol.id="hour-col";
+  for(let h=0;h<24;h++)hcol.appendChild(el("div","hour-cell",String(h).padStart(2,"0")));
+  grid.appendChild(hcol);
+
+  DAY_KEYS.forEach((dk,di)=>{
+    const isToday=isNow&&dk===tdk;
+    const col=el("div","cal-day-col"+(isToday?" today-col":""));
+    for(let h=0;h<24;h++){
+      const s=el("div","cal-slot");
+      s.addEventListener("click",()=>openAdd(di,dk,h));
+      col.appendChild(s);
+    }
+    (ws[dk]||[]).forEach((e)=>{
+      const c=catById(e.cat);
+      const sm=timeToMin(e.time);
+      const em=e.endTime?timeToMin(e.endTime):sm+60;
+      const dur=Math.max(em-sm,15);
+      const top=sm/60*HOUR_H, height=Math.max(dur/60*HOUR_H-2,20);
+      const ev=el("div","cal-event");
+      ev.style.cssText=`top:${top}px;height:${height}px;background:${c?.color||"#999"}`;
+      ev.innerHTML=`<div class="cal-event-title">${c?.icon||""} ${e.label||c?.label||""}</div>`+
+        (height>28?`<div class="cal-event-time">${e.time}${e.endTime?"〜"+e.endTime:""}</div>`:"");
+      ev.addEventListener("click",evt=>{evt.stopPropagation();openRec(di,dk,e);});
+      col.appendChild(ev);
+    });
+    grid.appendChild(col);
+  });
+  scroll.appendChild(grid);
+  calWrap.appendChild(scroll);
+  cont.appendChild(calWrap);
+  scroll.scrollTop=6*HOUR_H;
+}
+
+// ── Stats View ────────────────────────────────────────────────────────────────
+function renderStats(){
+  const cont=document.getElementById("content");
+  cont.innerHTML="";
+  const wrap=el("div","");wrap.id="stats-view";
+  const st={};
+  ALL_CATS.forEach(c=>st[c.id]={done:0,total:0,totalMin:0,ratings:[]});
+  Object.keys(records).forEach(wk=>{
+    const sc=schedules[wk]||{};
+    DAY_KEYS.forEach(dk=>{
+      (sc[dk]||[]).forEach(e=>{
+        if(!st[e.cat])return;
+        st[e.cat].total++;
+        const rec=records[wk]?.[dk]?.[e.cat];
+        if(rec?.done){
+          st[e.cat].done++;
+          if(rec.duration)st[e.cat].totalMin+=parseInt(rec.duration)||0;
+          if(rec.rating)st[e.cat].ratings.push(rec.rating);
+        }
+      });
+    });
+  });
+
+  wrap.appendChild(el("p","",`<span style="font-size:12px;color:#888">累計（全週間）</span>`));
+
+  const wT=WORKOUT_CATS.reduce((a,c)=>a+st[c.id].total,0);
+  const wD=WORKOUT_CATS.reduce((a,c)=>a+st[c.id].done,0);
+  const wR=wT?Math.round(wD/wT*100):0;
+  const wc=el("div","stats-card");
+  wc.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    <span style="font-size:18px">💪</span>
+    <span style="font-weight:700;font-size:14px">筋トレ（合計）</span>
+    <span style="margin-left:auto;font-size:13px;color:#E57373;font-weight:700">${wR}%</span>
+  </div>
+  <div class="progress-bar"><div class="progress-fill" style="width:${wR}%;background:#E57373"></div></div>
+  <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:#666;margin-top:6px">
+    ${WORKOUT_PARTS.map(p=>{
+      const s=st[`workout_${p.id}`];
+      return s.total>0?`<span><span class="part-dot" style="background:${p.color}"></span>${p.label}: ${s.done}/${s.total}回</span>`:"";
+    }).join("")||'<span style="color:#ccc">記録なし</span>'}
+  </div>`;
+  wrap.appendChild(wc);
+
+  BASE_CATS.forEach(c=>{
+    const s=st[c.id];
+    const rate=s.total?Math.round(s.done/s.total*100):0;
+    const avg=s.ratings.length?(s.ratings.reduce((a,b)=>a+b,0)/s.ratings.length).toFixed(1):"—";
+    const card=el("div","stats-card");
+    card.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <span style="font-size:18px">${c.icon}</span>
+      <span style="font-weight:700;font-size:14px">${c.label}</span>
+      <span style="margin-left:auto;font-size:13px;color:${c.color};font-weight:700">${rate}%</span>
+    </div>
+    <div class="progress-bar"><div class="progress-fill" style="width:${rate}%;background:${c.color}"></div></div>
+    <div class="stats-meta">
+      <span>完了 ${s.done}/${s.total} 回</span>
+      ${s.totalMin>0?`<span>合計 ${s.totalMin} 分</span>`:""}
+      <span>平均評価 ${avg}</span>
+    </div>`;
+    wrap.appendChild(card);
+  });
+  cont.appendChild(wrap);
+}
+
+// ── Add Modal ─────────────────────────────────────────────────────────────────
+function buildCatChips(){
+  const row=document.getElementById("cat-chips");row.innerHTML="";
+  const isW=addCat.startsWith("workout_");
+  const wb=el("button","chip");
+  wb.style.cssText=`border-color:#E57373;background:${isW?"#E57373":"#fff"};color:${isW?"#fff":"#E57373"};font-weight:${isW?700:400}`;
+  wb.textContent="💪 筋トレ";
+  wb.onclick=()=>{addCat=`workout_${addCat.startsWith("workout_")?addCat.replace("workout_",""):"chest"}`;buildCatChips();buildPartChips();};
+  row.appendChild(wb);
+  BASE_CATS.forEach(c=>{
+    const active=addCat===c.id;
+    const b=el("button","chip");
+    b.style.cssText=`border-color:${c.color};background:${active?c.color:"#fff"};color:${active?"#fff":c.color};font-weight:${active?700:400}`;
+    b.textContent=c.icon+" "+c.label;
+    b.onclick=()=>{addCat=c.id;buildCatChips();buildPartChips();};
+    row.appendChild(b);
+  });
+}
+function buildPartChips(){
+  const sec=document.getElementById("part-section");
+  const isW=addCat.startsWith("workout_");
+  sec.style.display=isW?"":"none";
+  if(!isW)return;
+  const row=document.getElementById("part-chips");row.innerHTML="";
+  const cur=addCat.replace("workout_","");
+  WORKOUT_PARTS.forEach(p=>{
+    const a=cur===p.id;
+    const b=el("button","part-chip");
+    b.style.cssText=`border-color:${p.color};background:${a?p.color:"#fff"};color:${a?"#fff":p.color};font-weight:${a?700:400}`;
+    b.textContent=p.label;
+    b.onclick=()=>{addCat=`workout_${p.id}`;buildPartChips();};
+    row.appendChild(b);
+  });
+}
+function openAdd(dayIdx,dayKey,hour){
+  addCtx={dayIdx,dayKey};addCat="workout_chest";
+  document.getElementById("add-modal-title").textContent=DAYS[dayIdx]+"曜日に予定を追加";
+  const hh=hour!==undefined?String(hour).padStart(2,"0"):"07";
+  const eh=hour!==undefined?String(Math.min(hour+1,23)).padStart(2,"0"):"08";
+  document.getElementById("add-time").value=`${hh}:00`;
+  document.getElementById("add-endtime").value=`${eh}:00`;
+  document.getElementById("add-label").value="";
+  buildCatChips();buildPartChips();
+  document.getElementById("add-modal").style.display="flex";
+}
+document.getElementById("add-time").addEventListener("change",e=>{
+  const t=e.target.value;if(!t)return;
+  const[h,m]=t.split(":").map(Number);
+  const eh=(h+1)%24;
+  document.getElementById("add-endtime").value=String(eh).padStart(2,"0")+":"+String(m).padStart(2,"0");
+});
+document.getElementById("add-cancel").onclick=()=>document.getElementById("add-modal").style.display="none";
+document.getElementById("add-modal").addEventListener("click",e=>{if(e.target===e.currentTarget)e.currentTarget.style.display="none";});
+document.getElementById("add-save").onclick=()=>{
+  if(!addCtx)return;
+  const time=document.getElementById("add-time").value;
+  const endTime=document.getElementById("add-endtime").value;
+  const label=document.getElementById("add-label").value.trim();
+  if(!time)return;
+  if(!schedules[weekKey])schedules[weekKey]=emptyWeek();
+  const dk=addCtx.dayKey;
+  schedules[weekKey][dk].push({cat:addCat,time,endTime,label,id:Date.now()});
+  schedules[weekKey][dk].sort((a,b)=>a.time.localeCompare(b.time));
+  document.getElementById("add-modal").style.display="none";
+  render();
+};
+
+// ── Record Modal ──────────────────────────────────────────────────────────────
+function renderRecStars(){
+  const el=document.getElementById("rec-stars");
+  el.innerHTML=starsHTML(recRating,true);
+  el.querySelectorAll("span").forEach(s=>{
+    s.addEventListener("click",()=>{
+      const n=parseInt(s.dataset.n);
+      recRating=recRating===n?0:n;
+      renderRecStars();
+    });
+  });
+}
+function openRec(dayIdx,dayKey,entry){
+  recCtx={dayIdx,dayKey,entry};
+  const c=catById(entry.cat);
+  const rec=getRec(dayKey,entry.cat);
+  recRating=rec.rating||0;
+  document.getElementById("rec-title").textContent=(c?.icon||"")+" "+(entry.label||c?.label||"");
+  document.getElementById("rec-sub").textContent=DAYS[dayIdx]+" "+entry.time+(entry.endTime?"〜"+entry.endTime:"");
+  document.getElementById("rec-duration").value=rec.duration||"";
+  document.getElementById("rec-note").value=rec.note||"";
+  document.getElementById("rec-done").checked=rec.done||false;
+  renderRecStars();
+  document.getElementById("rec-modal").style.display="flex";
+}
+function toggleDone(dk,entry){
+  const rec=getRec(dk,entry.cat);
+  if(!records[weekKey])records[weekKey]={};
+  if(!records[weekKey][dk])records[weekKey][dk]={};
+  records[weekKey][dk][entry.cat]={...rec,done:!rec.done};
+  render();
+}
+document.getElementById("rec-cancel").onclick=()=>document.getElementById("rec-modal").style.display="none";
+document.getElementById("rec-modal").addEventListener("click",e=>{if(e.target===e.currentTarget)e.currentTarget.style.display="none";});
+document.getElementById("rec-save").onclick=()=>{
+  if(!recCtx)return;
+  const{dayKey,entry}=recCtx;
+  if(!records[weekKey])records[weekKey]={};
+  if(!records[weekKey][dayKey])records[weekKey][dayKey]={};
+  records[weekKey][dayKey][entry.cat]={
+    done:document.getElementById("rec-done").checked,
+    note:document.getElementById("rec-note").value,
+    duration:document.getElementById("rec-duration").value,
+    rating:recRating,
+  };
+  document.getElementById("rec-modal").style.display="none";
+  render();
+};
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(){
+  renderNav();
+  if(tab==="calendar")renderCalendar();
+  else if(tab==="stats")renderStats();
+  else renderList();
+}
+render();
+</script>
+</body>
+</html>
