@@ -83,10 +83,16 @@ body { margin:0; font-family:-apple-system,"Hiragino Sans","Meiryo",sans-serif;
 .cal-slot { height:48px; border-bottom:1px solid #F0F0F0; cursor:pointer; }
 .cal-event { position:absolute; left:1px; right:1px; border-radius:4px;
   padding:2px 4px; overflow:hidden; cursor:pointer; opacity:.9;
-  box-shadow:0 1px 3px rgba(0,0,0,.15); }
+  box-shadow:0 1px 3px rgba(0,0,0,.15); touch-action:none; transition:box-shadow .15s; }
+.cal-event.dragging { opacity:.95; z-index:50; box-shadow:0 4px 16px rgba(0,0,0,.4);
+  outline:2px solid #fff; transition:none; }
 .cal-event-title { font-size:10px; color:#fff; font-weight:700;
   line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .cal-event-time { font-size:9px; color:rgba(255,255,255,.85); }
+#cal-scroll.no-scroll { overflow:hidden; }
+#drag-hint { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
+  background:rgba(26,29,35,.92); color:#fff; border-radius:10px; padding:8px 16px;
+  font-size:14px; font-weight:700; z-index:300; display:none; pointer-events:none; }
 
 /* Stats */
 #stats-view { flex:1; overflow-y:auto; padding:12px; }
@@ -97,6 +103,79 @@ body { margin:0; font-family:-apple-system,"Hiragino Sans","Meiryo",sans-serif;
 .progress-fill { height:100%; border-radius:99px; }
 .stats-meta { display:flex; gap:14px; font-size:11px; color:#888; }
 .part-dot { width:8px; height:8px; border-radius:50%; display:inline-block; margin-right:3px; }
+/* Period switcher */
+.mode-toggle { display:flex; background:#ECECEC; border-radius:8px; padding:3px; margin-bottom:10px; }
+.mode-toggle button { flex:1; border:none; background:none; padding:7px; font-size:13px;
+  border-radius:6px; cursor:pointer; color:#777; font-family:inherit; }
+.mode-toggle button.active { background:#fff; color:#1A1D23; font-weight:700;
+  box-shadow:0 1px 3px rgba(0,0,0,.12); }
+.period-nav { display:flex; align-items:center; justify-content:space-between;
+  background:#fff; border:1px solid #EAEAEA; border-radius:8px; padding:8px 12px; margin-bottom:12px; }
+.period-nav button { background:none; border:1px solid #DDD; border-radius:6px;
+  padding:4px 12px; cursor:pointer; font-size:14px; color:#555; font-family:inherit; }
+.period-nav button:disabled { opacity:.3; cursor:default; }
+.period-label { font-weight:700; font-size:14px; }
+/* Bar chart */
+.bar-chart { display:flex; align-items:flex-end; gap:8px; height:140px;
+  padding:8px 4px 0; margin-bottom:6px; }
+.bar-col { flex:1; display:flex; flex-direction:column; align-items:center;
+  justify-content:flex-end; height:100%; gap:4px; }
+.bar-val { font-size:11px; font-weight:700; color:#555; }
+.bar { width:100%; max-width:40px; border-radius:5px 5px 0 0; min-height:2px;
+  transition:height .3s; }
+.bar-lbl { font-size:10px; color:#888; text-align:center; line-height:1.2; }
+.num-row { display:flex; align-items:center; padding:8px 0; border-bottom:1px solid #F2F2F2; gap:8px; }
+.num-row:last-child { border-bottom:none; }
+.num-count { margin-left:auto; font-weight:700; font-size:15px; }
+.num-min { font-size:11px; color:#999; min-width:54px; text-align:right; }
+.section-label { font-size:12px; color:#888; margin:14px 4px 6px; font-weight:700; }
+
+/* Status / Level page */
+#status-view { flex:1; overflow-y:auto; padding:12px; }
+.hero-card { background:linear-gradient(135deg,#1A1D23,#2D3344); color:#fff;
+  border-radius:14px; padding:18px; margin-bottom:14px; text-align:center;
+  box-shadow:0 4px 20px rgba(0,0,0,.18); position:relative; overflow:hidden; }
+.hero-card::after { content:""; position:absolute; top:-50%; right:-20%;
+  width:160px; height:160px; background:radial-gradient(circle,rgba(102,187,106,.25),transparent 70%); }
+.hero-rank { font-size:12px; color:#9FE5A8; font-weight:700; letter-spacing:.08em; }
+.hero-level { font-size:42px; font-weight:800; line-height:1.1; margin:2px 0; }
+.hero-level small { font-size:16px; font-weight:600; color:rgba(255,255,255,.6); }
+.hero-sub { font-size:12px; color:rgba(255,255,255,.65); }
+.track-card { background:#fff; border-radius:12px; padding:14px; margin-bottom:10px;
+  border:1px solid #EAEAEA; }
+.track-top { display:flex; align-items:center; gap:10px; margin-bottom:8px; }
+.track-icon { width:38px; height:38px; border-radius:10px; display:flex;
+  align-items:center; justify-content:center; font-size:20px; flex-shrink:0; }
+.track-name { font-weight:700; font-size:14px; }
+.track-rank { font-size:11px; color:#999; }
+.track-lvl { margin-left:auto; text-align:right; }
+.track-lvl-num { font-size:22px; font-weight:800; line-height:1; }
+.track-lvl-lbl { font-size:9px; color:#aaa; letter-spacing:.1em; }
+.xp-track { background:#EFEFEF; border-radius:99px; height:10px; overflow:hidden; position:relative; }
+.xp-fill { height:100%; border-radius:99px; transition:width .6s cubic-bezier(.3,1.2,.5,1); }
+.xp-text { font-size:10px; color:#999; text-align:right; margin-top:3px; }
+
+/* Level-up celebration overlay */
+#levelup-overlay { position:fixed; inset:0; z-index:500; display:none;
+  align-items:center; justify-content:center; background:rgba(10,12,16,.78);
+  backdrop-filter:blur(3px); }
+.levelup-box { text-align:center; color:#fff; animation:lvlPop .5s cubic-bezier(.2,1.5,.4,1); }
+.levelup-burst { font-size:14px; color:#9FE5A8; font-weight:700; letter-spacing:.2em; }
+.levelup-title { font-size:30px; font-weight:800; margin:6px 0 2px;
+  background:linear-gradient(90deg,#FFD54F,#FF8A65); -webkit-background-clip:text;
+  -webkit-text-fill-color:transparent; }
+.levelup-cat { font-size:18px; font-weight:700; margin-top:8px; }
+.levelup-lvl { font-size:60px; font-weight:800; margin:4px 0; }
+.levelup-tap { font-size:12px; color:rgba(255,255,255,.5); margin-top:18px; }
+@keyframes lvlPop { 0%{transform:scale(.6);opacity:0} 100%{transform:scale(1);opacity:1} }
+.confetti { position:absolute; width:9px; height:9px; top:-12px; border-radius:2px;
+  animation:fall linear forwards; }
+@keyframes fall { to { transform:translateY(105vh) rotate(540deg); opacity:.4; } }
+/* XP gain toast */
+#xp-toast { position:fixed; bottom:70px; left:50%; transform:translateX(-50%);
+  background:#66BB6A; color:#fff; border-radius:99px; padding:8px 18px;
+  font-size:14px; font-weight:700; z-index:200; display:none;
+  box-shadow:0 4px 16px rgba(102,187,106,.5); }
 
 /* Modals */
 .overlay { position:fixed; inset:0; background:rgba(0,0,0,.45);
@@ -141,6 +220,7 @@ textarea.field-input { height:70px; resize:vertical; }
       <button class="tab-btn active" data-tab="schedule">リスト</button>
       <button class="tab-btn" data-tab="calendar">カレンダー</button>
       <button class="tab-btn" data-tab="log">成果記録</button>
+      <button class="tab-btn" data-tab="status">ステータス</button>
       <button class="tab-btn" data-tab="stats">統計</button>
     </div>
   </div>
@@ -197,6 +277,18 @@ textarea.field-input { height:70px; resize:vertical; }
 </div>
 
 <div id="toast">✅ 保存しました</div>
+<div id="xp-toast"></div>
+<div id="drag-hint"></div>
+<div id="levelup-overlay">
+  <div class="levelup-box">
+    <div class="levelup-burst">★ LEVEL UP ★</div>
+    <div class="levelup-title">レベルアップ！</div>
+    <div class="levelup-cat" id="lvl-cat"></div>
+    <div class="levelup-lvl" id="lvl-num"></div>
+    <div id="lvl-rank" style="font-size:14px;color:#9FE5A8;font-weight:700"></div>
+    <div class="levelup-tap">タップして閉じる</div>
+  </div>
+</div>
 
 <script>
 // ── Constants ────────────────────────────────────────────────────────────────
@@ -210,8 +302,6 @@ const WORKOUT_PARTS = [
   {id:"shoulder", label:"肩",   color:"#F44336"},
   {id:"arm",      label:"腕",   color:"#EF9A9A"},
   {id:"leg",      label:"脚",   color:"#C62828"},
-  {id:"core",     label:"体幹", color:"#B71C1C"},
-  {id:"full",     label:"全身", color:"#FF5252"},
 ];
 const BASE_CATS = [
   {id:"instrument",label:"楽器練習",icon:"🎵",color:"#7986CB",light:"#E8EAF6"},
@@ -226,7 +316,12 @@ const WORKOUT_CATS = WORKOUT_PARTS.map(p=>({
 const ALL_CATS = [...WORKOUT_CATS,...BASE_CATS];
 const CAT_MAP  = {};
 ALL_CATS.forEach(c=>CAT_MAP[c.id]=c);
+// Legacy fallback for removed parts (体幹/全身) so old saved entries still render
+CAT_MAP["workout_core"]={id:"workout_core",label:"筋トレ（体幹）",icon:"💪",color:"#B71C1C",light:"#FFEBEE",part:{id:"core",label:"体幹",color:"#B71C1C"}};
+CAT_MAP["workout_full"]={id:"workout_full",label:"筋トレ（全身）",icon:"💪",color:"#FF5252",light:"#FFEBEE",part:{id:"full",label:"全身",color:"#FF5252"}};
 const catById  = id=>CAT_MAP[id];
+// Calendar display name: workout → part label only (e.g. "胸"), others → full label
+function calName(c){ return c?.part ? c.part.label : (c?.label||""); }
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let tab       = "schedule";
@@ -237,6 +332,9 @@ let addCtx    = null;
 let recCtx    = null;
 let addCat    = "workout_chest";
 let recRating = 0;
+let statsMode = "month";              // "month" | "year"
+let statsYear = new Date().getFullYear();
+let statsMonth= new Date().getMonth();  // 0-11
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getWeekKey(date){
@@ -265,6 +363,85 @@ function starsHTML(val,interactive){
     `<span style="color:${n<=val?"#FFA726":"#ccc"};cursor:${interactive?"pointer":"default"};user-select:none"
       ${interactive?`data-n="${n}"`:""}>${n<=val?"★":"☆"}</span>`
   ).join("");
+}
+
+// ── XP / Level system ─────────────────────────────────────────────────────────
+// XP per completed task = 10 base + duration bonus (1xp/5min, max 20) + rating bonus (rating*2)
+function xpForRecord(rec){
+  if(!rec?.done)return 0;
+  let xp=10;
+  if(rec.duration)xp+=Math.min(20,Math.floor((parseInt(rec.duration)||0)/5));
+  if(rec.rating)xp+=rec.rating*2;
+  return xp;
+}
+// Level curve: XP needed to REACH level L from start = 50 * L^1.6 (cumulative)
+// We invert to get level from total XP.
+function levelFromXP(totalXP){
+  let lvl=1;
+  while(totalXP>=xpToReach(lvl+1))lvl++;
+  return lvl;
+}
+function xpToReach(level){ // cumulative XP needed to be AT this level
+  if(level<=1)return 0;
+  return Math.round(50*Math.pow(level-1,1.6));
+}
+function levelProgress(totalXP){
+  const lvl=levelFromXP(totalXP);
+  const cur=xpToReach(lvl), next=xpToReach(lvl+1);
+  return { lvl, into:totalXP-cur, span:next-cur, pct:Math.round((totalXP-cur)/(next-cur)*100) };
+}
+// Rank title based on level
+function rankTitle(lvl){
+  if(lvl>=40)return "レジェンド";
+  if(lvl>=30)return "達人";
+  if(lvl>=20)return "エキスパート";
+  if(lvl>=12)return "上級者";
+  if(lvl>=6) return "中級者";
+  if(lvl>=3) return "見習い";
+  return "ビギナー";
+}
+// Compute total XP per category across all records
+function computeXP(){
+  const xp={};
+  ALL_CATS.forEach(c=>xp[c.id]=0);
+  // include legacy
+  xp["workout_core"]=0; xp["workout_full"]=0;
+  Object.keys(records).forEach(wk=>{
+    DAY_KEYS.forEach(dk=>{
+      const day=records[wk]?.[dk];
+      if(!day)return;
+      Object.keys(day).forEach(catId=>{
+        if(xp[catId]===undefined)xp[catId]=0;
+        xp[catId]+=xpForRecord(day[catId]);
+      });
+    });
+  });
+  return xp;
+}
+// Workout XP combined (all parts → one "筋トレ" track)
+function workoutTotalXP(xp){
+  return WORKOUT_CATS.reduce((a,c)=>a+(xp[c.id]||0),0)+(xp["workout_core"]||0)+(xp["workout_full"]||0);
+}
+// Overall total level = sum of all category levels
+function overallStats(xp){
+  let totalLvl=0, totalXP=0;
+  const tracks=getTracks(xp);
+  tracks.forEach(t=>{ totalLvl+=t.lvl; totalXP+=t.xp; });
+  return { totalLvl, totalXP, tracks };
+}
+// Build display tracks: 筋トレ(合算) + 4 base cats
+function getTracks(xp){
+  const tracks=[];
+  const wXP=workoutTotalXP(xp);
+  const wp=levelProgress(wXP);
+  tracks.push({ id:"workout", label:"筋トレ", icon:"💪", color:"#E57373",
+    xp:wXP, lvl:wp.lvl, into:wp.into, span:wp.span, pct:wp.pct });
+  BASE_CATS.forEach(c=>{
+    const p=levelProgress(xp[c.id]||0);
+    tracks.push({ id:c.id, label:c.label, icon:c.icon, color:c.color,
+      xp:xp[c.id]||0, lvl:p.lvl, into:p.into, span:p.span, pct:p.pct });
+  });
+  return tracks;
 }
 
 // ── Save to localStorage ──────────────────────────────────────────────────────
@@ -391,12 +568,13 @@ function renderCalendar(){
   DAY_KEYS.forEach((dk,di)=>{
     const isToday=isNow&&dk===tdk;
     const col=el("div","cal-day-col"+(isToday?" today-col":""));
+    col.dataset.dayIdx=di; col.dataset.dayKey=dk;
     for(let h=0;h<24;h++){
       const s=el("div","cal-slot");
       s.addEventListener("click",()=>openAdd(di,dk,h));
       col.appendChild(s);
     }
-    (ws[dk]||[]).forEach((e)=>{
+    (ws[dk]||[]).forEach((e,ei)=>{
       const c=catById(e.cat);
       const sm=timeToMin(e.time);
       const em=e.endTime?timeToMin(e.endTime):sm+60;
@@ -404,9 +582,10 @@ function renderCalendar(){
       const top=sm/60*HOUR_H, height=Math.max(dur/60*HOUR_H-2,20);
       const ev=el("div","cal-event");
       ev.style.cssText=`top:${top}px;height:${height}px;background:${c?.color||"#999"}`;
-      ev.innerHTML=`<div class="cal-event-title">${c?.icon||""} ${e.label||c?.label||""}</div>`+
+      ev.innerHTML=`<div class="cal-event-title">${c?.icon||""} ${e.label||calName(c)}</div>`+
         (height>28?`<div class="cal-event-time">${e.time}${e.endTime?"〜"+e.endTime:""}</div>`:"");
-      ev.addEventListener("click",evt=>{evt.stopPropagation();openRec(di,dk,e);});
+      ev.dataset.dayKey=dk; ev.dataset.entryIdx=ei; ev.dataset.dur=dur;
+      attachDragHandlers(ev, di, dk, e, ei);
       col.appendChild(ev);
     });
     grid.appendChild(col);
@@ -417,16 +596,185 @@ function renderCalendar(){
   scroll.scrollTop=6*HOUR_H;
 }
 
-// ── Stats View ────────────────────────────────────────────────────────────────
-function renderStats(){
+// ── Drag to move events ───────────────────────────────────────────────────────
+function attachDragHandlers(ev, dayIdx, dayKey, entry, entryIdx){
+  let pressTimer=null, dragging=false, startX=0, startY=0;
+  let grid=null, dayCols=[], colW=0, dur=parseInt(ev.dataset.dur)||60;
+  let moved=false;
+
+  function pointerDown(clientX, clientY){
+    startX=clientX; startY=clientY; moved=false;
+    // Long-press (250ms) to enter drag mode
+    pressTimer=setTimeout(()=>{
+      dragging=true;
+      ev.classList.add("dragging");
+      document.getElementById("cal-scroll").classList.add("no-scroll");
+      grid=document.getElementById("cal-grid");
+      dayCols=Array.from(grid.querySelectorAll(".cal-day-col"));
+      colW=dayCols[0].getBoundingClientRect().width;
+      if(navigator.vibrate)navigator.vibrate(30);
+      showHint(entry.time+(entry.endTime?"〜"+entry.endTime:""));
+    },250);
+  }
+
+  function pointerMove(clientX, clientY){
+    if(Math.abs(clientX-startX)>8||Math.abs(clientY-startY)>8)moved=true;
+    if(!dragging){
+      // if user moves before long-press completes, cancel (let it scroll)
+      if(moved){clearTimeout(pressTimer);}
+      return;
+    }
+    // Determine target column by X
+    let targetCol=null;
+    for(const col of dayCols){
+      const r=col.getBoundingClientRect();
+      if(clientX>=r.left&&clientX<r.right){targetCol=col;break;}
+    }
+    if(!targetCol)targetCol=dayCols[parseInt(ev.dataset.curDayIdx??dayIdx)];
+    const colRect=targetCol.getBoundingClientRect();
+
+    // Determine time by Y (relative to column top), snap to 1 hour
+    let relY=clientY-colRect.top;
+    let hour=Math.round(relY/HOUR_H - 0.5*(dur/60)); // center under finger
+    hour=Math.max(0, Math.min(24-Math.ceil(dur/60), hour));
+
+    // Move the element visually into the target column
+    if(ev.parentElement!==targetCol)targetCol.appendChild(ev);
+    ev.style.top=(hour*HOUR_H)+"px";
+    ev.dataset.curDayIdx=targetCol.dataset.dayIdx;
+    ev.dataset.curHour=hour;
+
+    const sH=String(hour).padStart(2,"0");
+    const eH=String(Math.min(hour+Math.round(dur/60),24)).padStart(2,"0");
+    showHint(`${DAYS[targetCol.dataset.dayIdx]} ${sH}:00〜${eH}:00`);
+  }
+
+  function pointerUp(){
+    clearTimeout(pressTimer);
+    hideHint();
+    document.getElementById("cal-scroll").classList.remove("no-scroll");
+    if(dragging){
+      dragging=false;
+      ev.classList.remove("dragging");
+      const newDayIdx=parseInt(ev.dataset.curDayIdx??dayIdx);
+      const newHour=parseInt(ev.dataset.curHour??Math.floor(timeToMin(entry.time)/60));
+      commitMove(dayKey, entryIdx, newDayIdx, newHour, dur);
+    }else if(!moved){
+      // treat as tap → open record
+      openRec(dayIdx, dayKey, entry);
+    }
+  }
+
+  // Touch events
+  ev.addEventListener("touchstart",e=>{
+    const t=e.touches[0]; pointerDown(t.clientX,t.clientY);
+  },{passive:true});
+  ev.addEventListener("touchmove",e=>{
+    const t=e.touches[0];
+    if(dragging)e.preventDefault();
+    pointerMove(t.clientX,t.clientY);
+  },{passive:false});
+  ev.addEventListener("touchend",pointerUp);
+  ev.addEventListener("touchcancel",pointerUp);
+
+  // Mouse events (desktop testing)
+  ev.addEventListener("mousedown",e=>{
+    e.preventDefault(); pointerDown(e.clientX,e.clientY);
+    const mm=ev2=>pointerMove(ev2.clientX,ev2.clientY);
+    const mu=()=>{pointerUp();document.removeEventListener("mousemove",mm);document.removeEventListener("mouseup",mu);};
+    document.addEventListener("mousemove",mm);
+    document.addEventListener("mouseup",mu);
+  });
+}
+
+function commitMove(dayKey, entryIdx, newDayIdx, newHour, dur){
+  const ws=schedules[weekKey]||emptyWeek();
+  const entry=ws[dayKey]?.[entryIdx];
+  if(!entry)return;
+  const newDayKey=DAY_KEYS[newDayIdx];
+  const newStart=newHour*60;
+  const newEnd=Math.min(newStart+dur, 24*60);
+  entry.time=`${String(Math.floor(newStart/60)).padStart(2,"0")}:${String(newStart%60).padStart(2,"0")}`;
+  entry.endTime=`${String(Math.floor(newEnd/60)).padStart(2,"0")}:${String(newEnd%60).padStart(2,"0")}`;
+  // Remove from old day, add to new day
+  ws[dayKey].splice(entryIdx,1);
+  if(!ws[newDayKey])ws[newDayKey]=[];
+  ws[newDayKey].push(entry);
+  ws[newDayKey].sort((a,b)=>a.time.localeCompare(b.time));
+  schedules[weekKey]=ws;
+  saveData();
+  renderCalendar();
+}
+
+function showHint(txt){
+  const h=document.getElementById("drag-hint");
+  h.textContent=txt; h.style.display="block";
+}
+function hideHint(){
+  document.getElementById("drag-hint").style.display="none";
+}
+
+// ── Status / Level View ───────────────────────────────────────────────────────
+function renderStatus(){
   const cont=document.getElementById("content");
   cont.innerHTML="";
-  const wrap=el("div","");wrap.id="stats-view";
+  const wrap=el("div","");wrap.id="status-view";
+
+  const xp=computeXP();
+  const tracks=getTracks(xp);
+  const totalLvl=tracks.reduce((a,t)=>a+t.lvl,0);
+  const totalXP=tracks.reduce((a,t)=>a+t.xp,0);
+
+  // Hero card
+  const hero=el("div","hero-card");
+  hero.innerHTML=`
+    <div class="hero-rank">TRAINER RANK</div>
+    <div class="hero-level">Lv.${totalLvl}</div>
+    <div class="hero-sub">総獲得 ${totalXP} XP ・ 5分野の合計レベル</div>`;
+  wrap.appendChild(hero);
+
+  // Track cards
+  tracks.forEach(t=>{
+    const card=el("div","track-card");
+    card.innerHTML=`
+      <div class="track-top">
+        <div class="track-icon" style="background:${t.color}22">${t.icon}</div>
+        <div>
+          <div class="track-name">${t.label}</div>
+          <div class="track-rank">${rankTitle(t.lvl)}</div>
+        </div>
+        <div class="track-lvl">
+          <div class="track-lvl-num" style="color:${t.color}">${t.lvl}</div>
+          <div class="track-lvl-lbl">LEVEL</div>
+        </div>
+      </div>
+      <div class="xp-track"><div class="xp-fill" style="width:${t.pct}%;background:${t.color}"></div></div>
+      <div class="xp-text">${t.into} / ${t.span} XP　（次のレベルまで ${t.span-t.into}）</div>`;
+    wrap.appendChild(card);
+  });
+
+  // Info note
+  wrap.appendChild(el("p","",
+    `<span style="font-size:11px;color:#bbb;display:block;text-align:center;margin-top:8px;line-height:1.6">
+      予定を「完了」にするとXP獲得（基本10 + 時間ボーナス + 評価ボーナス）<br>
+      筋トレは全部位の合算でレベルアップします
+    </span>`));
+
+  cont.appendChild(wrap);
+}
+
+// ── Stats View ────────────────────────────────────────────────────────────────
+// Aggregate completed counts for a given period filter.
+// filterFn(dateObj) → true if the entry's date is in the selected period.
+function aggregateStats(filterFn){
   const st={};
   ALL_CATS.forEach(c=>st[c.id]={done:0,total:0,totalMin:0,ratings:[]});
-  Object.keys(records).forEach(wk=>{
+  Object.keys(schedules).forEach(wk=>{
     const sc=schedules[wk]||{};
-    DAY_KEYS.forEach(dk=>{
+    const dates=getWeekDates(wk); // actual date per day index
+    DAY_KEYS.forEach((dk,di)=>{
+      const dateObj=dates[di];
+      if(!filterFn(dateObj))return;
       (sc[dk]||[]).forEach(e=>{
         if(!st[e.cat])return;
         st[e.cat].total++;
@@ -439,45 +787,115 @@ function renderStats(){
       });
     });
   });
+  return st;
+}
 
-  wrap.appendChild(el("p","",`<span style="font-size:12px;color:#888">累計（全週間）</span>`));
+function renderStats(){
+  const cont=document.getElementById("content");
+  cont.innerHTML="";
+  const wrap=el("div","");wrap.id="stats-view";
 
-  const wT=WORKOUT_CATS.reduce((a,c)=>a+st[c.id].total,0);
-  const wD=WORKOUT_CATS.reduce((a,c)=>a+st[c.id].done,0);
-  const wR=wT?Math.round(wD/wT*100):0;
-  const wc=el("div","stats-card");
-  wc.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+  // ── Mode toggle ──
+  const toggle=el("div","mode-toggle");
+  const mBtn=el("button",statsMode==="month"?"active":"","月間");
+  const yBtn=el("button",statsMode==="year"?"active":"","年間");
+  mBtn.onclick=()=>{statsMode="month";renderStats();};
+  yBtn.onclick=()=>{statsMode="year";renderStats();};
+  toggle.appendChild(mBtn);toggle.appendChild(yBtn);
+  wrap.appendChild(toggle);
+
+  // ── Period nav ──
+  const now=new Date();
+  const pNav=el("div","period-nav");
+  const prevB=el("button",null,"←");
+  const nextB=el("button",null,"→");
+  const lbl=el("span","period-label");
+  if(statsMode==="month"){
+    lbl.textContent=`${statsYear}年 ${statsMonth+1}月`;
+    prevB.onclick=()=>{statsMonth--;if(statsMonth<0){statsMonth=11;statsYear--;}renderStats();};
+    nextB.onclick=()=>{statsMonth++;if(statsMonth>11){statsMonth=0;statsYear++;}renderStats();};
+    // disable next if future
+    if(statsYear>now.getFullYear()||(statsYear===now.getFullYear()&&statsMonth>=now.getMonth()))
+      nextB.disabled=true;
+  }else{
+    lbl.textContent=`${statsYear}年`;
+    prevB.onclick=()=>{statsYear--;renderStats();};
+    nextB.onclick=()=>{statsYear++;renderStats();};
+    if(statsYear>=now.getFullYear())nextB.disabled=true;
+  }
+  pNav.appendChild(prevB);pNav.appendChild(lbl);pNav.appendChild(nextB);
+  wrap.appendChild(pNav);
+
+  // ── Filter ──
+  const filterFn=(d)=>{
+    if(statsMode==="month")return d.getFullYear()===statsYear&&d.getMonth()===statsMonth;
+    return d.getFullYear()===statsYear;
+  };
+  const st=aggregateStats(filterFn);
+
+  // ── Bar chart: completed counts per category (workout split by part) ──
+  // Order: 7 workout parts + 4 base cats
+  const barCats=[...WORKOUT_CATS,...BASE_CATS];
+  const maxDone=Math.max(1,...barCats.map(c=>st[c.id].done));
+  wrap.appendChild(el("p","section-label","達成回数"));
+  const chartCard=el("div","stats-card");
+  const chart=el("div","bar-chart");
+  barCats.forEach(c=>{
+    const s=st[c.id];
+    const h=Math.round(s.done/maxDone*110);
+    const col=el("div","bar-col");
+    const shortLbl=c.part?c.part.label:c.label.replace("学習","").replace("練習","").replace("専門医","専門");
+    col.innerHTML=
+      `<span class="bar-val">${s.done}</span>`+
+      `<div class="bar" style="height:${s.done>0?Math.max(h,6):2}px;background:${c.color}"></div>`+
+      `<span class="bar-lbl">${c.part?"":c.icon+"<br>"}${shortLbl}</span>`;
+    chart.appendChild(col);
+  });
+  chartCard.appendChild(chart);
+  chartCard.appendChild(el("p","",`<span style="font-size:10px;color:#bbb">左7本＝筋トレ部位　右4本＝その他</span>`));
+  wrap.appendChild(chartCard);
+
+  // ── Number list ──
+  wrap.appendChild(el("p","section-label","カテゴリ別 達成回数"));
+
+  // Workout group card
+  const wDone=WORKOUT_CATS.reduce((a,c)=>a+st[c.id].done,0);
+  const wMin=WORKOUT_CATS.reduce((a,c)=>a+st[c.id].totalMin,0);
+  const wCard=el("div","stats-card");
+  let wHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px">
     <span style="font-size:18px">💪</span>
-    <span style="font-weight:700;font-size:14px">筋トレ（合計）</span>
-    <span style="margin-left:auto;font-size:13px;color:#E57373;font-weight:700">${wR}%</span>
-  </div>
-  <div class="progress-bar"><div class="progress-fill" style="width:${wR}%;background:#E57373"></div></div>
-  <div style="display:flex;flex-wrap:wrap;gap:8px;font-size:12px;color:#666;margin-top:6px">
-    ${WORKOUT_PARTS.map(p=>{
-      const s=st[`workout_${p.id}`];
-      return s.total>0?`<span><span class="part-dot" style="background:${p.color}"></span>${p.label}: ${s.done}/${s.total}回</span>`:"";
-    }).join("")||'<span style="color:#ccc">記録なし</span>'}
+    <span style="font-weight:700;font-size:14px">筋トレ</span>
+    <span style="margin-left:auto;font-weight:700;font-size:15px;color:#E57373">${wDone}回</span>
   </div>`;
-  wrap.appendChild(wc);
+  WORKOUT_PARTS.forEach(p=>{
+    const s=st[`workout_${p.id}`];
+    wHTML+=`<div class="num-row">
+      <span class="part-dot" style="background:${p.color}"></span>
+      <span style="font-size:13px">${p.label}</span>
+      <span class="num-count" style="color:${p.color}">${s.done}回</span>
+      <span class="num-min">${s.totalMin>0?s.totalMin+"分":""}</span>
+    </div>`;
+  });
+  wCard.innerHTML=wHTML;
+  wrap.appendChild(wCard);
 
+  // Base categories
   BASE_CATS.forEach(c=>{
     const s=st[c.id];
-    const rate=s.total?Math.round(s.done/s.total*100):0;
     const avg=s.ratings.length?(s.ratings.reduce((a,b)=>a+b,0)/s.ratings.length).toFixed(1):"—";
     const card=el("div","stats-card");
-    card.innerHTML=`<div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+    card.innerHTML=`<div style="display:flex;align-items:center;gap:8px">
       <span style="font-size:18px">${c.icon}</span>
       <span style="font-weight:700;font-size:14px">${c.label}</span>
-      <span style="margin-left:auto;font-size:13px;color:${c.color};font-weight:700">${rate}%</span>
+      <span style="margin-left:auto;font-weight:700;font-size:15px;color:${c.color}">${s.done}回</span>
     </div>
-    <div class="progress-bar"><div class="progress-fill" style="width:${rate}%;background:${c.color}"></div></div>
-    <div class="stats-meta">
-      <span>完了 ${s.done}/${s.total} 回</span>
+    <div class="stats-meta" style="margin-top:6px">
       ${s.totalMin>0?`<span>合計 ${s.totalMin} 分</span>`:""}
       <span>平均評価 ${avg}</span>
     </div>`;
     wrap.appendChild(card);
   });
+
   cont.appendChild(wrap);
 }
 
@@ -573,35 +991,101 @@ function openRec(dayIdx,dayKey,entry){
   renderRecStars();
   document.getElementById("rec-modal").style.display="flex";
 }
+function snapshotLevels(){
+  const xp=computeXP();
+  const tracks=getTracks(xp);
+  const map={};
+  tracks.forEach(t=>map[t.id]={lvl:t.lvl,label:t.label});
+  return map;
+}
+function trackIdForCat(catId){
+  return catId.startsWith("workout_")?"workout":catId;
+}
+function checkLevelUp(before, gainedXP){
+  const after=snapshotLevels();
+  let leveledTrack=null;
+  Object.keys(after).forEach(id=>{
+    if(before[id]&&after[id].lvl>before[id].lvl)
+      leveledTrack={id, label:after[id].label, lvl:after[id].lvl};
+  });
+  if(leveledTrack)showLevelUp(leveledTrack);
+  else if(gainedXP>0)showXPToast(gainedXP);
+}
+
 function toggleDone(dk,entry){
   const rec=getRec(dk,entry.cat);
+  const before=snapshotLevels();
+  const wasDone=rec.done;
   if(!records[weekKey])records[weekKey]={};
   if(!records[weekKey][dk])records[weekKey][dk]={};
   records[weekKey][dk][entry.cat]={...rec,done:!rec.done};
+  const gained = !wasDone ? xpForRecord(records[weekKey][dk][entry.cat]) : 0;
   saveData();render();
+  if(!wasDone)checkLevelUp(before, gained);
 }
 document.getElementById("rec-cancel").onclick=()=>document.getElementById("rec-modal").style.display="none";
 document.getElementById("rec-modal").addEventListener("click",e=>{if(e.target===e.currentTarget)e.currentTarget.style.display="none";});
 document.getElementById("rec-save").onclick=()=>{
   if(!recCtx)return;
   const{dayKey,entry}=recCtx;
+  const before=snapshotLevels();
+  const prevRec=getRec(dayKey,entry.cat);
+  const prevXP=xpForRecord(prevRec);
   if(!records[weekKey])records[weekKey]={};
   if(!records[weekKey][dayKey])records[weekKey][dayKey]={};
-  records[weekKey][dayKey][entry.cat]={
+  const newRec={
     done:document.getElementById("rec-done").checked,
     note:document.getElementById("rec-note").value,
     duration:document.getElementById("rec-duration").value,
     rating:recRating,
   };
+  records[weekKey][dayKey][entry.cat]=newRec;
+  const gained=xpForRecord(newRec)-prevXP;
   document.getElementById("rec-modal").style.display="none";
   saveData();render();
+  checkLevelUp(before, gained);
 };
+
+// ── Level-up celebration ──────────────────────────────────────────────────────
+function showLevelUp(track){
+  const c = track.id==="workout" ? {icon:"💪",color:"#E57373"} : catById(track.id);
+  document.getElementById("lvl-cat").textContent=(c?.icon||"")+" "+track.label;
+  document.getElementById("lvl-num").textContent="Lv. "+track.lvl;
+  document.getElementById("lvl-rank").textContent=rankTitle(track.lvl);
+  const ov=document.getElementById("levelup-overlay");
+  ov.style.display="flex";
+  spawnConfetti(ov);
+  if(navigator.vibrate)navigator.vibrate([40,40,80]);
+}
+document.getElementById("levelup-overlay").addEventListener("click",function(){
+  this.style.display="none";
+  this.querySelectorAll(".confetti").forEach(c=>c.remove());
+});
+function spawnConfetti(container){
+  const colors=["#FFD54F","#FF8A65","#66BB6A","#42A5F5","#EF5350","#AB47BC"];
+  for(let i=0;i<40;i++){
+    const cf=document.createElement("div");
+    cf.className="confetti";
+    cf.style.left=Math.random()*100+"%";
+    cf.style.background=colors[i%colors.length];
+    cf.style.animationDuration=(1.5+Math.random()*1.5)+"s";
+    cf.style.animationDelay=(Math.random()*0.4)+"s";
+    container.appendChild(cf);
+  }
+}
+function showXPToast(xp){
+  const t=document.getElementById("xp-toast");
+  t.textContent=`+${xp} XP`;
+  t.style.display="block";
+  setTimeout(()=>t.style.display="none",1500);
+}
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function render(){
   renderNav();
   if(tab==="calendar")renderCalendar();
   else if(tab==="stats")renderStats();
+  else if(tab==="status")renderStatus();
   else renderList();
 }
 render();
