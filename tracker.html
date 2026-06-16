@@ -154,6 +154,9 @@ body { margin:0; font-family:-apple-system,"Hiragino Sans","Meiryo",sans-serif;
 .xp-track { background:#EFEFEF; border-radius:99px; height:10px; overflow:hidden; position:relative; }
 .xp-fill { height:100%; border-radius:99px; transition:width .6s cubic-bezier(.3,1.2,.5,1); }
 .xp-text { font-size:10px; color:#999; text-align:right; margin-top:3px; }
+.decay-warn { font-size:11px; color:#E57373; font-weight:700; margin-top:6px;
+  background:#FFEBEE; border-radius:6px; padding:4px 8px; }
+.decay-soon { font-size:10px; color:#FB8C00; margin-top:6px; }
 
 /* Level-up celebration overlay */
 #levelup-overlay { position:fixed; inset:0; z-index:500; display:none;
@@ -418,6 +421,41 @@ function computeXP(){
   });
   return xp;
 }
+// Last completion date (Date object) per track ("workout" combined, or base cat id). null if never.
+function computeLastDone(){
+  const last={};  // trackId → Date
+  Object.keys(records).forEach(wk=>{
+    const dates=getWeekDates(wk);
+    DAY_KEYS.forEach((dk,di)=>{
+      const day=records[wk]?.[dk];
+      if(!day)return;
+      Object.keys(day).forEach(catId=>{
+        if(!day[catId]?.done)return;
+        const trackId=catId.startsWith("workout_")?"workout":catId;
+        const d=dates[di];
+        if(!last[trackId]||d>last[trackId])last[trackId]=d;
+      });
+    });
+  });
+  return last;
+}
+// ── Decay config ──
+const DECAY_GRACE_DAYS = 7;   // サボってもこの日数までは減らない
+const DECAY_PER_DAY    = 8;   // 猶予超過後、1日あたり減るXP（ゆるやか）
+function daysSince(date){
+  if(!date)return 0;
+  const today=new Date(); today.setHours(0,0,0,0);
+  const d=new Date(date); d.setHours(0,0,0,0);
+  return Math.floor((today-d)/(1000*60*60*24));
+}
+// Apply decay to a raw XP total given the last-done date.
+function applyDecay(rawXP, lastDate){
+  if(!lastDate||rawXP<=0)return {xp:rawXP, decayDays:0, lost:0};
+  const idle=daysSince(lastDate);
+  const decayDays=Math.max(0, idle-DECAY_GRACE_DAYS);
+  const lost=Math.min(rawXP, decayDays*DECAY_PER_DAY);
+  return { xp:Math.max(0,rawXP-lost), decayDays, lost, idle };
+}
 // Workout XP combined (all parts → one "筋トレ" track)
 function workoutTotalXP(xp){
   return WORKOUT_CATS.reduce((a,c)=>a+(xp[c.id]||0),0)+(xp["workout_core"]||0)+(xp["workout_full"]||0);
@@ -429,17 +467,23 @@ function overallStats(xp){
   tracks.forEach(t=>{ totalLvl+=t.lvl; totalXP+=t.xp; });
   return { totalLvl, totalXP, tracks };
 }
-// Build display tracks: 筋トレ(合算) + 4 base cats
+// Build display tracks: 筋トレ(合算) + 4 base cats, with decay applied
 function getTracks(xp){
+  const last=computeLastDone();
   const tracks=[];
-  const wXP=workoutTotalXP(xp);
-  const wp=levelProgress(wXP);
+  const wRaw=workoutTotalXP(xp);
+  const wD=applyDecay(wRaw, last["workout"]);
+  const wp=levelProgress(wD.xp);
   tracks.push({ id:"workout", label:"筋トレ", icon:"💪", color:"#E57373",
-    xp:wXP, lvl:wp.lvl, into:wp.into, span:wp.span, pct:wp.pct });
+    xp:wD.xp, rawXP:wRaw, lvl:wp.lvl, into:wp.into, span:wp.span, pct:wp.pct,
+    decayDays:wD.decayDays, lost:wD.lost, idle:wD.idle, lastDate:last["workout"]||null });
   BASE_CATS.forEach(c=>{
-    const p=levelProgress(xp[c.id]||0);
+    const raw=xp[c.id]||0;
+    const dd=applyDecay(raw, last[c.id]);
+    const p=levelProgress(dd.xp);
     tracks.push({ id:c.id, label:c.label, icon:c.icon, color:c.color,
-      xp:xp[c.id]||0, lvl:p.lvl, into:p.into, span:p.span, pct:p.pct });
+      xp:dd.xp, rawXP:raw, lvl:p.lvl, into:p.into, span:p.span, pct:p.pct,
+      decayDays:dd.decayDays, lost:dd.lost, idle:dd.idle, lastDate:last[c.id]||null });
   });
   return tracks;
 }
@@ -736,6 +780,19 @@ function renderStatus(){
   // Track cards
   tracks.forEach(t=>{
     const card=el("div","track-card");
+    // Decay status line
+    let statusLine="";
+    if(t.rawXP>0){
+      if(t.decayDays>0){
+        // Currently decaying
+        statusLine=`<div class="decay-warn">⚠️ ${t.idle}日サボり中 ・ 減衰 −${t.lost} XP</div>`;
+      }else if(t.lastDate){
+        const remain=DECAY_GRACE_DAYS-(t.idle||0);
+        if((t.idle||0)>=4){
+          statusLine=`<div class="decay-soon">あと${remain}日で減衰開始（最後の実施から${t.idle}日）</div>`;
+        }
+      }
+    }
     card.innerHTML=`
       <div class="track-top">
         <div class="track-icon" style="background:${t.color}22">${t.icon}</div>
@@ -749,7 +806,8 @@ function renderStatus(){
         </div>
       </div>
       <div class="xp-track"><div class="xp-fill" style="width:${t.pct}%;background:${t.color}"></div></div>
-      <div class="xp-text">${t.into} / ${t.span} XP　（次のレベルまで ${t.span-t.into}）</div>`;
+      <div class="xp-text">${t.into} / ${t.span} XP　（次のレベルまで ${t.span-t.into}）</div>
+      ${statusLine}`;
     wrap.appendChild(card);
   });
 
@@ -757,7 +815,8 @@ function renderStatus(){
   wrap.appendChild(el("p","",
     `<span style="font-size:11px;color:#bbb;display:block;text-align:center;margin-top:8px;line-height:1.6">
       予定を「完了」にするとXP獲得（基本10 + 時間ボーナス + 評価ボーナス）<br>
-      筋トレは全部位の合算でレベルアップします
+      筋トレは全部位の合算でレベルアップします<br>
+      ${DECAY_GRACE_DAYS}日以上あくと1日 −${DECAY_PER_DAY} XP ずつゆるやかに減衰します
     </span>`));
 
   cont.appendChild(wrap);
