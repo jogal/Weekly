@@ -13,6 +13,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=DotGothic16&display=swap" rel="stylesheet">
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 :root{
@@ -252,6 +253,7 @@ textarea.field-input { height:70px; resize:vertical; }
     <p id="app-title">
       ⚔️ 週間クエスト
       <span>
+        <button type="button" class="mini-btn" id="gcal-open">GCal連携</button>
         <button type="button" class="mini-btn" id="export-btn">データ保存</button>
         <button type="button" class="mini-btn" id="import-btn">復元</button>
       </span>
@@ -312,6 +314,25 @@ textarea.field-input { height:70px; resize:vertical; }
     <div class="btn-row">
       <button class="btn btn-secondary" id="rec-cancel">キャンセル</button>
       <button class="btn btn-primary" id="rec-save">保存</button>
+    </div>
+  </div>
+</div>
+
+<!-- Google Calendar Sync Modal -->
+<div class="overlay" id="gcal-modal" style="display:none">
+  <div class="modal-box">
+    <h3 class="modal-title">📅 Googleカレンダー連携</h3>
+    <p class="modal-sub">Google CloudのOAuthクライアントID（ウェブアプリ用）を貼り付けて接続してください。設定手順はREADME参照。</p>
+    <span class="field-label">OAuthクライアントID</span>
+    <input type="text" class="field-input" id="gcal-client-id"
+      placeholder="xxxx.apps.googleusercontent.com" autocomplete="off">
+    <label class="check-row" style="margin-bottom:12px">
+      <input type="checkbox" id="gcal-auto-check"> 予定の追加・移動・削除を自動で同期する
+    </label>
+    <p class="modal-sub" id="gcal-status" style="min-height:1em"></p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="gcal-close">閉じる</button>
+      <button class="btn btn-primary" id="gcal-test">保存して接続</button>
     </div>
   </div>
 </div>
@@ -540,15 +561,80 @@ function getTracks(xp){
 }
 
 // ── Save to localStorage ──────────────────────────────────────────────────────
-function saveData(){
+function persist(){
   localStorage.setItem("wt_schedules", JSON.stringify(schedules));
   localStorage.setItem("wt_records",   JSON.stringify(records));
+}
+function saveData(){
+  persist();
   showToast();
 }
-function showToast(){
+function showToast(msg){
   const t=document.getElementById("toast");
+  t.textContent=msg||"✅ 保存しました";
   t.style.display="block";
   setTimeout(()=>t.style.display="none",1800);
+}
+
+// ── Google Calendar auto-sync (Google Identity Services + Calendar API) ──────
+const GCAL_SCOPE="https://www.googleapis.com/auth/calendar.events";
+let gcalToken=null, gcalTokenExp=0, gcalTokenClient=null;
+function gcalClientId(){return localStorage.getItem("wt_gcal_client_id")||"";}
+function gcalAuto(){return localStorage.getItem("wt_gcal_auto")==="1"&&!!gcalClientId();}
+function gcalGetToken(){
+  return new Promise((resolve,reject)=>{
+    if(gcalToken&&Date.now()<gcalTokenExp-60000)return resolve(gcalToken);
+    if(!window.google?.accounts?.oauth2)return reject(new Error("Google認証ライブラリが未読み込みです"));
+    if(!gcalClientId())return reject(new Error("クライアントID未設定"));
+    if(!gcalTokenClient){
+      gcalTokenClient=google.accounts.oauth2.initTokenClient({
+        client_id:gcalClientId(), scope:GCAL_SCOPE, callback:()=>{},
+      });
+    }
+    gcalTokenClient.callback=resp=>{
+      if(resp.error)return reject(new Error(resp.error));
+      gcalToken=resp.access_token;
+      gcalTokenExp=Date.now()+(resp.expires_in||3600)*1000;
+      resolve(gcalToken);
+    };
+    gcalTokenClient.requestAccessToken({prompt:""});
+  });
+}
+function gcalEventBody(entry,dateObj){
+  const c=catById(entry.cat);
+  const dstr=`${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,"0")}-${String(dateObj.getDate()).padStart(2,"0")}`;
+  return {
+    summary:((c?.icon||"")+" "+(entry.label||c?.label||"")).trim(),
+    start:{dateTime:`${dstr}T${entry.time}:00`,timeZone:"Asia/Tokyo"},
+    end:{dateTime:`${dstr}T${entry.endTime||entry.time}:00`,timeZone:"Asia/Tokyo"},
+  };
+}
+async function gcalApi(path,method,body){
+  const token=await gcalGetToken();
+  const res=await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events"+path,{
+    method,
+    headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
+    body:body?JSON.stringify(body):undefined,
+  });
+  if(!res.ok&&res.status!==410)throw new Error("Calendar API "+res.status);
+  return res.status===204||res.status===410?null:res.json();
+}
+// Fire-and-forget sync helpers: never block the UI, toast on success/failure
+function gcalSyncInsert(entry,dateObj){
+  if(!gcalAuto())return;
+  gcalApi("","POST",gcalEventBody(entry,dateObj))
+    .then(ev=>{entry.gcalId=ev.id;persist();showToast("📅 Googleカレンダーに登録しました");})
+    .catch(()=>showToast("⚠️ カレンダー同期に失敗しました"));
+}
+function gcalSyncPatch(entry,dateObj){
+  if(!gcalAuto()||!entry.gcalId)return;
+  gcalApi("/"+entry.gcalId,"PATCH",gcalEventBody(entry,dateObj))
+    .catch(()=>showToast("⚠️ カレンダー同期に失敗しました"));
+}
+function gcalSyncDelete(entry){
+  if(!gcalAuto()||!entry.gcalId)return;
+  gcalApi("/"+entry.gcalId,"DELETE")
+    .catch(()=>showToast("⚠️ カレンダー同期に失敗しました"));
 }
 
 // ── Week nav ──────────────────────────────────────────────────────────────────
@@ -629,7 +715,7 @@ function renderList(){
         gb.onclick=()=>window.open(gcalUrl(e,dates[di]),"_blank");
         row.appendChild(gb);
         const db=el("button","del-btn","✕");
-        db.onclick=()=>{ws[dk].splice(ei,1);schedules[weekKey]=ws;saveData();render();};
+        db.onclick=()=>{gcalSyncDelete(e);ws[dk].splice(ei,1);schedules[weekKey]=ws;saveData();render();};
         row.appendChild(db);
       }
       card.appendChild(row);
@@ -802,6 +888,7 @@ function commitMove(dayKey, entryIdx, newDayIdx, newHour, dur){
   ws[newDayKey].sort((a,b)=>a.time.localeCompare(b.time));
   schedules[weekKey]=ws;
   saveData();
+  gcalSyncPatch(entry, getWeekDates(weekKey)[newDayIdx]);
   renderCalendar();
 }
 
@@ -1074,10 +1161,12 @@ document.getElementById("add-save").onclick=()=>{
   if(!time)return;
   if(!schedules[weekKey])schedules[weekKey]=emptyWeek();
   const dk=addCtx.dayKey;
-  schedules[weekKey][dk].push({cat:addCat,time,endTime,label,id:Date.now()});
+  const newEntry={cat:addCat,time,endTime,label,id:Date.now()};
+  schedules[weekKey][dk].push(newEntry);
   schedules[weekKey][dk].sort((a,b)=>a.time.localeCompare(b.time));
   document.getElementById("add-modal").style.display="none";
   saveData();render();
+  gcalSyncInsert(newEntry, getWeekDates(weekKey)[addCtx.dayIdx]);
 };
 
 // ── Record Modal ──────────────────────────────────────────────────────────────
@@ -1219,6 +1308,29 @@ document.getElementById("import-btn").onclick=()=>{
     });
   };
   inp.click();
+};
+
+// ── Google Calendar sync settings modal ───────────────────────────────────────
+function setGcalStatus(msg){document.getElementById("gcal-status").textContent=msg;}
+document.getElementById("gcal-open").onclick=()=>{
+  document.getElementById("gcal-client-id").value=gcalClientId();
+  document.getElementById("gcal-auto-check").checked=localStorage.getItem("wt_gcal_auto")==="1";
+  setGcalStatus(gcalClientId()?"設定済み":"");
+  document.getElementById("gcal-modal").style.display="flex";
+};
+document.getElementById("gcal-close").onclick=()=>document.getElementById("gcal-modal").style.display="none";
+document.getElementById("gcal-modal").addEventListener("click",e=>{if(e.target===e.currentTarget)e.currentTarget.style.display="none";});
+document.getElementById("gcal-test").onclick=()=>{
+  const id=document.getElementById("gcal-client-id").value.trim();
+  const auto=document.getElementById("gcal-auto-check").checked;
+  localStorage.setItem("wt_gcal_client_id",id);
+  localStorage.setItem("wt_gcal_auto",auto?"1":"0");
+  gcalTokenClient=null; gcalToken=null;
+  if(!id){setGcalStatus("クライアントIDを入力してください");return;}
+  setGcalStatus("接続中…");
+  gcalGetToken()
+    .then(()=>setGcalStatus("✅ 接続できました！自動同期の準備OK"))
+    .catch(err=>setGcalStatus("❌ 接続失敗: "+err.message));
 };
 
 // ── PWA service worker ────────────────────────────────────────────────────────
