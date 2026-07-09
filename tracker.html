@@ -255,7 +255,7 @@ textarea.field-input { height:70px; resize:vertical; }
 .mcal-more { font-size:8px; color:var(--dim); line-height:6px; }
 
 /* Pixel hero character */
-#hero-canvas { image-rendering:pixelated; width:90px; height:120px; margin-bottom:2px; }
+#hero-canvas { image-rendering:pixelated; width:96px; height:120px; margin-bottom:2px; }
 .hero-job { font-size:12px; color:var(--gold); letter-spacing:.15em; margin-bottom:4px; }
 .char-stat-title { font-size:12px; color:var(--green); font-weight:700;
   letter-spacing:.2em; margin-bottom:10px; }
@@ -943,17 +943,17 @@ function hideHint(){
   document.getElementById("drag-hint").style.display="none";
 }
 
-// ── Pixel hero character (24x32, 16-bit JRPG style, job system) ──────────────
+// ── Pixel hero character (32x40, GBA-style shading, left-facing, job system) ──
 // The look changes by "job": whichever stat (track) has the highest level wins.
-// Letters: K=outline S=skin E=eye H=hair/hat B=clothes b=clothes shadow
-//          C=accent/trim L=legs F=boots G=gold prop
+// Letters: K=outline S/s=skin E=eye W=highlight H/h=hair-hat B/b/d=clothes(3 shades)
+//          C=accent/trim L=legs F/f=boots G/g=gold T=wood
 const JOB_DEFS={
-  novice:   {name:"すっぴん", pal:{H:"#7a4a2a",B:"#4a7ab8",b:"#35588a",C:"#8a5a2a",L:"#3a3a5a",F:"#5a3a22"}},
-  monk:     {name:"モンク",   pal:{H:"#2d2d3a",B:"#e07830",b:"#b05a20",C:"#e8e8e0",L:"#e07830",F:"#8a5a2a"}},
-  whitemage:{name:"白魔道士", pal:{H:"#f0ece0",B:"#f0ece0",b:"#cfc8b8",C:"#c03838",L:"#f0ece0",F:"#8a5a2a"}},
-  bard:     {name:"吟遊詩人", pal:{H:"#2f8e5a",B:"#2fa06a",b:"#1f7a4a",C:"#caa53d",L:"#3a3a5a",F:"#5a3a22"}},
-  scholar:  {name:"学者",     pal:{H:"#2f4a8e",B:"#3a5aa8",b:"#2a4078",C:"#caa53d",L:"#3a3a5a",F:"#2d2d3a"}},
-  chef:     {name:"料理人",   pal:{H:"#f0ece0",B:"#c04040",b:"#983030",C:"#f0ece0",L:"#3a3a5a",F:"#2d2d3a"}},
+  novice:   {name:"すっぴん", pal:{H:"#8a5430",h:"#6a3d20",B:"#4a7ab8",b:"#3a608f",d:"#2c4a70",C:"#8a5a2a",L:"#3a3a5a",F:"#5a3a22",f:"#42280f"}},
+  monk:     {name:"モンク",   pal:{H:"#2d2d3a",h:"#1d1d28",B:"#e07830",b:"#b85c20",d:"#94491a",C:"#ece8da",L:"#e07830",F:"#8a5a2a",f:"#6a4018"}},
+  whitemage:{name:"白魔道士", pal:{H:"#f2eee2",h:"#d5cfc0",B:"#f2eee2",b:"#d5cfc0",d:"#b8b2a2",C:"#c23a3a",L:"#f2eee2",F:"#8a5a2a",f:"#6a4018"}},
+  bard:     {name:"吟遊詩人", pal:{H:"#2f8e5a",h:"#217346",B:"#33a06b",b:"#268254",d:"#1c6a42",C:"#caa53d",L:"#3a3a5a",F:"#5a3a22",f:"#42280f"}},
+  scholar:  {name:"学者",     pal:{H:"#31497e",h:"#25396a",B:"#3c5a9e",b:"#2f4a86",d:"#243a6e",C:"#caa53d",L:"#3a3a5a",F:"#2d2d3a",f:"#1d1d28"}},
+  chef:     {name:"料理人",   pal:{H:"#f2eee2",h:"#d5cfc0",B:"#c04040",b:"#9c3232",d:"#7e2828",C:"#f2eee2",L:"#3a3a5a",F:"#2d2d3a",f:"#1d1d28"}},
 };
 const TRACK_JOB={workout:"monk",medicine:"whitemage",instrument:"bard",english:"scholar",cooking:"chef"};
 function currentJob(tracks){
@@ -963,57 +963,115 @@ function currentJob(tracks){
   return TRACK_JOB[top[0].id]||"novice";
 }
 function heroGrid(job){
-  const g=Array.from({length:32},()=>Array(24).fill("."));
+  const g=Array.from({length:40},()=>Array(32).fill("."));
   const row=(y,x1,x2,ch)=>{for(let x=x1;x<=x2;x++)g[y][x]=ch;};
   const px=(y,x,ch)=>{g[y][x]=ch;};
-  // head: big JRPG-chibi proportions
-  row(2,8,15,"K");
-  px(3,7,"K");row(3,8,15,"H");px(3,16,"K");
-  [4,5,6].forEach(y=>{px(y,6,"K");row(y,7,16,"H");px(y,17,"K");});
-  px(7,6,"K");row(7,7,8,"H");row(7,9,14,"S");row(7,15,16,"H");px(7,17,"K");
-  px(8,6,"K");px(8,7,"H");row(8,8,15,"S");px(8,16,"H");px(8,17,"K");
-  [9,10,11,12,13].forEach(y=>{px(y,6,"K");row(y,7,16,"S");px(y,17,"K");});
-  row(10,8,9,"E");row(10,14,15,"E");
-  row(11,8,9,"E");row(11,14,15,"E");
-  px(14,7,"K");row(14,8,15,"S");px(14,16,"K");
-  px(15,8,"K");row(15,9,14,"S");px(15,15,"K");
-  // body with arms at the sides
-  px(16,8,"K");row(16,9,14,"B");px(16,15,"K");
-  px(17,7,"K");row(17,8,15,"B");px(17,16,"K");
-  [18,19,20].forEach(y=>{px(y,6,"K");px(y,7,"S");row(y,8,15,"B");px(y,16,"S");px(y,17,"K");});
-  px(21,7,"K");row(21,8,15,"B");px(21,16,"K");
-  px(22,7,"K");row(22,8,15,"C");px(22,16,"K");
-  px(23,7,"K");row(23,8,15,"B");px(23,16,"K");
-  px(24,7,"K");row(24,8,15,"b");px(24,16,"K");
-  // legs + boots
-  [25,26,27].forEach(y=>{px(y,8,"K");row(y,9,10,"L");px(y,11,"K");px(y,12,"K");row(y,13,14,"L");px(y,15,"K");});
-  px(28,7,"K");row(28,8,10,"F");px(28,11,"K");px(28,12,"K");row(28,13,15,"F");px(28,16,"K");
-  row(29,7,11,"K");row(29,12,16,"K");
 
-  // job-specific looks
+  // ── head (left-facing, chibi) ──
+  row(3,10,19,"K");
+  row(4,8,9,"K");row(4,10,19,"H");row(4,20,21,"K");
+  px(5,7,"K");row(5,8,21,"H");px(5,22,"K");
+  [6,7].forEach(y=>{px(y,6,"K");row(y,7,22,"H");px(y,23,"K");});
+  px(8,6,"K");row(8,7,22,"H");row(8,18,22,"h");px(8,23,"K");
+  // face field + hair behind
+  [9,10,11,12,13,14,15,16].forEach(y=>{
+    px(y,5,"K");row(y,6,15,"S");px(y,16,"s");row(y,17,22,"H");px(y,23,"K");
+  });
+  row(9,6,10,"H");px(9,11,"h");          // bangs
+  [10,11,12,13,14,15,16].forEach(y=>px(y,17,"h"));
+  row(9,17,22,"H");
+  // brow + eye (2x2) with highlight
+  px(10,8,"h");px(10,9,"h");
+  row(11,8,9,"E");row(12,8,9,"E");px(11,9,"W");
+  // nose bump on silhouette
+  px(13,4,"K");px(13,5,"S");
+  // mouth
+  px(15,8,"s");
+  // chin + jaw + hair bottom
+  px(17,6,"K");row(17,7,14,"S");px(17,15,"s");row(17,16,21,"h");px(17,22,"K");
+  px(18,7,"K");row(18,8,13,"S");px(18,14,"s");row(18,15,20,"h");px(18,21,"K");
+  // neck (in shadow)
+  px(19,9,"K");row(19,10,13,"s");row(19,14,19,"K");
+
+  // ── torso ──
+  px(20,8,"K");row(20,9,18,"B");px(20,19,"K");
+  px(21,7,"K");row(21,8,19,"B");px(21,20,"K");
+  [22,23,24,25,26].forEach(y=>{px(y,6,"K");row(y,7,20,"B");px(y,21,"K");});
+  // near arm (front) suggested by shading, hand at the end
+  px(22,8,"b");[22,23,24,25].forEach(y=>px(y,9,"b"));
+  row(26,7,9,"s");
+  // shading on the far side
+  [21,22,23,24,25,26].forEach(y=>px(y,19,"b"));
+  [22,23,24,25,26].forEach(y=>px(y,20,"d"));
+  // belt
+  px(27,6,"K");row(27,7,20,"C");px(27,21,"K");
+  // tunic skirt flare
+  [28,29,30].forEach(y=>{px(y,5,"K");row(y,6,21,"B");px(y,22,"K");});
+  row(30,6,21,"b");
+  px(31,5,"K");row(31,6,21,"d");px(31,22,"K");
+  [28,29].forEach(y=>px(y,20,"d"));
+
+  // ── legs (stepping left) ──
+  [32,33].forEach(y=>{px(y,7,"K");row(y,8,11,"L");px(y,12,"K");px(y,14,"K");row(y,15,18,"L");px(y,19,"K");});
+  // boots: front toe points left
+  px(34,5,"K");row(34,6,11,"F");px(34,12,"K");px(34,14,"K");row(34,15,18,"F");px(34,19,"K");
+  px(35,5,"K");row(35,6,11,"f");px(35,12,"K");px(35,14,"K");row(35,15,18,"f");px(35,19,"K");
+  row(36,5,12,"K");row(36,14,19,"K");
+
+  // ── job-specific looks ──
   if(job==="monk"){
-    row(6,6,17,"C");row(7,6,17,"C");                       // headband
-    [18,19,20].forEach(y=>{px(y,8,"S");px(y,15,"S");});    // sleeveless gi
+    // headband wrapping the hair line
+    row(8,6,23,"C");row(9,6,11,"C");row(9,17,23,"C");
+    // sleeveless gi: bare near arm
+    [22,23,24,25].forEach(y=>{px(y,7,"S");px(y,8,"S");px(y,9,"s");});
+    row(26,7,9,"S");px(26,9,"s");
   }
   if(job==="whitemage"){
-    row(0,10,13,"K");px(1,9,"K");row(1,10,13,"H");px(1,14,"K"); // hood peak
-    row(24,8,15,"C");                                       // red hem
-    [25,26,27].forEach(y=>{px(y,7,"K");row(y,8,15,"B");px(y,16,"K");}); // long robe
+    // pointed hood
+    row(1,12,15,"K");px(2,11,"K");row(2,12,15,"H");px(2,16,"K");
+    px(3,9,"K");row(3,10,19,"H");px(3,20,"K");
+    // robe covers the legs
+    [32,33,34].forEach(y=>{px(y,5,"K");row(y,6,21,"B");px(y,22,"K");px(y,20,"d");});
+    px(35,5,"K");row(35,6,21,"b");px(35,22,"K");
+    row(36,5,22,"K");
+    // red hem pattern
+    for(let x=6;x<=21;x++){if(x%3!==2){g[34][x]="C";g[35][x]="C";}}
+    px(22,8,"C");px(25,8,"C");
+    // staff with glowing orb (held in front)
+    for(let y=9;y<=34;y++)px(y,3,"T");
+    row(6,2,4,"G");row(7,2,4,"G");row(8,2,4,"G");px(7,3,"W");
+    px(26,3,"s");
   }
   if(job==="bard"){
-    px(2,16,"G");px(2,17,"G");px(3,17,"G");px(3,18,"G");px(4,18,"G");   // feather
+    // cap edge + feather sweeping back
+    row(8,6,23,"C");
+    px(3,20,"G");px(2,21,"G");px(2,22,"G");px(3,21,"g");px(3,22,"G");px(4,23,"G");px(5,23,"g");
   }
   if(job==="scholar"){
-    row(11,10,13,"K");px(11,7,"K");px(11,16,"K");           // glasses bridge+frames
-    px(6,5,"K");row(6,6,17,"H");px(6,18,"K");               // wide brim hat
-    px(18,3,"K");px(18,4,"K");px(18,5,"K");                 // book (top edge)
-    [19,20,21].forEach(y=>{px(y,2,"K");row(y,3,5,"G");px(y,6,"K");});
-    row(22,3,5,"K");
+    // wide flat brim
+    px(6,3,"K");row(6,4,25,"H");px(6,26,"K");
+    row(7,7,22,"h");
+    // round glasses + arm
+    px(10,7,"K");px(10,10,"K");row(10,8,9,"K");
+    px(11,7,"K");px(11,10,"K");
+    px(12,7,"K");px(12,10,"K");
+    row(13,8,9,"K");row(11,11,16,"K");
+    // book in front hand
+    row(24,1,5,"K");
+    [25,26,27].forEach(y=>{px(y,0,"K");row(y,1,4,"G");px(y,5,"K");});
+    row(25,1,4,"W");
+    row(28,1,5,"K");
   }
   if(job==="chef"){
-    px(0,7,"K");row(0,8,15,"H");px(0,16,"K");               // tall toque
-    px(1,6,"K");row(1,7,16,"H");px(1,17,"K");
-    [17,18,19,20,21].forEach(y=>row(y,9,14,"C"));           // apron
+    // tall toque
+    row(0,9,18,"K");
+    [1,2].forEach(y=>{px(y,8,"K");row(y,9,18,"H");px(y,19,"K");});
+    px(3,8,"K");row(3,9,19,"H");px(3,20,"K");
+    row(2,15,18,"h");
+    // apron with straps over the tunic
+    [21,22,23,24,25,26].forEach(y=>row(y,10,17,"C"));
+    [28,29].forEach(y=>row(y,9,18,"C"));
+    row(30,9,18,"C");
   }
   return g;
 }
@@ -1021,11 +1079,12 @@ function drawHero(canvas,tracks){
   const jobKey=currentJob(tracks);
   const job=JOB_DEFS[jobKey];
   const g=heroGrid(jobKey);
-  const pal={K:"#10121c",S:"#f0c8a0",E:"#2d2d3a",G:"#ffd257",...job.pal};
+  const pal={K:"#101018",S:"#f2c99b",s:"#d1a578",E:"#20222e",W:"#ffffff",
+    G:"#ffd257",g:"#c89b2a",T:"#8a5a2a",...job.pal};
   const ctx=canvas.getContext("2d");
-  const cell=canvas.width/24;
+  const cell=canvas.width/32;
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  for(let y=0;y<32;y++)for(let x=0;x<24;x++){
+  for(let y=0;y<40;y++)for(let x=0;x<32;x++){
     const ch=g[y][x];
     if(ch===".")continue;
     ctx.fillStyle=pal[ch]||"#fff";
@@ -1048,7 +1107,7 @@ function renderStatus(){
   // Hero card with pixel character (job = highest stat)
   const hero=el("div","hero-card");
   hero.innerHTML=`
-    <canvas id="hero-canvas" width="120" height="160"></canvas>
+    <canvas id="hero-canvas" width="128" height="160"></canvas>
     <div class="hero-job"></div>
     <div class="hero-level">Lv.${totalLvl}</div>
     <div class="hero-sub">総獲得 ${totalXP} XP ・ 5分野の合計レベル</div>`;
