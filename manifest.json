@@ -1,0 +1,15 @@
+{
+  "name": "週間クエスト",
+  "short_name": "週クエ",
+  "description": "予定と成果を記録してレベルアップする週間トラッカー",
+  "start_url": "./tracker.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f0f23",
+  "theme_color": "#0f0f23",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
