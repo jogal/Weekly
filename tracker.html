@@ -325,7 +325,8 @@ textarea.field-input { height:70px; resize:vertical; }
     <p class="modal-sub">Google CloudのOAuthクライアントID（ウェブアプリ用）を貼り付けて接続してください。設定手順はREADME参照。</p>
     <span class="field-label">OAuthクライアントID</span>
     <input type="text" class="field-input" id="gcal-client-id"
-      placeholder="xxxx.apps.googleusercontent.com" autocomplete="off">
+      placeholder="xxxx.apps.googleusercontent.com" autocomplete="off"
+      autocapitalize="none" autocorrect="off" spellcheck="false">
     <label class="check-row" style="margin-bottom:12px">
       <input type="checkbox" id="gcal-auto-check"> 予定の追加・移動・削除を自動で同期する
     </label>
@@ -1321,12 +1322,18 @@ document.getElementById("gcal-open").onclick=()=>{
 document.getElementById("gcal-close").onclick=()=>document.getElementById("gcal-modal").style.display="none";
 document.getElementById("gcal-modal").addEventListener("click",e=>{if(e.target===e.currentTarget)e.currentTarget.style.display="none";});
 document.getElementById("gcal-test").onclick=()=>{
-  const id=document.getElementById("gcal-client-id").value.trim();
+  // Normalize: strip all whitespace/newlines that sneak in when copying between devices
+  const id=document.getElementById("gcal-client-id").value.replace(/\s+/g,"");
   const auto=document.getElementById("gcal-auto-check").checked;
   localStorage.setItem("wt_gcal_client_id",id);
   localStorage.setItem("wt_gcal_auto",auto?"1":"0");
   gcalTokenClient=null; gcalToken=null;
   if(!id){setGcalStatus("クライアントIDを入力してください");return;}
+  if(!/^[\w-]+\.apps\.googleusercontent\.com$/.test(id)){
+    setGcalStatus("❌ IDの形式が違います。「数字-英数字.apps.googleusercontent.com」の形の文字列全体を貼り付けてください（クライアントシークレットではありません）");
+    return;
+  }
+  document.getElementById("gcal-client-id").value=id;
   setGcalStatus("接続中…");
   gcalGetToken()
     .then(()=>setGcalStatus("✅ 接続できました！自動同期の準備OK"))
