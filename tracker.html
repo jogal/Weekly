@@ -242,6 +242,32 @@ textarea.field-input { height:70px; resize:vertical; }
   background:#08081a; color:#fff; border:2px solid var(--txt); padding:10px 20px;
   font-size:13px; z-index:200; display:none; box-shadow:4px 4px 0 var(--shadow); }
 
+/* Monthly achievement dot calendar */
+.mcal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
+.mcal-hdr { text-align:center; font-size:10px; color:var(--dim); padding:2px 0; }
+.mcal-cell { background:#12122c; border:1px solid var(--line); min-height:44px; padding:3px; }
+.mcal-cell.empty { background:none; border-color:transparent; }
+.mcal-cell.today { border-color:var(--gold); }
+.mcal-num { font-size:9px; color:var(--dim); }
+.mcal-cell.today .mcal-num { color:var(--gold); font-weight:700; }
+.mcal-dots { display:flex; flex-wrap:wrap; gap:2px; margin-top:3px; }
+.mcal-dot { width:6px; height:6px; display:inline-block; }
+.mcal-more { font-size:8px; color:var(--dim); line-height:6px; }
+
+/* Pixel hero character */
+#hero-canvas { image-rendering:pixelated; width:96px; height:96px; margin-bottom:4px; }
+.hero-title { font-size:13px; color:var(--gold); margin:2px 0 4px; }
+.hero-next { font-size:10px; color:var(--faint); margin-top:4px; }
+.char-stat-title { font-size:12px; color:var(--green); font-weight:700;
+  letter-spacing:.2em; margin-bottom:10px; }
+.char-stat-row { display:flex; align-items:center; gap:8px; padding:5px 0; }
+.char-stat-lbl { font-size:12px; min-width:92px; }
+.char-stat-bar { flex:1; background:#0a0a1e; border:1px solid var(--line); height:10px; padding:1px; }
+.char-stat-fill { height:100%;
+  background-image:repeating-linear-gradient(to right, rgba(0,0,0,.35) 0 1px, transparent 1px 6px); }
+.char-stat-val { font-size:13px; font-weight:700; min-width:26px; text-align:right; }
+.char-stat-meta { font-size:11px; color:var(--dim); margin-top:10px; text-align:center; }
+
 /* Pixel button press effect */
 .nav-btn:active,.add-btn:active,.btn:active,.rec-btn:active,.mini-btn:active,
 .period-nav button:active { transform:translate(2px,2px); box-shadow:none; }
@@ -578,7 +604,8 @@ function showToast(msg){
 }
 
 // ── Google Calendar auto-sync (Google Identity Services + Calendar API) ──────
-const GCAL_SCOPE="https://www.googleapis.com/auth/calendar.events";
+const GCAL_SCOPE="https://www.googleapis.com/auth/calendar";
+const GCAL_CAL_NAME="週間クエスト";
 let gcalToken=null, gcalTokenExp=0, gcalTokenClient=null;
 function gcalClientId(){return localStorage.getItem("wt_gcal_client_id")||"";}
 function gcalAuto(){return localStorage.getItem("wt_gcal_auto")==="1"&&!!gcalClientId();}
@@ -608,11 +635,12 @@ function gcalEventBody(entry,dateObj){
     summary:((c?.icon||"")+" "+(entry.label||c?.label||"")).trim(),
     start:{dateTime:`${dstr}T${entry.time}:00`,timeZone:"Asia/Tokyo"},
     end:{dateTime:`${dstr}T${entry.endTime||entry.time}:00`,timeZone:"Asia/Tokyo"},
+    visibility:"private",
   };
 }
 async function gcalApi(path,method,body){
   const token=await gcalGetToken();
-  const res=await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events"+path,{
+  const res=await fetch("https://www.googleapis.com/calendar/v3"+path,{
     method,
     headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
     body:body?JSON.stringify(body):undefined,
@@ -620,21 +648,36 @@ async function gcalApi(path,method,body){
   if(!res.ok&&res.status!==410)throw new Error("Calendar API "+res.status);
   return res.status===204||res.status===410?null:res.json();
 }
+// Dedicated app calendar: find or create "週間クエスト" so events stay out of マイカレンダー
+function gcalEnsureCalendar(){
+  const saved=localStorage.getItem("wt_gcal_cal_id");
+  if(saved)return Promise.resolve(saved);
+  return gcalApi("/users/me/calendarList?minAccessRole=owner","GET").then(list=>{
+    const hit=(list.items||[]).find(c=>c.summary===GCAL_CAL_NAME);
+    if(hit)return hit.id;
+    return gcalApi("/calendars","POST",{summary:GCAL_CAL_NAME,timeZone:"Asia/Tokyo"}).then(c=>c.id);
+  }).then(id=>{localStorage.setItem("wt_gcal_cal_id",id);return id;});
+}
 // Fire-and-forget sync helpers: never block the UI, toast on success/failure
 function gcalSyncInsert(entry,dateObj){
   if(!gcalAuto())return;
-  gcalApi("","POST",gcalEventBody(entry,dateObj))
-    .then(ev=>{entry.gcalId=ev.id;persist();showToast("📅 Googleカレンダーに登録しました");})
-    .catch(()=>showToast("⚠️ カレンダー同期に失敗しました"));
+  (async()=>{
+    const cal=await gcalEnsureCalendar();
+    const ev=await gcalApi(`/calendars/${encodeURIComponent(cal)}/events`,"POST",gcalEventBody(entry,dateObj));
+    entry.gcalId=ev.id; entry.gcalCal=cal; persist();
+    showToast("📅 Googleカレンダーに登録しました");
+  })().catch(()=>showToast("⚠️ カレンダー同期に失敗しました"));
 }
 function gcalSyncPatch(entry,dateObj){
   if(!gcalAuto()||!entry.gcalId)return;
-  gcalApi("/"+entry.gcalId,"PATCH",gcalEventBody(entry,dateObj))
+  const cal=encodeURIComponent(entry.gcalCal||"primary");
+  gcalApi(`/calendars/${cal}/events/${entry.gcalId}`,"PATCH",gcalEventBody(entry,dateObj))
     .catch(()=>showToast("⚠️ カレンダー同期に失敗しました"));
 }
 function gcalSyncDelete(entry){
   if(!gcalAuto()||!entry.gcalId)return;
-  gcalApi("/"+entry.gcalId,"DELETE")
+  const cal=encodeURIComponent(entry.gcalCal||"primary");
+  gcalApi(`/calendars/${cal}/events/${entry.gcalId}`,"DELETE")
     .catch(()=>showToast("⚠️ カレンダー同期に失敗しました"));
 }
 
@@ -901,6 +944,65 @@ function hideHint(){
   document.getElementById("drag-hint").style.display="none";
 }
 
+// ── Pixel hero character ──────────────────────────────────────────────────────
+// 16x16 sprite: K=outline S=skin W=eye H=hair/helmet B=tunic L=legs
+// Overlays added per stage: A=blade G=gold T=wood/grip
+const HERO_BASE=[
+"................",
+".....KKKKK......",
+"....KHHHHHK.....",
+"....KHHHHHK.....",
+"....KSSSSSK.....",
+"....KSWSWSK.....",
+"....KSSSSSK.....",
+".....KSSSK......",
+"....KBBBBBK.....",
+"...KBBBBBBBK....",
+"...KSBBBBBSK....",
+"....KBBBBBK.....",
+"....KLL.LLK.....",
+"....KLL.LLK.....",
+"....KK...KK.....",
+"................"];
+const HERO_STAGES=[
+  {min:0, title:"見習い冒険者", tunic:"#4a7ab8", hair:"#7a4a2a", sword:false, shield:false, crown:false},
+  {min:10,title:"駆け出し戦士", tunic:"#3fae5c", hair:"#7a4a2a", sword:true,  shield:false, crown:false},
+  {min:20,title:"歴戦の騎士",   tunic:"#c0504d", hair:"#8fa3c8", sword:true,  shield:true,  crown:false},
+  {min:35,title:"伝説の勇者",   tunic:"#caa53d", hair:"#e8c84a", sword:true,  shield:true,  crown:true},
+];
+function heroStage(totalLvl){
+  return [...HERO_STAGES].reverse().find(s=>totalLvl>=s.min)||HERO_STAGES[0];
+}
+function drawHero(canvas,totalLvl){
+  const stage=heroStage(totalLvl);
+  const g=HERO_BASE.map(r=>r.split(""));
+  if(stage.sword){
+    for(let y=3;y<=9;y++)g[y][13]="A";
+    g[10][12]="G";g[10][13]="G";g[10][14]="G";
+    g[11][13]="T";
+  }
+  if(stage.shield){
+    for(let y=8;y<=12;y++){g[y][0]="K";g[y][1]="T";g[y][2]="T";}
+    g[10][1]="G";
+  }
+  if(stage.crown){
+    g[0][5]="G";g[0][7]="G";g[0][9]="G";
+    for(let x=5;x<=9;x++)g[1][x]="G";
+  }
+  const pal={K:"#10121c",S:"#f0c8a0",W:"#10121c",H:stage.hair,B:stage.tunic,
+    L:"#3a3a5a",A:"#cfd8e6",G:"#ffd257",T:"#8a5a2a"};
+  const ctx=canvas.getContext("2d");
+  const cell=canvas.width/16;
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+    const ch=g[y][x];
+    if(ch===".")continue;
+    ctx.fillStyle=pal[ch]||"#fff";
+    ctx.fillRect(x*cell,y*cell,cell,cell);
+  }
+  return stage;
+}
+
 // ── Status / Level View ───────────────────────────────────────────────────────
 function renderStatus(){
   const cont=document.getElementById("content");
@@ -912,13 +1014,54 @@ function renderStatus(){
   const totalLvl=tracks.reduce((a,t)=>a+t.lvl,0);
   const totalXP=tracks.reduce((a,t)=>a+t.xp,0);
 
-  // Hero card
+  // Hero card with pixel character
+  const stage=heroStage(totalLvl);
+  const nextStage=HERO_STAGES.find(s=>s.min>totalLvl);
   const hero=el("div","hero-card");
   hero.innerHTML=`
+    <canvas id="hero-canvas" width="112" height="112"></canvas>
     <div class="hero-rank">TRAINER RANK</div>
     <div class="hero-level">Lv.${totalLvl}</div>
-    <div class="hero-sub">総獲得 ${totalXP} XP ・ 5分野の合計レベル</div>`;
+    <div class="hero-title">―― ${stage.title} ――</div>
+    <div class="hero-sub">総獲得 ${totalXP} XP ・ 5分野の合計レベル</div>
+    ${nextStage?`<div class="hero-next">▼ Lv.${nextStage.min} で「${nextStage.title}」に進化</div>`:""}`;
   wrap.appendChild(hero);
+  drawHero(hero.querySelector("#hero-canvas"),totalLvl);
+
+  // RPG-style stat panel: each track becomes a stat
+  const STAT_DEFS=[
+    {id:"workout",   label:"ちから"},
+    {id:"medicine",  label:"かしこさ"},
+    {id:"instrument",label:"センス"},
+    {id:"english",   label:"ことば"},
+    {id:"cooking",   label:"たいりょく"},
+  ];
+  let doneTotal=0; const doneDays=new Set();
+  Object.keys(records).forEach(wk=>{
+    const wdates=getWeekDates(wk);
+    DAY_KEYS.forEach((dk,di)=>{
+      const day=records[wk]?.[dk];
+      if(!day)return;
+      Object.keys(day).forEach(cid=>{
+        if(day[cid]?.done){doneTotal++;doneDays.add(wdates[di].toDateString());}
+      });
+    });
+  });
+  const maxStat=Math.max(10,...tracks.map(t=>t.lvl));
+  const sCard=el("div","stats-card");
+  sCard.innerHTML=`<div class="char-stat-title">— STATUS —</div>`+
+    STAT_DEFS.map(s=>{
+      const t=tracks.find(x=>x.id===s.id);
+      if(!t)return "";
+      const pct=Math.round(t.lvl/maxStat*100);
+      return `<div class="char-stat-row">
+        <span class="char-stat-lbl">${t.icon} ${s.label}</span>
+        <div class="char-stat-bar"><div class="char-stat-fill" style="width:${pct}%;background:${t.color}"></div></div>
+        <span class="char-stat-val">${t.lvl}</span>
+      </div>`;
+    }).join("")+
+    `<div class="char-stat-meta">冒険日数 ${doneDays.size}日 ・ クエスト達成 ${doneTotal}回</div>`;
+  wrap.appendChild(sCard);
 
   // Track cards
   tracks.forEach(t=>{
@@ -992,6 +1135,27 @@ function aggregateStats(filterFn){
   return st;
 }
 
+// Completed-entry colors per day of a given month: {dayOfMonth: [color, ...]}
+function completedDotsForMonth(year,month){
+  const map={};
+  Object.keys(records).forEach(wk=>{
+    const dates=getWeekDates(wk);
+    DAY_KEYS.forEach((dk,di)=>{
+      const day=records[wk]?.[dk];
+      if(!day)return;
+      const d=dates[di];
+      if(d.getFullYear()!==year||d.getMonth()!==month)return;
+      Object.keys(day).forEach(catId=>{
+        if(!day[catId]?.done)return;
+        const c=catById(catId);
+        const color=c?.part?c.part.color:(c?.color||"#999");
+        (map[d.getDate()]=map[d.getDate()]||[]).push(color);
+      });
+    });
+  });
+  return map;
+}
+
 function renderStats(){
   const cont=document.getElementById("content");
   cont.innerHTML="";
@@ -1034,6 +1198,36 @@ function renderStats(){
     return d.getFullYear()===statsYear;
   };
   const st=aggregateStats(filterFn);
+
+  // ── Monthly achievement dot calendar ──
+  if(statsMode==="month"){
+    wrap.appendChild(el("p","section-label","達成カレンダー"));
+    const calCard=el("div","stats-card");
+    const grid=el("div","mcal-grid");
+    DAYS.forEach(d=>grid.appendChild(el("div","mcal-hdr",d)));
+    const dots=completedDotsForMonth(statsYear,statsMonth);
+    const offset=(new Date(statsYear,statsMonth,1).getDay()+6)%7; // Monday-start
+    const daysIn=new Date(statsYear,statsMonth+1,0).getDate();
+    const today=new Date();
+    for(let i=0;i<offset;i++)grid.appendChild(el("div","mcal-cell empty"));
+    for(let dd=1;dd<=daysIn;dd++){
+      const isToday=today.getFullYear()===statsYear&&today.getMonth()===statsMonth&&today.getDate()===dd;
+      const cell=el("div","mcal-cell"+(isToday?" today":""));
+      cell.appendChild(el("div","mcal-num",String(dd)));
+      const dr=el("div","mcal-dots");
+      const list=dots[dd]||[];
+      list.slice(0,6).forEach(col=>{
+        const dot=el("span","mcal-dot");
+        dot.style.background=col;
+        dr.appendChild(dot);
+      });
+      if(list.length>6)dr.appendChild(el("span","mcal-more","+"+(list.length-6)));
+      cell.appendChild(dr);
+      grid.appendChild(cell);
+    }
+    calCard.appendChild(grid);
+    wrap.appendChild(calCard);
+  }
 
   // ── Bar chart: completed counts per category (workout split by part) ──
   // Order: 7 workout parts + 4 base cats
@@ -1336,7 +1530,8 @@ document.getElementById("gcal-test").onclick=()=>{
   document.getElementById("gcal-client-id").value=id;
   setGcalStatus("接続中…");
   gcalGetToken()
-    .then(()=>setGcalStatus("✅ 接続できました！自動同期の準備OK"))
+    .then(()=>gcalEnsureCalendar())
+    .then(()=>setGcalStatus("✅ 接続できました！専用カレンダー『週間クエスト』に非公開で同期されます"))
     .catch(err=>setGcalStatus("❌ 接続失敗: "+err.message));
 };
 
