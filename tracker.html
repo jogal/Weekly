@@ -255,7 +255,7 @@ textarea.field-input { height:70px; resize:vertical; }
 .mcal-more { font-size:8px; color:var(--dim); line-height:6px; }
 
 /* Pixel hero character */
-#hero-canvas { image-rendering:pixelated; width:96px; height:120px; margin-bottom:2px; }
+#hero-canvas { image-rendering:pixelated; width:96px; height:123px; margin-bottom:2px; }
 .hero-job { font-size:12px; color:var(--gold); letter-spacing:.15em; margin-bottom:4px; }
 .char-stat-title { font-size:12px; color:var(--green); font-weight:700;
   letter-spacing:.2em; margin-bottom:10px; }
@@ -943,153 +943,181 @@ function hideHint(){
   document.getElementById("drag-hint").style.display="none";
 }
 
-// ── Pixel hero character (32x40, GBA-style shading, left-facing, job system) ──
+// ── Pixel hero character (32x40, GBA-style shading, left-facing, walk anim) ───
 // The look changes by "job": whichever stat (track) has the highest level wins.
-// Letters: K=outline S/s=skin E=eye W=highlight H/h=hair-hat B/b/d=clothes(3 shades)
-//          C=accent/trim L=legs F/f=boots G/g=gold T=wood
+// Palette letters: K=outline S/s=skin E=eye W=highlight H/h=hat-hair(2 shades)
+//   B/b/d=clothes(3 shades) C=trim L=legs F/f=boots G/g=gold(2) T=wood I=glow-eye
 const JOB_DEFS={
   novice:   {name:"すっぴん", pal:{H:"#8a5430",h:"#6a3d20",B:"#4a7ab8",b:"#3a608f",d:"#2c4a70",C:"#8a5a2a",L:"#3a3a5a",F:"#5a3a22",f:"#42280f"}},
-  monk:     {name:"モンク",   pal:{H:"#2d2d3a",h:"#1d1d28",B:"#e07830",b:"#b85c20",d:"#94491a",C:"#ece8da",L:"#e07830",F:"#8a5a2a",f:"#6a4018"}},
-  whitemage:{name:"白魔道士", pal:{H:"#f2eee2",h:"#d5cfc0",B:"#f2eee2",b:"#d5cfc0",d:"#b8b2a2",C:"#c23a3a",L:"#f2eee2",F:"#8a5a2a",f:"#6a4018"}},
+  monk:     {name:"モンク",   pal:{H:"#2a2a34",h:"#18181f",B:"#f07a24",b:"#c85e18",d:"#9c4712",C:"#f0ece0",L:"#f07a24",F:"#8a5a2a",f:"#6a4018"}},
+  whitemage:{name:"白魔道士", pal:{H:"#f4f1e6",h:"#d6d0be",B:"#f4f1e6",b:"#d6d0be",d:"#bab48f",C:"#c0392b",L:"#f4f1e6",F:"#9c6a2e",f:"#764a1c"}},
+  blackmage:{name:"黒魔道士", pal:{H:"#4a46a8",h:"#302c78",B:"#4a46a8",b:"#35318a",d:"#262260",C:"#caa53d",L:"#302c78",F:"#caa53d",f:"#9c7d24"}},
   bard:     {name:"吟遊詩人", pal:{H:"#2f8e5a",h:"#217346",B:"#33a06b",b:"#268254",d:"#1c6a42",C:"#caa53d",L:"#3a3a5a",F:"#5a3a22",f:"#42280f"}},
-  scholar:  {name:"学者",     pal:{H:"#31497e",h:"#25396a",B:"#3c5a9e",b:"#2f4a86",d:"#243a6e",C:"#caa53d",L:"#3a3a5a",F:"#2d2d3a",f:"#1d1d28"}},
-  chef:     {name:"料理人",   pal:{H:"#f2eee2",h:"#d5cfc0",B:"#c04040",b:"#9c3232",d:"#7e2828",C:"#f2eee2",L:"#3a3a5a",F:"#2d2d3a",f:"#1d1d28"}},
+  chef:     {name:"料理人",   pal:{H:"#f4f1e6",h:"#d6d0be",B:"#c83c3c",b:"#a02c2c",d:"#7e2020",C:"#f4f1e6",L:"#3a3a5a",F:"#2d2d3a",f:"#1d1d28"}},
 };
-const TRACK_JOB={workout:"monk",medicine:"whitemage",instrument:"bard",english:"scholar",cooking:"chef"};
+const TRACK_JOB={workout:"monk",medicine:"whitemage",instrument:"bard",english:"blackmage",cooking:"chef"};
 function currentJob(tracks){
   const max=Math.max(...tracks.map(t=>t.lvl));
   const top=tracks.filter(t=>t.lvl===max);
   if(max<=1||top.length===tracks.length)return "novice";
   return TRACK_JOB[top[0].id]||"novice";
 }
-function heroGrid(job){
+
+// Legs drawn per animation frame → simple 2-step "march in place"
+function drawLegs(g,job,frame){
+  const row=(y,x1,x2,ch)=>{for(let x=x1;x<=x2;x++)g[y][x]=ch;};
+  const px=(y,x,ch)=>{g[y][x]=ch;};
+  const mage=(job==="whitemage"||job==="blackmage");
+  // one foot lifts 1px while the other plants, swapping each frame
+  const lLift=frame?1:0, rLift=frame?0:1;
+  if(mage){
+    // only little feet poke out from under the robe
+    px(35-lLift,9,"K");row(35-lLift,10,11,"F");px(35-lLift,12,"K");
+    px(36-lLift,9,"K");row(36-lLift,10,11,"f");px(36-lLift,12,"K");
+    px(35-rLift,15,"K");row(35-rLift,16,17,"F");px(35-rLift,18,"K");
+    px(36-rLift,15,"K");row(36-rLift,16,17,"f");px(36-rLift,18,"K");
+    return;
+  }
+  // trousers
+  [32,33].forEach(y=>{px(y,7,"K");row(y,8,11,"L");px(y,12,"K");px(y,14,"K");row(y,15,18,"L");px(y,19,"K");});
+  // left boot (toe points left)
+  px(34-lLift,5,"K");row(34-lLift,6,11,"F");px(34-lLift,12,"K");
+  px(35-lLift,5,"K");row(35-lLift,6,11,"f");px(35-lLift,12,"K");
+  px(36-lLift,6,"K");row(36-lLift,7,11,"K");
+  // right boot
+  px(34-rLift,14,"K");row(34-rLift,15,18,"F");px(34-rLift,19,"K");
+  px(35-rLift,14,"K");row(35-rLift,15,18,"f");px(35-rLift,19,"K");
+  px(36-rLift,14,"K");row(36-rLift,15,18,"K");
+}
+
+function heroGrid(job,frame){
   const g=Array.from({length:40},()=>Array(32).fill("."));
   const row=(y,x1,x2,ch)=>{for(let x=x1;x<=x2;x++)g[y][x]=ch;};
   const px=(y,x,ch)=>{g[y][x]=ch;};
 
-  // ── head (left-facing, chibi) ──
+  if(job==="blackmage"){
+    // ── iconic pointed hat (wide floppy brim, tip curling left) ──
+    px(2,17,"H");px(2,18,"H");
+    px(3,15,"H");row(3,16,18,"H");
+    px(4,14,"H");row(4,15,19,"H");
+    row(5,13,20,"H");
+    row(6,12,21,"H");
+    row(7,11,22,"H");
+    row(8,6,24,"H");            // brim top
+    row(9,5,25,"h");            // brim underside (shadow)
+    // ── shadowed face under the brim, two glowing eyes ──
+    [10,11,12,13,14,15,16].forEach(y=>{px(y,7,"K");row(y,8,19,"K");px(y,20,"K");});
+    row(12,9,10,"I");row(12,15,16,"I");   // eyes
+    px(13,9,"I");px(13,16,"I");
+    // ── indigo robe to the floor ──
+    px(17,8,"K");row(17,9,18,"B");px(17,19,"K");
+    px(18,7,"K");row(18,8,19,"B");px(18,20,"K");
+    [19,20,21,22,23,24,25,26,27].forEach(y=>{px(y,6,"K");row(y,7,20,"B");px(y,21,"K");});
+    // sleeve/arm shading + gold trim mid-robe
+    [19,20,21,22].forEach(y=>{px(y,7,"b");px(y,19,"b");px(y,20,"d");});
+    row(23,7,20,"C");           // gold sash
+    [28,29,30,31,32,33,34].forEach(y=>{px(y,5,"K");row(y,6,21,"B");px(y,22,"K");px(y,20,"d");});
+    row(34,6,21,"b");
+    // wooden staff with topaz, held in the front hand
+    for(let y=10;y<=34;y++)px(y,3,"T");
+    row(7,2,4,"G");row(8,2,4,"G");row(9,2,4,"G");px(8,3,"W");
+    px(26,3,"s");px(27,3,"s");  // gloved hand hint
+    drawLegs(g,job,frame);
+    return g;
+  }
+
+  // ── standard head (left-facing, chibi) ──
   row(3,10,19,"K");
   row(4,8,9,"K");row(4,10,19,"H");row(4,20,21,"K");
   px(5,7,"K");row(5,8,21,"H");px(5,22,"K");
   [6,7].forEach(y=>{px(y,6,"K");row(y,7,22,"H");px(y,23,"K");});
   px(8,6,"K");row(8,7,22,"H");row(8,18,22,"h");px(8,23,"K");
-  // face field + hair behind
   [9,10,11,12,13,14,15,16].forEach(y=>{
     px(y,5,"K");row(y,6,15,"S");px(y,16,"s");row(y,17,22,"H");px(y,23,"K");
   });
-  row(9,6,10,"H");px(9,11,"h");          // bangs
+  row(9,6,10,"H");px(9,11,"h");
   [10,11,12,13,14,15,16].forEach(y=>px(y,17,"h"));
   row(9,17,22,"H");
-  // brow + eye (2x2) with highlight
   px(10,8,"h");px(10,9,"h");
   row(11,8,9,"E");row(12,8,9,"E");px(11,9,"W");
-  // nose bump on silhouette
   px(13,4,"K");px(13,5,"S");
-  // mouth
   px(15,8,"s");
-  // chin + jaw + hair bottom
   px(17,6,"K");row(17,7,14,"S");px(17,15,"s");row(17,16,21,"h");px(17,22,"K");
   px(18,7,"K");row(18,8,13,"S");px(18,14,"s");row(18,15,20,"h");px(18,21,"K");
-  // neck (in shadow)
   px(19,9,"K");row(19,10,13,"s");row(19,14,19,"K");
 
   // ── torso ──
   px(20,8,"K");row(20,9,18,"B");px(20,19,"K");
   px(21,7,"K");row(21,8,19,"B");px(21,20,"K");
   [22,23,24,25,26].forEach(y=>{px(y,6,"K");row(y,7,20,"B");px(y,21,"K");});
-  // near arm (front) suggested by shading, hand at the end
   px(22,8,"b");[22,23,24,25].forEach(y=>px(y,9,"b"));
   row(26,7,9,"s");
-  // shading on the far side
   [21,22,23,24,25,26].forEach(y=>px(y,19,"b"));
   [22,23,24,25,26].forEach(y=>px(y,20,"d"));
-  // belt
   px(27,6,"K");row(27,7,20,"C");px(27,21,"K");
-  // tunic skirt flare
   [28,29,30].forEach(y=>{px(y,5,"K");row(y,6,21,"B");px(y,22,"K");});
   row(30,6,21,"b");
   px(31,5,"K");row(31,6,21,"d");px(31,22,"K");
   [28,29].forEach(y=>px(y,20,"d"));
 
-  // ── legs (stepping left) ──
-  [32,33].forEach(y=>{px(y,7,"K");row(y,8,11,"L");px(y,12,"K");px(y,14,"K");row(y,15,18,"L");px(y,19,"K");});
-  // boots: front toe points left
-  px(34,5,"K");row(34,6,11,"F");px(34,12,"K");px(34,14,"K");row(34,15,18,"F");px(34,19,"K");
-  px(35,5,"K");row(35,6,11,"f");px(35,12,"K");px(35,14,"K");row(35,15,18,"f");px(35,19,"K");
-  row(36,5,12,"K");row(36,14,19,"K");
+  drawLegs(g,job,frame);
 
-  // ── job-specific looks ──
+  // ── job-specific extras ──
   if(job==="monk"){
-    // headband wrapping the hair line
     row(8,6,23,"C");row(9,6,11,"C");row(9,17,23,"C");
-    // sleeveless gi: bare near arm
     [22,23,24,25].forEach(y=>{px(y,7,"S");px(y,8,"S");px(y,9,"s");});
     row(26,7,9,"S");px(26,9,"s");
   }
   if(job==="whitemage"){
-    // pointed hood
     row(1,12,15,"K");px(2,11,"K");row(2,12,15,"H");px(2,16,"K");
     px(3,9,"K");row(3,10,19,"H");px(3,20,"K");
-    // robe covers the legs
-    [32,33,34].forEach(y=>{px(y,5,"K");row(y,6,21,"B");px(y,22,"K");px(y,20,"d");});
-    px(35,5,"K");row(35,6,21,"b");px(35,22,"K");
-    row(36,5,22,"K");
-    // red hem pattern
-    for(let x=6;x<=21;x++){if(x%3!==2){g[34][x]="C";g[35][x]="C";}}
-    px(22,8,"C");px(25,8,"C");
-    // staff with glowing orb (held in front)
-    for(let y=9;y<=34;y++)px(y,3,"T");
-    row(6,2,4,"G");row(7,2,4,"G");row(8,2,4,"G");px(7,3,"W");
-    px(26,3,"s");
+    // long robe over the legs, red triangle hem
+    [31,32,33].forEach(y=>{px(y,5,"K");row(y,6,21,"B");px(y,22,"K");px(y,20,"d");});
+    px(34,5,"K");row(34,6,21,"b");px(34,22,"K");
+    for(let x=6;x<=21;x+=3){px(33,x,"C");px(34,x,"C");px(34,x+1,"C");}
+    px(22,8,"C");px(25,8,"C");   // shoulder trim
   }
   if(job==="bard"){
-    // cap edge + feather sweeping back
     row(8,6,23,"C");
     px(3,20,"G");px(2,21,"G");px(2,22,"G");px(3,21,"g");px(3,22,"G");px(4,23,"G");px(5,23,"g");
   }
-  if(job==="scholar"){
-    // wide flat brim
-    px(6,3,"K");row(6,4,25,"H");px(6,26,"K");
-    row(7,7,22,"h");
-    // round glasses + arm
-    px(10,7,"K");px(10,10,"K");row(10,8,9,"K");
-    px(11,7,"K");px(11,10,"K");
-    px(12,7,"K");px(12,10,"K");
-    row(13,8,9,"K");row(11,11,16,"K");
-    // book in front hand
-    row(24,1,5,"K");
-    [25,26,27].forEach(y=>{px(y,0,"K");row(y,1,4,"G");px(y,5,"K");});
-    row(25,1,4,"W");
-    row(28,1,5,"K");
-  }
   if(job==="chef"){
-    // tall toque
     row(0,9,18,"K");
     [1,2].forEach(y=>{px(y,8,"K");row(y,9,18,"H");px(y,19,"K");});
     px(3,8,"K");row(3,9,19,"H");px(3,20,"K");
     row(2,15,18,"h");
-    // apron with straps over the tunic
     [21,22,23,24,25,26].forEach(y=>row(y,10,17,"C"));
     [28,29].forEach(y=>row(y,9,18,"C"));
     row(30,9,18,"C");
   }
   return g;
 }
+
+let heroTimer=null;
 function drawHero(canvas,tracks){
   const jobKey=currentJob(tracks);
   const job=JOB_DEFS[jobKey];
-  const g=heroGrid(jobKey);
   const pal={K:"#101018",S:"#f2c99b",s:"#d1a578",E:"#20222e",W:"#ffffff",
-    G:"#ffd257",g:"#c89b2a",T:"#8a5a2a",...job.pal};
+    G:"#ffd257",g:"#c89b2a",T:"#8a5a2a",I:"#ffe94a",...job.pal};
   const ctx=canvas.getContext("2d");
   const cell=canvas.width/32;
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-  for(let y=0;y<40;y++)for(let x=0;x<32;x++){
-    const ch=g[y][x];
-    if(ch===".")continue;
-    ctx.fillStyle=pal[ch]||"#fff";
-    ctx.fillRect(x*cell,y*cell,cell,cell);
-  }
+  if(heroTimer){clearInterval(heroTimer);heroTimer=null;}
+  let frame=0;
+  const paint=()=>{
+    if(!canvas.isConnected){clearInterval(heroTimer);heroTimer=null;return;}
+    const g=heroGrid(jobKey,frame);
+    ctx.clearRect(0,0,canvas.width,canvas.height);
+    const bob=frame?cell:0;   // 1px vertical bounce
+    for(let y=0;y<40;y++)for(let x=0;x<32;x++){
+      const ch=g[y][x];
+      if(ch===".")continue;
+      ctx.fillStyle=pal[ch]||"#fff";
+      ctx.fillRect(x*cell,y*cell+bob,cell,cell);
+    }
+    frame^=1;
+  };
+  paint();
+  heroTimer=setInterval(paint,480);
   return job;
 }
 
@@ -1107,7 +1135,7 @@ function renderStatus(){
   // Hero card with pixel character (job = highest stat)
   const hero=el("div","hero-card");
   hero.innerHTML=`
-    <canvas id="hero-canvas" width="128" height="160"></canvas>
+    <canvas id="hero-canvas" width="128" height="164"></canvas>
     <div class="hero-job"></div>
     <div class="hero-level">Lv.${totalLvl}</div>
     <div class="hero-sub">総獲得 ${totalXP} XP ・ 5分野の合計レベル</div>`;
