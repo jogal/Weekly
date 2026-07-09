@@ -255,9 +255,8 @@ textarea.field-input { height:70px; resize:vertical; }
 .mcal-more { font-size:8px; color:var(--dim); line-height:6px; }
 
 /* Pixel hero character */
-#hero-canvas { image-rendering:pixelated; width:96px; height:96px; margin-bottom:4px; }
-.hero-title { font-size:13px; color:var(--gold); margin:2px 0 4px; }
-.hero-next { font-size:10px; color:var(--faint); margin-top:4px; }
+#hero-canvas { image-rendering:pixelated; width:90px; height:120px; margin-bottom:2px; }
+.hero-job { font-size:12px; color:var(--gold); letter-spacing:.15em; margin-bottom:4px; }
 .char-stat-title { font-size:12px; color:var(--green); font-weight:700;
   letter-spacing:.2em; margin-bottom:10px; }
 .char-stat-row { display:flex; align-items:center; gap:8px; padding:5px 0; }
@@ -944,63 +943,95 @@ function hideHint(){
   document.getElementById("drag-hint").style.display="none";
 }
 
-// ── Pixel hero character ──────────────────────────────────────────────────────
-// 16x16 sprite: K=outline S=skin W=eye H=hair/helmet B=tunic L=legs
-// Overlays added per stage: A=blade G=gold T=wood/grip
-const HERO_BASE=[
-"................",
-".....KKKKK......",
-"....KHHHHHK.....",
-"....KHHHHHK.....",
-"....KSSSSSK.....",
-"....KSWSWSK.....",
-"....KSSSSSK.....",
-".....KSSSK......",
-"....KBBBBBK.....",
-"...KBBBBBBBK....",
-"...KSBBBBBSK....",
-"....KBBBBBK.....",
-"....KLL.LLK.....",
-"....KLL.LLK.....",
-"....KK...KK.....",
-"................"];
-const HERO_STAGES=[
-  {min:0, title:"見習い冒険者", tunic:"#4a7ab8", hair:"#7a4a2a", sword:false, shield:false, crown:false},
-  {min:10,title:"駆け出し戦士", tunic:"#3fae5c", hair:"#7a4a2a", sword:true,  shield:false, crown:false},
-  {min:20,title:"歴戦の騎士",   tunic:"#c0504d", hair:"#8fa3c8", sword:true,  shield:true,  crown:false},
-  {min:35,title:"伝説の勇者",   tunic:"#caa53d", hair:"#e8c84a", sword:true,  shield:true,  crown:true},
-];
-function heroStage(totalLvl){
-  return [...HERO_STAGES].reverse().find(s=>totalLvl>=s.min)||HERO_STAGES[0];
+// ── Pixel hero character (24x32, 16-bit JRPG style, job system) ──────────────
+// The look changes by "job": whichever stat (track) has the highest level wins.
+// Letters: K=outline S=skin E=eye H=hair/hat B=clothes b=clothes shadow
+//          C=accent/trim L=legs F=boots G=gold prop
+const JOB_DEFS={
+  novice:   {name:"すっぴん", pal:{H:"#7a4a2a",B:"#4a7ab8",b:"#35588a",C:"#8a5a2a",L:"#3a3a5a",F:"#5a3a22"}},
+  monk:     {name:"モンク",   pal:{H:"#2d2d3a",B:"#e07830",b:"#b05a20",C:"#e8e8e0",L:"#e07830",F:"#8a5a2a"}},
+  whitemage:{name:"白魔道士", pal:{H:"#f0ece0",B:"#f0ece0",b:"#cfc8b8",C:"#c03838",L:"#f0ece0",F:"#8a5a2a"}},
+  bard:     {name:"吟遊詩人", pal:{H:"#2f8e5a",B:"#2fa06a",b:"#1f7a4a",C:"#caa53d",L:"#3a3a5a",F:"#5a3a22"}},
+  scholar:  {name:"学者",     pal:{H:"#2f4a8e",B:"#3a5aa8",b:"#2a4078",C:"#caa53d",L:"#3a3a5a",F:"#2d2d3a"}},
+  chef:     {name:"料理人",   pal:{H:"#f0ece0",B:"#c04040",b:"#983030",C:"#f0ece0",L:"#3a3a5a",F:"#2d2d3a"}},
+};
+const TRACK_JOB={workout:"monk",medicine:"whitemage",instrument:"bard",english:"scholar",cooking:"chef"};
+function currentJob(tracks){
+  const max=Math.max(...tracks.map(t=>t.lvl));
+  const top=tracks.filter(t=>t.lvl===max);
+  if(max<=1||top.length===tracks.length)return "novice";
+  return TRACK_JOB[top[0].id]||"novice";
 }
-function drawHero(canvas,totalLvl){
-  const stage=heroStage(totalLvl);
-  const g=HERO_BASE.map(r=>r.split(""));
-  if(stage.sword){
-    for(let y=3;y<=9;y++)g[y][13]="A";
-    g[10][12]="G";g[10][13]="G";g[10][14]="G";
-    g[11][13]="T";
+function heroGrid(job){
+  const g=Array.from({length:32},()=>Array(24).fill("."));
+  const row=(y,x1,x2,ch)=>{for(let x=x1;x<=x2;x++)g[y][x]=ch;};
+  const px=(y,x,ch)=>{g[y][x]=ch;};
+  // head: big JRPG-chibi proportions
+  row(2,8,15,"K");
+  px(3,7,"K");row(3,8,15,"H");px(3,16,"K");
+  [4,5,6].forEach(y=>{px(y,6,"K");row(y,7,16,"H");px(y,17,"K");});
+  px(7,6,"K");row(7,7,8,"H");row(7,9,14,"S");row(7,15,16,"H");px(7,17,"K");
+  px(8,6,"K");px(8,7,"H");row(8,8,15,"S");px(8,16,"H");px(8,17,"K");
+  [9,10,11,12,13].forEach(y=>{px(y,6,"K");row(y,7,16,"S");px(y,17,"K");});
+  row(10,8,9,"E");row(10,14,15,"E");
+  row(11,8,9,"E");row(11,14,15,"E");
+  px(14,7,"K");row(14,8,15,"S");px(14,16,"K");
+  px(15,8,"K");row(15,9,14,"S");px(15,15,"K");
+  // body with arms at the sides
+  px(16,8,"K");row(16,9,14,"B");px(16,15,"K");
+  px(17,7,"K");row(17,8,15,"B");px(17,16,"K");
+  [18,19,20].forEach(y=>{px(y,6,"K");px(y,7,"S");row(y,8,15,"B");px(y,16,"S");px(y,17,"K");});
+  px(21,7,"K");row(21,8,15,"B");px(21,16,"K");
+  px(22,7,"K");row(22,8,15,"C");px(22,16,"K");
+  px(23,7,"K");row(23,8,15,"B");px(23,16,"K");
+  px(24,7,"K");row(24,8,15,"b");px(24,16,"K");
+  // legs + boots
+  [25,26,27].forEach(y=>{px(y,8,"K");row(y,9,10,"L");px(y,11,"K");px(y,12,"K");row(y,13,14,"L");px(y,15,"K");});
+  px(28,7,"K");row(28,8,10,"F");px(28,11,"K");px(28,12,"K");row(28,13,15,"F");px(28,16,"K");
+  row(29,7,11,"K");row(29,12,16,"K");
+
+  // job-specific looks
+  if(job==="monk"){
+    row(6,6,17,"C");row(7,6,17,"C");                       // headband
+    [18,19,20].forEach(y=>{px(y,8,"S");px(y,15,"S");});    // sleeveless gi
   }
-  if(stage.shield){
-    for(let y=8;y<=12;y++){g[y][0]="K";g[y][1]="T";g[y][2]="T";}
-    g[10][1]="G";
+  if(job==="whitemage"){
+    row(0,10,13,"K");px(1,9,"K");row(1,10,13,"H");px(1,14,"K"); // hood peak
+    row(24,8,15,"C");                                       // red hem
+    [25,26,27].forEach(y=>{px(y,7,"K");row(y,8,15,"B");px(y,16,"K");}); // long robe
   }
-  if(stage.crown){
-    g[0][5]="G";g[0][7]="G";g[0][9]="G";
-    for(let x=5;x<=9;x++)g[1][x]="G";
+  if(job==="bard"){
+    px(2,16,"G");px(2,17,"G");px(3,17,"G");px(3,18,"G");px(4,18,"G");   // feather
   }
-  const pal={K:"#10121c",S:"#f0c8a0",W:"#10121c",H:stage.hair,B:stage.tunic,
-    L:"#3a3a5a",A:"#cfd8e6",G:"#ffd257",T:"#8a5a2a"};
+  if(job==="scholar"){
+    row(11,10,13,"K");px(11,7,"K");px(11,16,"K");           // glasses bridge+frames
+    px(6,5,"K");row(6,6,17,"H");px(6,18,"K");               // wide brim hat
+    px(18,3,"K");px(18,4,"K");px(18,5,"K");                 // book (top edge)
+    [19,20,21].forEach(y=>{px(y,2,"K");row(y,3,5,"G");px(y,6,"K");});
+    row(22,3,5,"K");
+  }
+  if(job==="chef"){
+    px(0,7,"K");row(0,8,15,"H");px(0,16,"K");               // tall toque
+    px(1,6,"K");row(1,7,16,"H");px(1,17,"K");
+    [17,18,19,20,21].forEach(y=>row(y,9,14,"C"));           // apron
+  }
+  return g;
+}
+function drawHero(canvas,tracks){
+  const jobKey=currentJob(tracks);
+  const job=JOB_DEFS[jobKey];
+  const g=heroGrid(jobKey);
+  const pal={K:"#10121c",S:"#f0c8a0",E:"#2d2d3a",G:"#ffd257",...job.pal};
   const ctx=canvas.getContext("2d");
-  const cell=canvas.width/16;
+  const cell=canvas.width/24;
   ctx.clearRect(0,0,canvas.width,canvas.height);
-  for(let y=0;y<16;y++)for(let x=0;x<16;x++){
+  for(let y=0;y<32;y++)for(let x=0;x<24;x++){
     const ch=g[y][x];
     if(ch===".")continue;
     ctx.fillStyle=pal[ch]||"#fff";
     ctx.fillRect(x*cell,y*cell,cell,cell);
   }
-  return stage;
+  return job;
 }
 
 // ── Status / Level View ───────────────────────────────────────────────────────
@@ -1014,19 +1045,16 @@ function renderStatus(){
   const totalLvl=tracks.reduce((a,t)=>a+t.lvl,0);
   const totalXP=tracks.reduce((a,t)=>a+t.xp,0);
 
-  // Hero card with pixel character
-  const stage=heroStage(totalLvl);
-  const nextStage=HERO_STAGES.find(s=>s.min>totalLvl);
+  // Hero card with pixel character (job = highest stat)
   const hero=el("div","hero-card");
   hero.innerHTML=`
-    <canvas id="hero-canvas" width="112" height="112"></canvas>
-    <div class="hero-rank">TRAINER RANK</div>
+    <canvas id="hero-canvas" width="120" height="160"></canvas>
+    <div class="hero-job"></div>
     <div class="hero-level">Lv.${totalLvl}</div>
-    <div class="hero-title">―― ${stage.title} ――</div>
-    <div class="hero-sub">総獲得 ${totalXP} XP ・ 5分野の合計レベル</div>
-    ${nextStage?`<div class="hero-next">▼ Lv.${nextStage.min} で「${nextStage.title}」に進化</div>`:""}`;
+    <div class="hero-sub">総獲得 ${totalXP} XP ・ 5分野の合計レベル</div>`;
   wrap.appendChild(hero);
-  drawHero(hero.querySelector("#hero-canvas"),totalLvl);
+  const job=drawHero(hero.querySelector("#hero-canvas"),tracks);
+  hero.querySelector(".hero-job").textContent="JOB─"+job.name;
 
   // RPG-style stat panel: each track becomes a stat
   const STAT_DEFS=[
