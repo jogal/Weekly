@@ -347,13 +347,13 @@ textarea.field-input { height:70px; resize:vertical; }
 <div class="overlay" id="gcal-modal" style="display:none">
   <div class="modal-box">
     <h3 class="modal-title">📅 Googleカレンダー連携</h3>
-    <p class="modal-sub">Google CloudのOAuthクライアントID（ウェブアプリ用）を貼り付けて接続してください。設定手順はREADME参照。</p>
+    <p class="modal-sub">一度接続すれば、予定の追加・移動・削除は<b>自動で</b>専用カレンダー『週間クエスト』（非公開）に反映されます。カレンダーを開く必要はありません。設定手順はREADME参照。</p>
     <span class="field-label">OAuthクライアントID</span>
     <input type="text" class="field-input" id="gcal-client-id"
       placeholder="xxxx.apps.googleusercontent.com" autocomplete="off"
       autocapitalize="none" autocorrect="off" spellcheck="false">
     <label class="check-row" style="margin-bottom:12px">
-      <input type="checkbox" id="gcal-auto-check"> 予定の追加・移動・削除を自動で同期する
+      <input type="checkbox" id="gcal-auto-check" checked> 自動同期を有効にする（推奨）
     </label>
     <p class="modal-sub" id="gcal-status" style="min-height:1em"></p>
     <div class="btn-row">
@@ -753,10 +753,13 @@ function renderList(){
         rb.onclick=()=>openRec(di,dk,e);row.appendChild(rb);
       }
       if(tab==="schedule"){
-        const gb=el("button","gcal-btn","📅");
-        gb.title="Googleカレンダーに追加";
-        gb.onclick=()=>window.open(gcalUrl(e,dates[di]),"_blank");
-        row.appendChild(gb);
+        // Manual "open Google Calendar" button only when auto-sync is off
+        if(!gcalAuto()){
+          const gb=el("button","gcal-btn","📅");
+          gb.title="Googleカレンダーに追加";
+          gb.onclick=()=>window.open(gcalUrl(e,dates[di]),"_blank");
+          row.appendChild(gb);
+        }
         const db=el("button","del-btn","✕");
         db.onclick=()=>{gcalSyncDelete(e);ws[dk].splice(ei,1);schedules[weekKey]=ws;saveData();render();};
         row.appendChild(db);
@@ -1624,8 +1627,8 @@ document.getElementById("import-btn").onclick=()=>{
 function setGcalStatus(msg){document.getElementById("gcal-status").textContent=msg;}
 document.getElementById("gcal-open").onclick=()=>{
   document.getElementById("gcal-client-id").value=gcalClientId();
-  document.getElementById("gcal-auto-check").checked=localStorage.getItem("wt_gcal_auto")==="1";
-  setGcalStatus(gcalClientId()?"設定済み":"");
+  document.getElementById("gcal-auto-check").checked=localStorage.getItem("wt_gcal_auto")!=="0";
+  setGcalStatus(gcalAuto()?"✅ 自動同期ON: 週間クエスト（非公開）に同期中":(gcalClientId()?"設定済み（自動同期OFF）":""));
   document.getElementById("gcal-modal").style.display="flex";
 };
 document.getElementById("gcal-close").onclick=()=>document.getElementById("gcal-modal").style.display="none";
