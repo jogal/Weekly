@@ -1,10 +1,16 @@
-const CACHE = "weekly-quest-v8";
+const CACHE = "weekly-quest-v9";
 const ASSETS = [
   "./tracker.html",
   "./manifest.json",
   "./icon-192.png",
   "./icon-512.png",
   "./icon-180.png",
+  "./sprites/novice.png",
+  "./sprites/monk.png",
+  "./sprites/whitemage.png",
+  "./sprites/blackmage.png",
+  "./sprites/bard.png",
+  "./sprites/chef.png",
 ];
 
 self.addEventListener("install", e => {
