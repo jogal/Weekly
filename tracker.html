@@ -242,30 +242,37 @@ textarea.field-input { height:70px; resize:vertical; }
   background:#08081a; color:#fff; border:2px solid var(--txt); padding:10px 20px;
   font-size:13px; z-index:200; display:none; box-shadow:4px 4px 0 var(--shadow); }
 
-/* Monthly achievement dot calendar */
-.mcal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:2px; }
-.mcal-hdr { text-align:center; font-size:10px; color:var(--dim); padding:2px 0; }
-.mcal-cell { background:#12122c; border:1px solid var(--line); min-height:44px; padding:3px; }
+/* Monthly achievement calendar: fixed 5-slot grid per day, filled = theme color */
+.mcal-grid { display:grid; grid-template-columns:repeat(7,1fr); gap:1px; }
+.mcal-hdr { text-align:center; font-size:10px; color:var(--dim); padding:1px 0; }
+.mcal-cell { background:#12122c; border:1px solid var(--line); padding:2px 2px 3px; }
 .mcal-cell.empty { background:none; border-color:transparent; }
 .mcal-cell.today { border-color:var(--gold); }
-.mcal-num { font-size:9px; color:var(--dim); }
+.mcal-num { font-size:9px; color:var(--dim); line-height:1.1; }
 .mcal-cell.today .mcal-num { color:var(--gold); font-weight:700; }
-.mcal-dots { display:flex; flex-wrap:wrap; gap:2px; margin-top:3px; }
-.mcal-dot { width:6px; height:6px; display:inline-block; }
-.mcal-more { font-size:8px; color:var(--dim); line-height:6px; }
+.mcal-slots { display:grid; grid-template-columns:repeat(5,1fr); gap:1px; margin-top:2px; }
+.mcal-slot { aspect-ratio:1; background:#0a0a1e; border:1px solid #1c1c3e; }
+.mcal-legend { display:flex; flex-wrap:wrap; gap:8px; margin-top:8px; font-size:10px; color:var(--dim); }
+.mcal-legend span { display:inline-flex; align-items:center; gap:3px; }
+.mcal-legend i { width:9px; height:9px; display:inline-block; }
 
 /* Pixel hero character */
 #hero-canvas { image-rendering:pixelated; width:96px; height:123px; margin-bottom:2px; }
 .hero-job { font-size:12px; color:var(--gold); letter-spacing:.15em; margin-bottom:4px; }
-.char-stat-title { font-size:12px; color:var(--green); font-weight:700;
-  letter-spacing:.2em; margin-bottom:10px; }
-.char-stat-row { display:flex; align-items:center; gap:8px; padding:5px 0; }
-.char-stat-lbl { font-size:12px; min-width:92px; }
-.char-stat-bar { flex:1; background:#0a0a1e; border:1px solid var(--line); height:10px; padding:1px; }
+/* Compact side-by-side: character on the left, level+job+stats on the right */
+.hero-compact { display:flex; align-items:center; gap:12px; text-align:left; padding:12px; }
+.hero-compact #hero-canvas { width:74px; height:95px; margin:0; flex-shrink:0; }
+.hero-compact::after { display:none; }
+.hero-info { flex:1; min-width:0; }
+.hero-info .hero-level { font-size:26px; margin:0; line-height:1; text-shadow:2px 2px 0 #143314; }
+.hero-info .hero-job { font-size:11px; margin:1px 0 6px; }
+.hero-info .hero-sub { font-size:10px; margin-top:6px; }
+.char-stat-row { display:flex; align-items:center; gap:6px; padding:2px 0; }
+.char-stat-lbl { font-size:11px; min-width:74px; }
+.char-stat-bar { flex:1; background:#0a0a1e; border:1px solid var(--line); height:9px; padding:1px; }
 .char-stat-fill { height:100%;
   background-image:repeating-linear-gradient(to right, rgba(0,0,0,.35) 0 1px, transparent 1px 6px); }
-.char-stat-val { font-size:13px; font-weight:700; min-width:26px; text-align:right; }
-.char-stat-meta { font-size:11px; color:var(--dim); margin-top:10px; text-align:center; }
+.char-stat-val { font-size:12px; font-weight:700; min-width:20px; text-align:right; }
 
 /* Pixel button press effect */
 .nav-btn:active,.add-btn:active,.btn:active,.rec-btn:active,.mini-btn:active,
@@ -1140,24 +1147,14 @@ function renderStatus(){
   const cont=document.getElementById("content");
   cont.innerHTML="";
   const wrap=el("div","");wrap.id="status-view";
+  cont.appendChild(wrap);   // attach now so the hero canvas is connected when first drawn
 
   const xp=computeXP();
   const tracks=getTracks(xp);
   const totalLvl=tracks.reduce((a,t)=>a+t.lvl,0);
   const totalXP=tracks.reduce((a,t)=>a+t.xp,0);
 
-  // Hero card with pixel character (job = highest stat)
-  const hero=el("div","hero-card");
-  hero.innerHTML=`
-    <canvas id="hero-canvas" width="128" height="164"></canvas>
-    <div class="hero-job"></div>
-    <div class="hero-level">Lv.${totalLvl}</div>
-    <div class="hero-sub">総獲得 ${totalXP} XP ・ 5分野の合計レベル</div>`;
-  wrap.appendChild(hero);
-  const job=drawHero(hero.querySelector("#hero-canvas"),tracks);
-  hero.querySelector(".hero-job").textContent="JOB─"+job.name;
-
-  // RPG-style stat panel: each track becomes a stat
+  // RPG-style stat labels: each track becomes a stat
   const STAT_DEFS=[
     {id:"workout",   label:"ちから"},
     {id:"medicine",  label:"かしこさ"},
@@ -1177,20 +1174,29 @@ function renderStatus(){
     });
   });
   const maxStat=Math.max(10,...tracks.map(t=>t.lvl));
-  const sCard=el("div","stats-card");
-  sCard.innerHTML=`<div class="char-stat-title">— STATUS —</div>`+
-    STAT_DEFS.map(s=>{
-      const t=tracks.find(x=>x.id===s.id);
-      if(!t)return "";
-      const pct=Math.round(t.lvl/maxStat*100);
-      return `<div class="char-stat-row">
-        <span class="char-stat-lbl">${t.icon} ${s.label}</span>
-        <div class="char-stat-bar"><div class="char-stat-fill" style="width:${pct}%;background:${t.color}"></div></div>
-        <span class="char-stat-val">${t.lvl}</span>
-      </div>`;
-    }).join("")+
-    `<div class="char-stat-meta">冒険日数 ${doneDays.size}日 ・ クエスト達成 ${doneTotal}回</div>`;
-  wrap.appendChild(sCard);
+
+  // Compact hero card: character on the left, level + job + stat bars on the right
+  const hero=el("div","hero-card hero-compact");
+  hero.innerHTML=`
+    <canvas id="hero-canvas" width="128" height="164"></canvas>
+    <div class="hero-info">
+      <div class="hero-level">Lv.${totalLvl}</div>
+      <div class="hero-job"></div>
+      ${STAT_DEFS.map(s=>{
+        const t=tracks.find(x=>x.id===s.id);
+        if(!t)return "";
+        const pct=Math.round(t.lvl/maxStat*100);
+        return `<div class="char-stat-row">
+          <span class="char-stat-lbl">${t.icon} ${s.label}</span>
+          <div class="char-stat-bar"><div class="char-stat-fill" style="width:${pct}%;background:${t.color}"></div></div>
+          <span class="char-stat-val">${t.lvl}</span>
+        </div>`;
+      }).join("")}
+      <div class="hero-sub">総XP ${totalXP} ・ 冒険 ${doneDays.size}日 ・ 達成 ${doneTotal}回</div>
+    </div>`;
+  wrap.appendChild(hero);
+  const job=drawHero(hero.querySelector("#hero-canvas"),tracks);
+  hero.querySelector(".hero-job").textContent="JOB─"+job.name;
 
   // Track cards
   tracks.forEach(t=>{
@@ -1233,8 +1239,6 @@ function renderStatus(){
       筋トレは全部位の合算でレベルアップします<br>
       ${DECAY_GRACE_DAYS}日以上あくと1日 −${DECAY_PER_DAY} XP ずつゆるやかに減衰します
     </span>`));
-
-  cont.appendChild(wrap);
 }
 
 // ── Stats View ────────────────────────────────────────────────────────────────
@@ -1264,8 +1268,17 @@ function aggregateStats(filterFn){
   return st;
 }
 
-// Completed-entry colors per day of a given month: {dayOfMonth: [color, ...]}
-function completedDotsForMonth(year,month){
+// Fixed 5-track order for the achievement calendar (matches the STATUS panel)
+const CAL_TRACKS=[
+  {id:"workout",   color:"#E57373", label:"筋トレ", icon:"💪"},
+  {id:"medicine",  color:"#FFA726", label:"専門医", icon:"🧠"},
+  {id:"instrument",color:"#7986CB", label:"楽器",   icon:"🎵"},
+  {id:"english",   color:"#26C6DA", label:"英語",   icon:"🌐"},
+  {id:"cooking",   color:"#66BB6A", label:"自炊",   icon:"🍳"},
+];
+function trackOf(catId){return catId.startsWith("workout_")?"workout":catId;}
+// Which of the 5 tracks were completed each day: {dayOfMonth: Set(trackId)}
+function completedTracksForMonth(year,month){
   const map={};
   Object.keys(records).forEach(wk=>{
     const dates=getWeekDates(wk);
@@ -1276,9 +1289,7 @@ function completedDotsForMonth(year,month){
       if(d.getFullYear()!==year||d.getMonth()!==month)return;
       Object.keys(day).forEach(catId=>{
         if(!day[catId]?.done)return;
-        const c=catById(catId);
-        const color=c?.part?c.part.color:(c?.color||"#999");
-        (map[d.getDate()]=map[d.getDate()]||[]).push(color);
+        (map[d.getDate()]=map[d.getDate()]||new Set()).add(trackOf(catId));
       });
     });
   });
@@ -1334,7 +1345,7 @@ function renderStats(){
     const calCard=el("div","stats-card");
     const grid=el("div","mcal-grid");
     DAYS.forEach(d=>grid.appendChild(el("div","mcal-hdr",d)));
-    const dots=completedDotsForMonth(statsYear,statsMonth);
+    const doneMap=completedTracksForMonth(statsYear,statsMonth);
     const offset=(new Date(statsYear,statsMonth,1).getDay()+6)%7; // Monday-start
     const daysIn=new Date(statsYear,statsMonth+1,0).getDate();
     const today=new Date();
@@ -1343,18 +1354,25 @@ function renderStats(){
       const isToday=today.getFullYear()===statsYear&&today.getMonth()===statsMonth&&today.getDate()===dd;
       const cell=el("div","mcal-cell"+(isToday?" today":""));
       cell.appendChild(el("div","mcal-num",String(dd)));
-      const dr=el("div","mcal-dots");
-      const list=dots[dd]||[];
-      list.slice(0,6).forEach(col=>{
-        const dot=el("span","mcal-dot");
-        dot.style.background=col;
-        dr.appendChild(dot);
+      const done=doneMap[dd]||new Set();
+      const slots=el("div","mcal-slots");
+      CAL_TRACKS.forEach(t=>{
+        const slot=el("div","mcal-slot");
+        if(done.has(t.id))slot.style.background=t.color;
+        slots.appendChild(slot);
       });
-      if(list.length>6)dr.appendChild(el("span","mcal-more","+"+(list.length-6)));
-      cell.appendChild(dr);
+      cell.appendChild(slots);
       grid.appendChild(cell);
     }
     calCard.appendChild(grid);
+    // legend
+    const legend=el("div","mcal-legend");
+    CAL_TRACKS.forEach(t=>{
+      const s=el("span","");
+      s.innerHTML=`<i style="background:${t.color}"></i>${t.label}`;
+      legend.appendChild(s);
+    });
+    calCard.appendChild(legend);
     wrap.appendChild(calCard);
   }
 
