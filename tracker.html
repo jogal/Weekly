@@ -608,9 +608,9 @@ const GCAL_CAL_NAME="週間クエスト";
 let gcalToken=null, gcalTokenExp=0, gcalTokenClient=null;
 function gcalClientId(){return localStorage.getItem("wt_gcal_client_id")||"";}
 function gcalAuto(){return localStorage.getItem("wt_gcal_auto")==="1"&&!!gcalClientId();}
-function gcalGetToken(){
+function gcalGetToken(forceConsent){
   return new Promise((resolve,reject)=>{
-    if(gcalToken&&Date.now()<gcalTokenExp-60000)return resolve(gcalToken);
+    if(!forceConsent&&gcalToken&&Date.now()<gcalTokenExp-60000)return resolve(gcalToken);
     if(!window.google?.accounts?.oauth2)return reject(new Error("Google認証ライブラリが未読み込みです"));
     if(!gcalClientId())return reject(new Error("クライアントID未設定"));
     if(!gcalTokenClient){
@@ -624,7 +624,8 @@ function gcalGetToken(){
       gcalTokenExp=Date.now()+(resp.expires_in||3600)*1000;
       resolve(gcalToken);
     };
-    gcalTokenClient.requestAccessToken({prompt:""});
+    // forceConsent: re-show the consent screen so newly-added scopes are actually granted
+    gcalTokenClient.requestAccessToken({prompt:forceConsent?"consent":""});
   });
 }
 function gcalEventBody(entry,dateObj){
@@ -644,10 +645,18 @@ async function gcalApi(path,method,body){
     headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
     body:body?JSON.stringify(body):undefined,
   });
-  if(!res.ok&&res.status!==410)throw new Error("Calendar API "+res.status);
+  if(!res.ok&&res.status!==410){
+    // Surface Google's real reason (API disabled / insufficient scope / rate limit …)
+    let detail="";
+    try{const j=await res.json();detail=j.error?.message||j.error?.errors?.[0]?.reason||"";}catch(e){}
+    const err=new Error("Calendar API "+res.status+(detail?" — "+detail:""));
+    err.status=res.status;
+    throw err;
+  }
   return res.status===204||res.status===410?null:res.json();
 }
-// Dedicated app calendar: find or create "週間クエスト" so events stay out of マイカレンダー
+// Dedicated app calendar: find or create "週間クエスト" so events stay out of マイカレンダー.
+// Falls back to "primary" (events still marked private) if calendar management is not permitted.
 function gcalEnsureCalendar(){
   const saved=localStorage.getItem("wt_gcal_cal_id");
   if(saved)return Promise.resolve(saved);
@@ -661,11 +670,13 @@ function gcalEnsureCalendar(){
 function gcalSyncInsert(entry,dateObj){
   if(!gcalAuto())return;
   (async()=>{
-    const cal=await gcalEnsureCalendar();
+    let cal;
+    try{ cal=await gcalEnsureCalendar(); }
+    catch(e){ cal="primary"; }   // no calendar-create permission → private event on primary
     const ev=await gcalApi(`/calendars/${encodeURIComponent(cal)}/events`,"POST",gcalEventBody(entry,dateObj));
     entry.gcalId=ev.id; entry.gcalCal=cal; persist();
-    showToast("📅 Googleカレンダーに登録しました");
-  })().catch(()=>showToast("⚠️ カレンダー同期に失敗しました"));
+    showToast(cal==="primary"?"📅 カレンダーに登録（非公開）":"📅 週間クエストに登録しました");
+  })().catch(err=>showToast("⚠️ 同期失敗: "+(err.message||"")));
 }
 function gcalSyncPatch(entry,dateObj){
   if(!gcalAuto()||!entry.gcalId)return;
@@ -1646,11 +1657,24 @@ document.getElementById("gcal-test").onclick=()=>{
     return;
   }
   document.getElementById("gcal-client-id").value=id;
-  setGcalStatus("接続中…");
-  gcalGetToken()
+  setGcalStatus("接続中…（許可画面が出たら承認してください）");
+  // forceConsent=true so the newly-added full calendar scope is actually granted
+  gcalGetToken(true)
     .then(()=>gcalEnsureCalendar())
-    .then(()=>setGcalStatus("✅ 接続できました！専用カレンダー『週間クエスト』に非公開で同期されます"))
-    .catch(err=>setGcalStatus("❌ 接続失敗: "+err.message));
+    .then(cal=>{
+      if(cal==="primary")
+        setGcalStatus("✅ 接続OK（マイカレンダーに非公開で同期）。専用カレンダーを使うにはCalendar APIの有効化が必要です");
+      else
+        setGcalStatus("✅ 接続できました！専用カレンダー『週間クエスト』に非公開で同期されます");
+    })
+    .catch(err=>{
+      let hint="";
+      if(String(err.message).includes("403")){
+        hint="（403）Google Cloudで①Calendar APIが有効か ②OAuth同意画面のスコープ に問題がある可能性。"
+            +"Calendar APIの有効化: console.cloud.google.com のAPIライブラリで『Google Calendar API』を有効化してください";
+      }
+      setGcalStatus("❌ 接続失敗: "+err.message+" "+hint);
+    });
 };
 
 // ── PWA service worker ────────────────────────────────────────────────────────

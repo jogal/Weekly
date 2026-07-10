@@ -1,4 +1,4 @@
-const CACHE = "weekly-quest-v6";
+const CACHE = "weekly-quest-v7";
 const ASSETS = [
   "./tracker.html",
   "./manifest.json",
