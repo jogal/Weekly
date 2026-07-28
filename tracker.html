@@ -28,27 +28,39 @@ body { margin:0; font-family:"DotGothic16","Hiragino Sans","Meiryo",sans-serif;
   background-image:radial-gradient(#1a1a3e 1px, transparent 1px);
   background-size:10px 10px; }
 #app { display:flex; flex-direction:column; height:100dvh; }
-button{ font-family:inherit; }
+body { overscroll-behavior:none; }
+button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none; user-select:none; }
 
-#header { background:#08081a; color:#fff; padding:14px 16px 0;
-  padding-top:max(14px,env(safe-area-inset-top)); flex-shrink:0;
+#header { background:#08081a; color:#fff; padding:12px 16px;
+  padding-top:max(12px,env(safe-area-inset-top)); flex-shrink:0;
   border-bottom:2px solid var(--line); }
-#app-title { margin:0 0 10px; font-size:15px; font-weight:700; letter-spacing:.08em;
+#app-title { margin:0; font-size:15px; font-weight:700; letter-spacing:.08em;
   color:var(--green); text-shadow:2px 2px 0 #123312;
   display:flex; align-items:center; justify-content:space-between; }
 .mini-btn { background:var(--panel2); border:2px solid var(--line); color:var(--dim);
-  font-size:10px; padding:3px 7px; cursor:pointer; margin-left:6px;
+  font-size:11px; padding:7px 12px; cursor:pointer; margin-left:6px;
   box-shadow:2px 2px 0 var(--shadow); text-shadow:none; }
-#tabs { display:flex; }
-.tab-btn { flex:1; padding:9px 0; border:none; background:none; cursor:pointer;
-  color:var(--faint); font-weight:400; font-size:12px; white-space:nowrap;
-  border-bottom:3px solid transparent; }
-.tab-btn.active { color:var(--green); font-weight:700; border-bottom-color:var(--green); }
+
+/* Bottom tab bar: thumb-reachable navigation */
+#tabbar { display:flex; background:#08081a; border-top:2px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom); flex-shrink:0; }
+.tab-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:8px 0 7px; border:none; background:none; cursor:pointer;
+  color:var(--faint); font-weight:400; font-size:10px; white-space:nowrap;
+  border-top:3px solid transparent; min-height:52px; }
+.tab-btn.active { color:var(--green); font-weight:700; border-top-color:var(--green); }
+.tab-ico { font-size:19px; line-height:1; }
+.tab-btn:not(.active) .tab-ico { filter:grayscale(.9) brightness(.7); }
+
+/* Settings menu */
+.menu-item { display:block; width:100%; text-align:left; background:var(--panel2);
+  border:2px solid var(--line); color:var(--txt); padding:14px 12px; font-size:14px;
+  cursor:pointer; margin-bottom:10px; box-shadow:2px 2px 0 var(--shadow); }
 
 #week-nav { display:flex; align-items:center; justify-content:space-between;
-  padding:10px 14px; background:var(--panel); border-bottom:2px solid var(--line); flex-shrink:0; }
+  padding:8px 12px; background:var(--panel); border-bottom:2px solid var(--line); flex-shrink:0; }
 .nav-btn { background:var(--panel2); border:2px solid var(--txt);
-  padding:5px 10px; cursor:pointer; font-size:12px; color:var(--txt);
+  padding:10px 14px; cursor:pointer; font-size:13px; color:var(--txt);
   box-shadow:2px 2px 0 var(--shadow); }
 #week-label { font-weight:700; font-size:13px; color:var(--txt); }
 .badge { font-size:10px; background:var(--gold); color:#08081a;
@@ -69,23 +81,23 @@ button{ font-family:inherit; }
 .today-badge { font-size:10px; background:var(--gold); color:#08081a;
   padding:1px 6px; margin-left:6px; }
 .add-btn { background:var(--green); color:#08081a; border:2px solid #08081a;
-  padding:3px 10px; font-size:12px; cursor:pointer; font-weight:700;
+  padding:8px 14px; font-size:13px; cursor:pointer; font-weight:700;
   box-shadow:2px 2px 0 var(--shadow); }
-.entry-row { display:flex; align-items:center; padding:8px 10px;
+.entry-row { display:flex; align-items:center; padding:10px;
   border-bottom:1px dashed var(--line); gap:7px; }
 .entry-row:last-child { border-bottom:none; }
 .entry-time { font-size:11px; color:var(--dim); min-width:78px; flex-shrink:0; }
-.entry-name { flex:1; font-size:13px; font-weight:500;
+.entry-name { flex:1; font-size:14px; font-weight:500;
   overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .entry-name.done { text-decoration:line-through; color:var(--faint); }
 .cat-chip { font-size:10px; padding:2px 7px; white-space:nowrap; flex-shrink:0; }
 .rec-btn { background:var(--panel2); border:2px solid var(--dim);
-  padding:4px 9px; font-size:11px; cursor:pointer; color:var(--txt); flex-shrink:0;
+  padding:9px 13px; font-size:12px; cursor:pointer; color:var(--txt); flex-shrink:0;
   box-shadow:2px 2px 0 var(--shadow); }
 .gcal-btn { background:none; border:2px solid var(--line); color:var(--dim);
-  padding:3px 6px; font-size:12px; cursor:pointer; flex-shrink:0; }
+  padding:8px 10px; font-size:13px; cursor:pointer; flex-shrink:0; }
 .del-btn { background:none; border:none; color:var(--faint); cursor:pointer;
-  font-size:16px; flex-shrink:0; line-height:1; padding:6px 8px; }
+  font-size:17px; flex-shrink:0; line-height:1; padding:10px; }
 .empty-day { padding:10px 14px; font-size:12px; color:var(--faint); margin:0; }
 .stars-r { display:inline-flex; gap:2px; flex-shrink:0; font-size:13px; }
 
@@ -207,7 +219,7 @@ button{ font-family:inherit; }
   animation:fall linear forwards; }
 @keyframes fall { to { transform:translateY(105vh) rotate(540deg); opacity:.4; } }
 /* XP gain toast */
-#xp-toast { position:fixed; bottom:70px; left:50%; transform:translateX(-50%);
+#xp-toast { position:fixed; bottom:calc(120px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
   background:#08081a; color:var(--green); border:2px solid var(--green);
   padding:8px 18px; font-size:14px; font-weight:700; z-index:200; display:none;
   box-shadow:4px 4px 0 var(--shadow); }
@@ -221,24 +233,26 @@ button{ font-family:inherit; }
 .modal-title { margin:0 0 14px; font-size:15px; font-weight:700; color:var(--gold); }
 .modal-sub { font-size:12px; color:var(--dim); margin:0 0 14px; }
 .field-label { font-size:11px; color:var(--dim); margin-bottom:4px; display:block; }
+/* 16px inputs: prevents iOS Safari from auto-zooming the page on focus */
 .field-input { width:100%; border:2px solid var(--line); background:#0a0a1e;
-  color:var(--txt); padding:8px 10px; font-size:13px; margin-bottom:10px; font-family:inherit; }
+  color:var(--txt); padding:10px 12px; font-size:16px; margin-bottom:10px; font-family:inherit; }
 .field-input::placeholder { color:var(--faint); }
-textarea.field-input { height:70px; resize:vertical; }
-.chip-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
-.chip { padding:4px 10px; font-size:12px; cursor:pointer; border:2px solid; }
-.part-row { display:flex; flex-wrap:wrap; gap:5px; margin-bottom:10px; }
-.part-chip { padding:3px 10px; font-size:12px; cursor:pointer; border:2px solid; }
+textarea.field-input { height:76px; resize:vertical; }
+.chip-row { display:flex; flex-wrap:wrap; gap:7px; margin-bottom:10px; }
+.chip { padding:8px 13px; font-size:13px; cursor:pointer; border:2px solid; }
+.part-row { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:10px; }
+.part-chip { padding:7px 13px; font-size:13px; cursor:pointer; border:2px solid; }
 .btn-row { display:flex; gap:8px; margin-top:14px; }
-.btn { flex:1; padding:9px; cursor:pointer; font-size:14px;
+.btn { flex:1; padding:13px; cursor:pointer; font-size:15px;
   box-shadow:2px 2px 0 var(--shadow); }
 .btn-primary { background:var(--green); color:#08081a; border:2px solid #08081a; font-weight:700; }
 .btn-secondary { background:var(--panel2); color:var(--txt); border:2px solid var(--line); }
-.check-row { display:flex; align-items:center; gap:7px; font-size:13px; cursor:pointer; }
-.check-row input { width:16px; height:16px; accent-color:var(--green); cursor:pointer; }
+.check-row { display:flex; align-items:center; gap:8px; font-size:14px; cursor:pointer;
+  padding:6px 0; }
+.check-row input { width:20px; height:20px; accent-color:var(--green); cursor:pointer; }
 
 /* Save toast */
-#toast { position:fixed; bottom:30px; left:50%; transform:translateX(-50%);
+#toast { position:fixed; bottom:calc(76px + env(safe-area-inset-bottom)); left:50%; transform:translateX(-50%);
   background:#08081a; color:#fff; border:2px solid var(--txt); padding:10px 20px;
   font-size:13px; z-index:200; display:none; box-shadow:4px 4px 0 var(--shadow); }
 
@@ -286,19 +300,8 @@ textarea.field-input { height:70px; resize:vertical; }
   <div id="header">
     <p id="app-title">
       ⚔️ 週間クエスト
-      <span>
-        <button type="button" class="mini-btn" id="gcal-open">GCal連携</button>
-        <button type="button" class="mini-btn" id="export-btn">データ保存</button>
-        <button type="button" class="mini-btn" id="import-btn">復元</button>
-      </span>
+      <button type="button" class="mini-btn" id="menu-open">⚙ 設定</button>
     </p>
-    <div id="tabs">
-      <button class="tab-btn active" data-tab="schedule">リスト</button>
-      <button class="tab-btn" data-tab="calendar">カレンダー</button>
-      <button class="tab-btn" data-tab="log">成果記録</button>
-      <button class="tab-btn" data-tab="status">ステータス</button>
-      <button class="tab-btn" data-tab="stats">統計</button>
-    </div>
   </div>
   <div id="week-nav">
     <button type="button" class="nav-btn" id="prev-week">← 前週</button>
@@ -306,6 +309,26 @@ textarea.field-input { height:70px; resize:vertical; }
     <button type="button" class="nav-btn" id="next-week">次週 →</button>
   </div>
   <div id="content"></div>
+  <div id="tabbar">
+    <button class="tab-btn active" data-tab="schedule"><span class="tab-ico">📝</span>予定</button>
+    <button class="tab-btn" data-tab="calendar"><span class="tab-ico">📅</span>週間</button>
+    <button class="tab-btn" data-tab="log"><span class="tab-ico">✅</span>記録</button>
+    <button class="tab-btn" data-tab="status"><span class="tab-ico">⚔️</span>育成</button>
+    <button class="tab-btn" data-tab="stats"><span class="tab-ico">📊</span>統計</button>
+  </div>
+</div>
+
+<!-- Settings Menu Modal -->
+<div class="overlay" id="menu-modal" style="display:none">
+  <div class="modal-box">
+    <h3 class="modal-title">⚙ 設定</h3>
+    <button type="button" class="menu-item" id="gcal-open">📅 Googleカレンダー連携</button>
+    <button type="button" class="menu-item" id="export-btn">💾 データを書き出す</button>
+    <button type="button" class="menu-item" id="import-btn">📂 データを復元する</button>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="menu-close">閉じる</button>
+    </div>
+  </div>
 </div>
 
 <!-- Add Modal -->
@@ -717,7 +740,7 @@ document.getElementById("next-week").addEventListener("click",()=>{
   const dt=new Date(y,m-1,d+7);weekKey=getWeekKey(dt);render();});
 
 // ── Tabs ──────────────────────────────────────────────────────────────────────
-document.getElementById("tabs").addEventListener("click",e=>{
+document.getElementById("tabbar").addEventListener("click",e=>{
   const b=e.target.closest(".tab-btn");if(!b)return;
   tab=b.dataset.tab;
   document.querySelectorAll(".tab-btn").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));
@@ -1460,6 +1483,14 @@ function showXPToast(xp){
   t.style.display="block";
   setTimeout(()=>t.style.display="none",1500);
 }
+
+// ── Settings menu ─────────────────────────────────────────────────────────────
+document.getElementById("menu-open").onclick=()=>document.getElementById("menu-modal").style.display="flex";
+document.getElementById("menu-close").onclick=()=>document.getElementById("menu-modal").style.display="none";
+document.getElementById("menu-modal").addEventListener("click",e=>{
+  if(e.target===e.currentTarget||e.target.closest(".menu-item"))
+    document.getElementById("menu-modal").style.display="none";
+});
 
 // ── Data export / import ──────────────────────────────────────────────────────
 document.getElementById("export-btn").onclick=()=>{
