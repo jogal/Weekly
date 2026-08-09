@@ -1,0 +1,15 @@
+{
+  "name": "めぐり記録",
+  "short_name": "めぐり",
+  "description": "カフェ・サウナ・クラフトビールなどの訪問ログ",
+  "start_url": "./spots.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0c0c0e",
+  "theme_color": "#0c0c0e",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
