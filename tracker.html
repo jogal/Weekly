@@ -774,7 +774,12 @@ function renderList(){
     hdr.appendChild(ab);
     card.appendChild(hdr);
 
-    if(!entries.length){card.appendChild(el("p","empty-day","予定なし"));}
+    // 予定外だが完了記録がある種目(ジムアプリ⚡からの自動記録など)は記録タブに行を出す
+    const extraRecs = tab==="log"
+      ? Object.entries(records?.[weekKey]?.[dk]||{})
+          .filter(([catId,r])=>r?.done && !entries.some(e=>e.cat===catId))
+      : [];
+    if(!entries.length&&!extraRecs.length){card.appendChild(el("p","empty-day","予定なし"));}
     else entries.forEach((e,ei)=>{
       const c=catById(e.cat);
       const rec=getRec(dk,e.cat);
@@ -810,6 +815,27 @@ function renderList(){
         db.onclick=()=>{gcalSyncDelete(e);ws[dk].splice(ei,1);schedules[weekKey]=ws;saveData();render();};
         row.appendChild(db);
       }
+      card.appendChild(row);
+    });
+    extraRecs.forEach(([catId,rec])=>{
+      const c=catById(catId);
+      const pseudo={cat:catId,time:"",label:""};
+      const row=el("div","entry-row");
+      const cb=document.createElement("input");
+      cb.type="checkbox";cb.checked=true;
+      cb.style.cssText=`accent-color:${c?.color||"#999"};width:16px;height:16px;cursor:pointer;flex-shrink:0`;
+      cb.onchange=()=>toggleDone(dk,pseudo);
+      row.appendChild(cb);
+      row.appendChild(el("span","",c?.icon||""));
+      row.appendChild(el("span","entry-time","予定外"));
+      row.appendChild(el("span","entry-name done",rec.note||c?.label||catId));
+      const chip=el("span","cat-chip",calName(c)||c?.label||"");
+      chip.style.background=c?.light||"#eee";chip.style.color=c?.color||"#333";
+      row.appendChild(chip);
+      if(rec.rating>0)row.appendChild(el("span","stars-r",starsHTML(rec.rating,false)));
+      const rb=el("button","rec-btn","編集");
+      rb.onclick=()=>openRec(di,dk,pseudo);
+      row.appendChild(rb);
       card.appendChild(row);
     });
     wrap.appendChild(card);
@@ -1568,6 +1594,22 @@ document.getElementById("gcal-test").onclick=()=>{
 // ── PWA service worker ────────────────────────────────────────────────────────
 if("serviceWorker" in navigator&&location.protocol==="https:")
   navigator.serviceWorker.register("./sw.js").catch(()=>{});
+
+// ── 外部(ジムアプリ⚡等)の書き込みを取り込む ─────────────────────────────────
+// メモリ上の古いコピーで localStorage を上書きしてジムの記録を消さないよう、
+// 画面に戻ってきた時・他タブが書いた時に必ず読み直す。
+function reloadFromStorage(){
+  try{
+    schedules=JSON.parse(localStorage.getItem("wt_schedules")||"{}");
+    records  =JSON.parse(localStorage.getItem("wt_records")||"{}");
+  }catch(e){ return; }
+  render();
+}
+window.addEventListener("storage",e=>{
+  if(e.key==="wt_records"||e.key==="wt_schedules")reloadFromStorage();
+});
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)reloadFromStorage();});
+window.addEventListener("pageshow",e=>{if(e.persisted)reloadFromStorage();});
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function render(){

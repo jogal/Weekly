@@ -242,6 +242,7 @@ let lastEx = JSON.parse(localStorage.getItem("gym_last")||"{}");   // 種目名 
 let custom = JSON.parse(localStorage.getItem("gym_custom")||"{}"); // 部位id → [種目名]
 let sel    = JSON.parse(localStorage.getItem("gym_sel")||"null") || {part:"chest", ex:"ベンチプレス"};
 let marks  = JSON.parse(localStorage.getItem("gym_marks")||"{}");  // 週クエに自動記入したキー
+let stepPref=JSON.parse(localStorage.getItem("gym_stepkg")||"{}"); // 種目名 → 重量の刻み(kg)
 let tab    = "today";
 let kg=0, reps=10;
 
@@ -251,6 +252,14 @@ function persist(){
   localStorage.setItem("gym_custom", JSON.stringify(custom));
   localStorage.setItem("gym_sel",    JSON.stringify(sel));
   localStorage.setItem("gym_marks",  JSON.stringify(marks));
+  localStorage.setItem("gym_stepkg", JSON.stringify(stepPref));
+}
+
+// 種目ごとの重量の刻み。マシン都合で1kg単位の種目はここで切替(ラットプルは初期値1kg)
+const STEP_CYCLE=[2.5,1];
+function stepOf(ex){
+  if(stepPref[ex]!==undefined)return stepPref[ex];
+  return ex==="ラットプルダウン" ? 1 : 2.5;
 }
 
 // 選択種目の前回値を kg/reps に反映(ズボラ: 前回のままなら⚡を押すだけ)
@@ -418,19 +427,29 @@ function renderToday(root){
 
   // 入力パネル
   const part=PART_MAP[sel.part];
+  const step=stepOf(sel.ex);
   const card=el("div","card"); card.id="input-card"; card.style.marginTop="12px";
   const title=el("p","", `${esc(sel.ex)} <span id="sel-ex-part" style="color:${part.color}">${part.label}</span>`);
   title.id="sel-ex-name";
+  // 刻み切替(2.5kg⇔1kg): マシンのプレート単位に合わせる
+  const stepTgl=el("button","mini-btn",`刻み ${step}kg`);
+  stepTgl.style.marginLeft="auto"; stepTgl.style.marginRight="8px";
+  stepTgl.onclick=()=>{
+    const i=STEP_CYCLE.indexOf(step);
+    stepPref[sel.ex]=STEP_CYCLE[(i+1)%STEP_CYCLE.length];
+    persist(); render();
+  };
+  title.insertBefore(stepTgl, title.querySelector("#sel-ex-part"));
   card.appendChild(title);
 
-  // 重量: −10 / −2.5 / 値 / +2.5 / +10 (0で自重)
+  // 重量: −10 / −刻み / 値 / +刻み / +10 (0で自重)
   const wRow=el("div","stepper-row");
   const wVal=el("div","step-val");
   const updW=()=>{ wVal.innerHTML=(kg===0?"自重":kg)+" <small>kg</small>"; };
   wRow.appendChild(stepBtn("-10","small",()=>{kg=Math.max(0,kg-10);updW();}));
-  wRow.appendChild(stepBtn("-2.5","",()=>{kg=Math.max(0,Math.round((kg-2.5)*10)/10);updW();}));
+  wRow.appendChild(stepBtn("-"+step,"",()=>{kg=Math.max(0,Math.round((kg-step)*10)/10);updW();}));
   wRow.appendChild(wVal);
-  wRow.appendChild(stepBtn("+2.5","",()=>{kg=Math.round((kg+2.5)*10)/10;updW();}));
+  wRow.appendChild(stepBtn("+"+step,"",()=>{kg=Math.round((kg+step)*10)/10;updW();}));
   wRow.appendChild(stepBtn("+10","small",()=>{kg+=10;updW();}));
   wVal.onclick=()=>{
     const v=prompt("重量(kg) ※自重は0",String(kg));
