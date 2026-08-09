@@ -1,0 +1,579 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="めぐり">
+<meta name="theme-color" content="#0c0c0e">
+<title>めぐり記録</title>
+<link rel="manifest" href="spots-manifest.json">
+<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+* { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
+:root{
+  --bg:#0c0c0e; --panel:#131316; --panel2:#1b1b1f; --line:#28282e;
+  --txt:#f0f0f2; --dim:#96969e; --faint:#55555e;
+  --acc:#3ecfb2; --gold:#c8a557;
+  --cond:"Barlow Condensed","Noto Sans JP",sans-serif;
+  color-scheme:dark;
+}
+html,body{ height:100%; }
+body { margin:0; font-family:"Noto Sans JP","Hiragino Sans","Meiryo",sans-serif;
+  background:var(--bg); color:var(--txt); height:100dvh; overflow:hidden;
+  overscroll-behavior:none; }
+button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none; user-select:none; }
+
+#app { display:flex; flex-direction:column; height:100dvh; position:relative; }
+
+/* faint giant map-pin watermark */
+#pin-bg { position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:0; }
+#pin-bg svg { position:absolute; right:-20px; top:14%; width:60%; height:60%; opacity:.05; }
+
+#header { background:var(--bg); padding:14px 16px 10px;
+  padding-top:max(14px,env(safe-area-inset-top)); flex-shrink:0;
+  border-bottom:1px solid var(--line); z-index:1; }
+#app-title { margin:0; font-size:16px; font-weight:600; letter-spacing:.12em;
+  font-family:var(--cond); text-transform:uppercase; color:var(--txt);
+  display:flex; align-items:center; justify-content:space-between; line-height:1; gap:8px; }
+#app-title>span:first-child { min-width:0; white-space:nowrap; }
+#app-title>span:last-child { display:flex; flex-shrink:0; align-items:center; }
+#app-title .t-jp { display:block; font-size:10px; color:var(--dim);
+  letter-spacing:.38em; margin-top:5px; font-weight:500; }
+#app-title .t-red { color:var(--acc); }
+.mini-btn { background:none; border:1px solid var(--line); color:var(--dim);
+  font-size:10px; padding:7px 9px; cursor:pointer; margin-left:4px;
+  font-family:var(--cond); letter-spacing:.12em; text-transform:uppercase;
+  text-shadow:none; text-decoration:none; display:inline-block; }
+
+#content { flex:1; overflow-y:auto; padding:12px; z-index:1; -webkit-overflow-scrolling:touch; }
+
+#tabbar { display:flex; background:var(--bg); border-top:1px solid var(--line);
+  padding-bottom:env(safe-area-inset-bottom); flex-shrink:0; z-index:1; }
+.tab-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
+  padding:9px 0 7px; border:none; background:none; cursor:pointer;
+  color:var(--faint); font-weight:500; font-size:10px; white-space:nowrap;
+  border-top:2px solid transparent; min-height:52px; letter-spacing:.14em; }
+.tab-btn.active { color:var(--txt); font-weight:700; border-top-color:var(--acc); }
+.tab-ico { font-size:17px; line-height:1; filter:grayscale(1) brightness(1.7); }
+.tab-btn:not(.active) .tab-ico { filter:grayscale(1) brightness(.8); }
+
+.card { background:var(--panel); border:1px solid var(--line);
+  margin-bottom:12px; padding:12px 14px; }
+.card-title { font-size:10px; color:var(--dim); margin:0 0 8px;
+  font-family:var(--cond); letter-spacing:.3em; text-transform:uppercase; }
+
+/* Today header card */
+#today-line { display:flex; align-items:baseline; justify-content:space-between; }
+#today-date { font-size:17px; font-weight:600; font-family:var(--cond); letter-spacing:.12em; }
+#today-sub  { font-size:11px; color:var(--dim); letter-spacing:.06em; }
+
+/* Category tabs */
+#cat-tabs { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; margin-bottom:10px;
+  scrollbar-width:none; }
+#cat-tabs::-webkit-scrollbar{ display:none; }
+.cat-tab { flex-shrink:0; padding:9px 16px; font-size:13px; cursor:pointer;
+  background:none; color:var(--dim); border:1px solid var(--line); letter-spacing:.1em; }
+.cat-tab.active { color:#0c0c0e; font-weight:700; border-color:transparent; }
+
+/* Place grid */
+#place-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.place-btn { padding:13px 8px; font-size:13px; cursor:pointer; text-align:center;
+  background:var(--panel); color:var(--txt); border:1px solid var(--line);
+  min-height:48px; line-height:1.25; letter-spacing:.02em;
+  overflow:hidden; }
+.place-btn.active { font-weight:700; }
+.place-btn.add { color:var(--faint); border-style:dashed; }
+.place-count { display:block; font-size:10px; color:var(--faint); margin-top:3px;
+  font-family:var(--cond); letter-spacing:.1em; }
+
+/* Input panel */
+#input-card { border-color:var(--line); }
+#sel-place-name { font-size:16px; font-weight:600; margin:0 0 10px; color:var(--txt);
+  letter-spacing:.04em; display:flex; justify-content:space-between; align-items:center; }
+#sel-cat-badge { font-size:10px; padding:2px 9px; border:1px solid currentColor; letter-spacing:.14em; }
+#star-row { display:flex; justify-content:center; gap:10px; font-size:30px;
+  margin-bottom:10px; cursor:pointer; user-select:none; }
+#star-row span { cursor:pointer; }
+#memo-input { width:100%; border:1px solid var(--line); background:#0f0f12;
+  color:var(--txt); padding:10px 12px; font-size:16px; margin-bottom:12px; font-family:inherit; }
+#memo-input::placeholder { color:var(--faint); }
+#log-btn { width:100%; min-height:58px; font-size:16px; font-weight:700; cursor:pointer;
+  background:var(--acc); color:#0c0c0e; border:none; letter-spacing:.3em;
+  font-family:var(--cond); }
+#log-btn:disabled { background:var(--panel2); color:var(--faint); }
+#log-btn:active { opacity:.6; }
+
+/* Recent rows */
+.set-row { display:flex; align-items:center; gap:8px; padding:8px 2px;
+  border-bottom:1px solid var(--line); font-size:13px; }
+.set-row:last-child { border-bottom:none; }
+.set-time { color:var(--faint); font-size:12px; width:44px; flex-shrink:0;
+  font-family:var(--cond); letter-spacing:.06em; }
+.set-cat-dot { width:3px; height:16px; flex-shrink:0; }
+.set-main { flex:1; min-width:0; }
+.set-place { font-weight:700; }
+.set-memo { display:block; font-size:11px; color:var(--dim); overflow:hidden; text-overflow:ellipsis;
+  white-space:nowrap; }
+.set-stars { font-size:11px; color:var(--gold); flex-shrink:0; letter-spacing:.1em; }
+.set-del { background:none; border:none; color:var(--faint); font-size:16px;
+  cursor:pointer; padding:6px 8px; }
+.empty-note { color:var(--faint); font-size:12px; text-align:center; padding:14px 0; }
+
+/* History */
+.h-day { margin-bottom:12px; padding:0; }
+.h-day-head { display:flex; justify-content:space-between; align-items:baseline;
+  padding:8px 12px; background:transparent; border-bottom:1px solid var(--line); }
+.h-day-date { font-weight:600; font-size:15px; font-family:var(--cond); letter-spacing:.1em; }
+.h-day-sub { font-size:10px; color:var(--dim); letter-spacing:.08em; }
+.h-row { padding:7px 12px; border-bottom:1px solid var(--line); font-size:12px;
+  display:flex; align-items:center; gap:8px; }
+.h-row:last-child { border-bottom:none; }
+
+/* Spots collection */
+.spot-cat-head { font-size:11px; margin:14px 4px 8px; font-weight:600;
+  font-family:var(--cond); letter-spacing:.3em; text-transform:uppercase; }
+.spot-row { display:flex; align-items:center; gap:10px; padding:10px 12px;
+  border-bottom:1px solid var(--line); }
+.spot-row:last-child { border-bottom:none; }
+.spot-name { flex:1; font-size:13px; font-weight:700; min-width:0;
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.spot-meta { font-size:10px; color:var(--dim); font-weight:400; display:block;
+  margin-top:2px; letter-spacing:.06em; }
+.spot-visits { text-align:right; flex-shrink:0; }
+.spot-visits b { font-size:20px; font-family:var(--cond); font-weight:600; display:block; line-height:1; }
+.spot-visits i { font-size:9px; color:var(--faint); font-style:normal;
+  font-family:var(--cond); letter-spacing:.2em; }
+
+/* Toast */
+#toast { display:none; position:fixed; bottom:calc(76px + env(safe-area-inset-bottom));
+  left:50%; transform:translateX(-50%); background:var(--bg); color:var(--txt);
+  border:1px solid var(--acc); padding:10px 18px; font-size:13px; z-index:50;
+  white-space:nowrap; max-width:92vw; overflow:hidden; text-overflow:ellipsis; }
+
+/* Pin flash on record */
+#flash { display:none; position:fixed; inset:0; z-index:40; pointer-events:none;
+  align-items:center; justify-content:center; }
+#flash.on { display:flex; animation:flashbg .45s ease-out; }
+#flash .zap { font-size:90px; animation:zappop .45s ease-out;
+  filter:grayscale(1) brightness(2); text-shadow:0 0 40px var(--acc); }
+@keyframes flashbg { 0%{background:rgba(62,207,178,.16)} 100%{background:transparent} }
+@keyframes zappop { 0%{transform:scale(.3) rotate(-15deg);opacity:1}
+  60%{transform:scale(1.25) rotate(5deg)} 100%{transform:scale(1);opacity:0} }
+
+/* Modal */
+.overlay { position:fixed; inset:0; background:rgba(8,8,10,.78); z-index:30;
+  display:flex; align-items:center; justify-content:center; padding:20px; }
+.modal-box { background:var(--panel); border:1px solid var(--line);
+  border-top:3px solid var(--acc); padding:16px; width:100%; max-width:340px; }
+.modal-title { margin:0 0 12px; font-size:14px; color:var(--txt);
+  font-family:var(--cond); letter-spacing:.2em; }
+.menu-item { display:block; width:100%; text-align:left; background:var(--panel2);
+  border:1px solid var(--line); color:var(--txt); padding:14px 12px; font-size:14px;
+  cursor:pointer; margin-bottom:10px; text-decoration:none; }
+.btn-row { display:flex; gap:8px; justify-content:flex-end; margin-top:4px; }
+.btn { padding:10px 16px; font-size:13px; cursor:pointer; border:1px solid var(--line);
+  background:none; color:var(--txt); }
+</style>
+</head>
+<body>
+<div id="app">
+  <div id="pin-bg"><svg viewBox="0 0 100 140" fill="#3ecfb2">
+    <path d="M50 0 C22 0 4 20 4 46 C4 82 50 140 50 140 C50 140 96 82 96 46 C96 20 78 0 50 0 Z
+             M50 64 A18 18 0 1 1 50 28 A18 18 0 1 1 50 64 Z" fill-rule="evenodd"/>
+  </svg></div>
+  <div id="header">
+    <p id="app-title">
+      <span>TOUR <span class="t-red">LOG</span><span class="t-jp">めぐり記録</span></span>
+      <span>
+        <a class="mini-btn" href="tracker.html">QUEST</a>
+        <a class="mini-btn" href="gym.html">GYM</a>
+        <a class="mini-btn" href="music.html">MUSIC</a>
+        <button type="button" class="mini-btn" id="menu-open">設定</button>
+      </span>
+    </p>
+  </div>
+  <div id="content"></div>
+  <div id="tabbar">
+    <button class="tab-btn active" data-tab="today"><span class="tab-ico">📍</span>きろく</button>
+    <button class="tab-btn" data-tab="history"><span class="tab-ico">📜</span>履歴</button>
+    <button class="tab-btn" data-tab="spots"><span class="tab-ico">🗺️</span>スポット</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+<div id="flash"><span class="zap">📍</span></div>
+
+<!-- Settings menu -->
+<div class="overlay" id="menu-modal" style="display:none">
+  <div class="modal-box">
+    <h3 class="modal-title">設定</h3>
+    <button type="button" class="menu-item" id="export-btn">💾 データを書き出す</button>
+    <button type="button" class="menu-item" id="import-btn">📂 データを復元する</button>
+    <div class="btn-row">
+      <button class="btn" id="menu-close">閉じる</button>
+    </div>
+  </div>
+</div>
+
+<script>
+// ── カテゴリ(プリセット+自由に追加できる) ──────────────────────────────────
+const PRESET_CATS=[
+  {id:"cafe",  label:"カフェ",  icon:"☕", color:"#c89b6a"},
+  {id:"sauna", label:"サウナ",  icon:"♨", color:"#5ac8e0"},
+  {id:"beer",  label:"ビール",  icon:"🍺", color:"#f5a623"},
+];
+const CUSTOM_PALETTE=["#e07a5f","#81b29a","#b085f5","#f2cc8f","#ff8fab","#7fc8f8"];
+
+// ── 日付ヘルパー ──────────────────────────────────────────────────────────────
+function dateKeyOf(date){
+  const y=date.getFullYear(), m=String(date.getMonth()+1).padStart(2,"0"), dd=String(date.getDate()).padStart(2,"0");
+  return `${y}-${m}-${dd}`;
+}
+function getWeekKey(date){
+  const d=new Date(date); d.setHours(0,0,0,0);
+  const day=d.getDay(); d.setDate(d.getDate()-(day===0?6:day-1));
+  return dateKeyOf(d);
+}
+function fmtTime(iso){ const d=new Date(iso);
+  return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
+
+// ── State ─────────────────────────────────────────────────────────────────────
+// logs: [{t:ISO文字列, cat:カテゴリid, place:店名, memo:ひとこと, rating:0-5}]
+let logs      = JSON.parse(localStorage.getItem("spot_logs")||"[]");
+let customCats= JSON.parse(localStorage.getItem("spot_cats")||"[]"); // [{id,label,icon,color}]
+let sel       = JSON.parse(localStorage.getItem("spot_sel")||"null") || {cat:"cafe", place:null};
+let tab       = "today";
+let rating    = 0;
+
+function persist(){
+  localStorage.setItem("spot_logs", JSON.stringify(logs));
+  localStorage.setItem("spot_cats", JSON.stringify(customCats));
+  localStorage.setItem("spot_sel",  JSON.stringify(sel));
+}
+function allCats(){ return [...PRESET_CATS, ...customCats]; }
+function catById(id){ return allCats().find(c=>c.id===id); }
+
+// カテゴリ内の場所一覧(訪問履歴から自動生成、最近行った順)
+function placesOf(catId){
+  const seen={};
+  [...logs].reverse().forEach(l=>{
+    if(l.cat!==catId)return;
+    if(!seen[l.place])seen[l.place]={place:l.place, count:0, last:l.t};
+    seen[l.place].count++;
+  });
+  return Object.values(seen);
+}
+function todayLogs(){ const k=dateKeyOf(new Date()); return logs.filter(l=>dateKeyOf(new Date(l.t))===k); }
+
+// ── 記録・削除 ────────────────────────────────────────────────────────────────
+function addLog(){
+  if(!sel.place)return;
+  const memo=document.getElementById("memo-input")?.value.trim()||"";
+  const now=new Date();
+  logs.push({t:now.toISOString(), cat:sel.cat, place:sel.place, memo, rating});
+  persist();
+  flash();
+  const c=catById(sel.cat);
+  showToast("📍 "+sel.place+" 記録!("+(c?.label||"")+" "+logs.filter(l=>l.place===sel.place&&l.cat===sel.cat).length+"回目)");
+  rating=0;
+  render();
+}
+function delLog(iso){
+  const i=logs.findIndex(l=>l.t===iso);
+  if(i<0)return;
+  logs.splice(i,1);
+  persist();
+  render();
+}
+
+// ── UI helpers ────────────────────────────────────────────────────────────────
+function el(tag,cls,html){
+  const e=document.createElement(tag);
+  if(cls)e.className=cls;
+  if(html!==undefined)e.innerHTML=html;
+  return e;
+}
+function esc(s){ return String(s).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c])); }
+function stars(n){ return n?("★".repeat(n)+"☆".repeat(5-n)):""; }
+function showToast(msg){
+  const t=document.getElementById("toast");
+  t.textContent=msg; t.style.display="block";
+  clearTimeout(showToast._tm);
+  showToast._tm=setTimeout(()=>t.style.display="none",2000);
+}
+function flash(){
+  const f=document.getElementById("flash");
+  f.classList.remove("on"); void f.offsetWidth; f.classList.add("on");
+  setTimeout(()=>f.classList.remove("on"),500);
+  if(navigator.vibrate) navigator.vibrate(30);
+}
+
+// ── 画面: きろく ──────────────────────────────────────────────────────────────
+function renderToday(root){
+  const now=new Date();
+  const tl=todayLogs();
+  const wk=getWeekKey(now);
+  const weekN=logs.filter(l=>getWeekKey(new Date(l.t))===wk).length;
+  const totalPlaces=new Set(logs.map(l=>l.cat+"|"+l.place)).size;
+
+  const wd=["日","月","火","水","木","金","土"][now.getDay()];
+  const head=el("div","card");
+  head.appendChild(el("div","", `<div id="today-line">
+    <span id="today-date">${now.getMonth()+1}/${now.getDate()}(${wd})</span>
+    <span id="today-sub">今週 ${weekN}回 / 通算 ${totalPlaces}スポット</span>
+  </div>`));
+  root.appendChild(head);
+
+  // カテゴリタブ
+  const tabs=el("div"); tabs.id="cat-tabs";
+  allCats().forEach(c=>{
+    const b=el("button","cat-tab"+(c.id===sel.cat?" active":""),c.icon+" "+esc(c.label));
+    if(c.id===sel.cat) b.style.background=c.color;
+    b.onclick=()=>{
+      sel.cat=c.id;
+      const ps=placesOf(c.id);
+      sel.place=ps.length?ps[0].place:null;
+      persist(); render();
+    };
+    tabs.appendChild(b);
+  });
+  const addCatB=el("button","cat-tab","＋");
+  addCatB.onclick=()=>{
+    const name=prompt("カテゴリ名(例: ラーメン、銭湯、神社)");
+    if(!name||!name.trim())return;
+    const n=name.trim();
+    if(allCats().some(c=>c.label===n)){ showToast("もうあるよ"); return; }
+    const id="c"+Date.now();
+    customCats.push({id, label:n, icon:"📍", color:CUSTOM_PALETTE[customCats.length%CUSTOM_PALETTE.length]});
+    sel.cat=id; sel.place=null;
+    persist(); render();
+  };
+  tabs.appendChild(addCatB);
+  root.appendChild(tabs);
+
+  // 場所グリッド(行ったことのある店がボタンになる。再訪はワンタップ)
+  const cat=catById(sel.cat)||PRESET_CATS[0];
+  const grid=el("div"); grid.id="place-grid";
+  placesOf(sel.cat).forEach(p=>{
+    const active=p.place===sel.place;
+    const b=el("button","place-btn"+(active?" active":""),
+      esc(p.place)+`<span class="place-count">${p.count}回</span>`);
+    if(active){ b.style.borderColor=cat.color; b.style.background=cat.color+"18"; }
+    b.onclick=()=>{ sel.place=p.place; persist(); render(); };
+    grid.appendChild(b);
+  });
+  const addB=el("button","place-btn add","＋ 新しい場所");
+  addB.onclick=()=>{
+    const name=prompt((cat.label||"")+"の店名・場所名");
+    if(!name||!name.trim())return;
+    sel.place=name.trim();
+    persist(); render();
+  };
+  grid.appendChild(addB);
+  root.appendChild(grid);
+
+  // 入力パネル
+  const card=el("div","card"); card.id="input-card"; card.style.marginTop="12px";
+  card.style.borderTop=`3px solid ${cat.color}`;
+  const title=el("p","", sel.place
+    ? `${esc(sel.place)} <span id="sel-cat-badge" style="color:${cat.color}">${esc(cat.label)}</span>`
+    : `<span style="color:var(--faint)">場所を選んでね</span>`);
+  title.id="sel-place-name";
+  card.appendChild(title);
+
+  // 評価(任意)
+  const starRow=el("div"); starRow.id="star-row";
+  const drawStars=()=>{
+    starRow.innerHTML="";
+    for(let n=1;n<=5;n++){
+      const s=el("span","",n<=rating?"★":"☆");
+      s.style.color=n<=rating?"var(--gold)":"#3d3d45";
+      s.onclick=()=>{ rating=(rating===n)?0:n; drawStars(); };
+      starRow.appendChild(s);
+    }
+  };
+  drawStars();
+  card.appendChild(starRow);
+
+  // ひとことメモ(任意)
+  const memo=document.createElement("input");
+  memo.id="memo-input"; memo.type="text"; memo.placeholder="ひとこと(何を飲んだ・整った度など、なくてもOK)";
+  card.appendChild(memo);
+
+  const logB=el("button","","📍 記録する");
+  logB.id="log-btn";
+  logB.disabled=!sel.place;
+  logB.style.background=sel.place?cat.color:"";
+  logB.onclick=addLog;
+  card.appendChild(logB);
+  root.appendChild(card);
+
+  // 今日の記録
+  const list=el("div","card");
+  list.appendChild(el("p","card-title","今日の記録(時刻は自動)"));
+  if(!tl.length){
+    list.appendChild(el("div","empty-note","まだナシ。場所を選んで📍を押すだけで日付も時刻も勝手に付くよ"));
+  }else{
+    [...tl].reverse().forEach(l=>{
+      const c=catById(l.cat);
+      const row=el("div","set-row");
+      row.appendChild(el("span","set-time",fmtTime(l.t)));
+      const dot=el("span","set-cat-dot"); dot.style.background=c?.color||"#666";
+      row.appendChild(dot);
+      row.appendChild(el("span","set-main",
+        `<span class="set-place">${esc(l.place)}</span>`+
+        (l.memo?`<span class="set-memo">${esc(l.memo)}</span>`:"")));
+      if(l.rating)row.appendChild(el("span","set-stars",stars(l.rating)));
+      const del=el("button","set-del","✕");
+      del.onclick=()=>{ if(confirm("この記録を消す?")) delLog(l.t); };
+      row.appendChild(del);
+      list.appendChild(row);
+    });
+  }
+  root.appendChild(list);
+}
+
+// ── 画面: 履歴 ────────────────────────────────────────────────────────────────
+function renderHistory(root){
+  if(!logs.length){
+    const c=el("div","card");
+    c.appendChild(el("div","empty-note","履歴はまだナシ。今日どこか寄ってく?📍"));
+    root.appendChild(c);
+    return;
+  }
+  const byDay={};
+  logs.forEach(l=>{
+    const k=dateKeyOf(new Date(l.t));
+    (byDay[k]=byDay[k]||[]).push(l);
+  });
+  Object.keys(byDay).sort().reverse().forEach(dk=>{
+    const list=byDay[dk].sort((a,b)=>a.t<b.t?-1:1);
+    const d=new Date(dk+"T00:00:00");
+    const wd=["日","月","火","水","木","金","土"][d.getDay()];
+    const card=el("div","card h-day");
+    card.appendChild(el("div","h-day-head",
+      `<span class="h-day-date">${d.getMonth()+1}/${d.getDate()}(${wd})</span>
+       <span class="h-day-sub">${list.length}件</span>`));
+    list.forEach(l=>{
+      const c=catById(l.cat);
+      const row=el("div","h-row");
+      const dot=el("span","set-cat-dot"); dot.style.background=c?.color||"#666";
+      row.appendChild(dot);
+      row.appendChild(el("span","set-main",
+        `<span class="set-place">${esc(l.place)}</span>`+
+        (l.memo?`<span class="set-memo">${esc(l.memo)}</span>`:"")));
+      if(l.rating)row.appendChild(el("span","set-stars",stars(l.rating)));
+      card.appendChild(row);
+    });
+    root.appendChild(card);
+  });
+}
+
+// ── 画面: スポット(コレクション) ──────────────────────────────────────────────
+function renderSpots(root){
+  if(!logs.length){
+    const c=el("div","card");
+    c.appendChild(el("div","empty-note","記録するとここが行きつけリストになっていくよ🗺️"));
+    root.appendChild(c);
+    return;
+  }
+  allCats().forEach(c=>{
+    const ps=placesOf(c.id);
+    if(!ps.length)return;
+    const head=el("div","spot-cat-head",c.icon+" "+esc(c.label)+` <span style="color:var(--faint)">${ps.length}</span>`);
+    head.style.color=c.color;
+    root.appendChild(head);
+    const card=el("div","card"); card.style.padding="0";
+    ps.sort((a,b)=>b.count-a.count||(a.last<b.last?1:-1)).forEach(p=>{
+      const pls=logs.filter(l=>l.cat===c.id&&l.place===p.place);
+      const rated=pls.filter(l=>l.rating);
+      const avg=rated.length?Math.round(rated.reduce((a,l)=>a+l.rating,0)/rated.length):0;
+      const last=new Date(pls[pls.length-1].t);
+      const row=el("div","spot-row");
+      const dot=el("span","set-cat-dot"); dot.style.background=c.color;
+      row.appendChild(dot);
+      row.appendChild(el("span","spot-name",
+        esc(p.place)+`<span class="spot-meta">${avg?stars(avg)+" ・ ":""}最終 ${last.getMonth()+1}/${last.getDate()}</span>`));
+      row.appendChild(el("span","spot-visits",`<b>${p.count}</b><i>VISITS</i>`));
+      card.appendChild(row);
+    });
+    root.appendChild(card);
+  });
+}
+
+// ── Render ────────────────────────────────────────────────────────────────────
+function render(){
+  const root=document.getElementById("content");
+  root.innerHTML="";
+  if(tab==="today") renderToday(root);
+  else if(tab==="history") renderHistory(root);
+  else renderSpots(root);
+}
+document.getElementById("tabbar").addEventListener("click",e=>{
+  const b=e.target.closest(".tab-btn");
+  if(!b)return;
+  tab=b.dataset.tab;
+  document.querySelectorAll(".tab-btn").forEach(x=>x.classList.toggle("active",x===b));
+  render();
+});
+
+// ── 設定(バックアップ) ────────────────────────────────────────────────────────
+document.getElementById("menu-open").onclick=()=>document.getElementById("menu-modal").style.display="flex";
+document.getElementById("menu-close").onclick=()=>document.getElementById("menu-modal").style.display="none";
+document.getElementById("menu-modal").addEventListener("click",e=>{
+  if(e.target===e.currentTarget) e.currentTarget.style.display="none";
+});
+document.getElementById("export-btn").onclick=()=>{
+  const data={spot_logs:logs, spot_cats:customCats};
+  const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob);
+  a.download="tour-log-backup.json";
+  a.click();
+  URL.revokeObjectURL(a.href);
+  document.getElementById("menu-modal").style.display="none";
+};
+document.getElementById("import-btn").onclick=()=>{
+  const input=document.createElement("input");
+  input.type="file"; input.accept="application/json";
+  input.onchange=()=>{
+    const f=input.files[0];
+    if(!f)return;
+    const r=new FileReader();
+    r.onload=()=>{
+      try{
+        const d=JSON.parse(r.result);
+        if(!Array.isArray(d.spot_logs)) throw new Error("bad");
+        logs=d.spot_logs; customCats=d.spot_cats||[];
+        persist(); render();
+        showToast("✅ 復元しました");
+      }catch(e){ showToast("❌ 読み込めなかった…"); }
+    };
+    r.readAsText(f);
+  };
+  input.click();
+  document.getElementById("menu-modal").style.display="none";
+};
+
+// ── PWA service worker ────────────────────────────────────────────────────────
+if("serviceWorker" in navigator&&location.protocol==="https:")
+  navigator.serviceWorker.register("./sw.js").catch(()=>{});
+
+// 日付が変わったら描き直す(開きっぱなし対策)
+let lastDay=dateKeyOf(new Date());
+document.addEventListener("visibilitychange",()=>{
+  if(!document.hidden && dateKeyOf(new Date())!==lastDay){
+    lastDay=dateKeyOf(new Date());
+    render();
+  }
+});
+
+render();
+</script>
+</body>
+</html>
