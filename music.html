@@ -18,7 +18,7 @@
 :root{
   --bg:#0c0c0e; --panel:#131316; --panel2:#1b1b1f; --line:#28282e;
   --txt:#f0f0f2; --dim:#96969e; --faint:#55555e;
-  --note:#e01937; --green:#9FE5A8; --gold:#c8a557;
+  --note:#8a97ff; --green:#9FE5A8; --gold:#c8a557;
   --shadow:transparent;
   --cond:"Barlow Condensed","Noto Sans JP",sans-serif;
   color-scheme:dark;
@@ -75,7 +75,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 #week-days { display:flex; gap:6px; margin-top:10px; flex-wrap:wrap; }
 .wd-chip { font-size:10px; padding:3px 9px; border:1px solid var(--line);
   color:var(--faint); background:none; letter-spacing:.1em; }
-.wd-chip.on { border-color:var(--note); color:var(--note); background:rgba(224,25,55,.08); }
+.wd-chip.on { border-color:var(--note); color:var(--note); background:rgba(138,151,255,.08); }
 
 
 
@@ -94,7 +94,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   line-height:1.05; font-family:var(--cond); }
 .step-val small { font-size:12px; color:var(--dim); font-weight:500; letter-spacing:.2em; }
 #log-btn { width:100%; min-height:58px; font-size:16px; font-weight:700; cursor:pointer;
-  background:var(--note); color:#fff; border:none; letter-spacing:.3em;
+  background:var(--note); color:#0c0c0e; border:none; letter-spacing:.3em;
   font-family:var(--cond); }
 #log-btn:active { opacity:.6; }
 
@@ -128,7 +128,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 #flash.on { display:flex; animation:flashbg .45s ease-out; }
 #flash .zap { font-size:90px; animation:zappop .45s ease-out;
   filter:grayscale(1) brightness(2); text-shadow:0 0 40px var(--note); }
-@keyframes flashbg { 0%{background:rgba(224,25,55,.22)} 100%{background:transparent} }
+@keyframes flashbg { 0%{background:rgba(138,151,255,.18)} 100%{background:transparent} }
 @keyframes zappop { 0%{transform:scale(.3) rotate(-15deg);opacity:1}
   60%{transform:scale(1.25) rotate(5deg)} 100%{transform:scale(1);opacity:0} }
 
@@ -151,7 +151,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 .item-btn { padding:13px 8px; font-size:13px; cursor:pointer; text-align:center;
   background:var(--panel); color:var(--txt); border:1px solid var(--line);
   min-height:48px; line-height:1.25; letter-spacing:.04em; }
-.item-btn.active { background:rgba(224,25,55,.09); border-color:var(--note); color:var(--txt);
+.item-btn.active { background:rgba(138,151,255,.09); border-color:var(--note); color:var(--txt);
   font-weight:700; }
 .item-btn.add { color:var(--faint); border-style:dashed; }
 .item-last { display:block; font-size:10px; color:var(--faint); margin-top:3px;
@@ -162,7 +162,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 #timer-btn { width:100%; min-height:52px; font-size:14px; font-weight:700; cursor:pointer;
   background:none; color:var(--txt); border:1px solid var(--dim);
   letter-spacing:.2em; font-family:var(--cond); margin-bottom:12px; }
-#timer-btn.running { background:rgba(224,25,55,.1); color:#fff; border-color:var(--note);
+#timer-btn.running { background:rgba(138,151,255,.1); color:#fff; border-color:var(--note);
   animation:pulse 1.2s infinite; }
 @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.72} }
 /* History (music) */
@@ -174,7 +174,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 </head>
 <body>
 <div id="app">
-  <div id="note-bg"><svg viewBox="0 0 120 160" fill="#f0f0f2">
+  <div id="note-bg"><svg viewBox="0 0 120 160" fill="#8a97ff">
     <ellipse cx="30" cy="130" rx="22" ry="16"/>
     <rect x="44" y="20" width="8" height="112"/>
     <path d="M44 20 L100 8 L100 40 L52 52 L52 32 L92 22 L92 16 L52 26 Z"/>
