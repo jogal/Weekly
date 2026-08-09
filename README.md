@@ -21,6 +21,17 @@
 - 履歴タブで日ごとのセット・総挙上量を確認できる
 - ホーム画面に追加すれば週クエとは別アイコンのアプリとして使える
 
+## Vercelでデプロイする場合
+
+1. [vercel.com](https://vercel.com/) にGitHubアカウントでログイン
+2. **Add New → Project** でこのリポジトリ（`Weekly`）をImport
+3. Framework Preset は **Other** のまま、何も変えずに **Deploy**（ビルド設定不要）
+4. `https://<プロジェクト名>.vercel.app/` で公開される（トップは週クエ、筋トレは `/gym.html`）
+
+以降は対象ブランチにpushするたびに自動で再デプロイされる。
+
+> **注意**: GitHub Pages版から乗り換える場合、データ（localStorage）はドメインごとに別なので自動では引き継がれません。旧URL側の「⚙ 設定 → データを書き出す」→ 新URL側で「復元」で移行してください。GCal連携を使っている場合は、Google Cloud Consoleの「承認済みのJavaScript生成元」に `https://<プロジェクト名>.vercel.app` の追加も必要です。
+
 ## 使い方（iPhoneで使えるようにする）
 
 1. このリポジトリの **Settings → Pages** で「Deploy from a branch」を選び、`main` ブランチを指定して保存
