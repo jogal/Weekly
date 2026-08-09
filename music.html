@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="apple-mobile-web-app-title" content="ジム⚡">
-<meta name="theme-color" content="#1c0505">
-<title>⚡筋トレ記録</title>
-<link rel="manifest" href="gym-manifest.json">
+<meta name="apple-mobile-web-app-title" content="音楽🎵">
+<meta name="theme-color" content="#0f0c26">
+<title>🎵音楽練習記録</title>
+<link rel="manifest" href="music-manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -16,30 +16,30 @@
 <style>
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 :root{
-  --bg:#1c0505; --panel:#3a0d0d; --panel2:#4d1414; --line:#7a2020;
-  --txt:#ffeede; --dim:#e0a898; --faint:#a05858;
-  --bolt:#ffd93d; --bolt-dark:#8a6a00; --green:#9FE5A8;
-  --shadow:#0f0202;
+  --bg:#0f0c26; --panel:#1e1844; --panel2:#2a2260; --line:#453a8f;
+  --txt:#eceafc; --dim:#a9a5d6; --faint:#6b64a3;
+  --note:#aeb6ff; --gold:#ffd257; --green:#9FE5A8;
+  --shadow:#060414;
   color-scheme:dark;
 }
 html,body{ height:100%; }
 body { margin:0; font-family:"DotGothic16","Hiragino Sans","Meiryo",sans-serif;
   background:var(--bg); color:var(--txt); height:100dvh; overflow:hidden;
-  background-image:radial-gradient(#330b0b 1px, transparent 1px);
+  background-image:radial-gradient(#1d1740 1px, transparent 1px);
   background-size:10px 10px; overscroll-behavior:none; }
 button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none; user-select:none; }
 
 #app { display:flex; flex-direction:column; height:100dvh; position:relative; }
 
-/* faint giant lightning watermark */
-#bolt-bg { position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:0; }
-#bolt-bg svg { position:absolute; right:-40px; top:10%; width:70%; height:70%; opacity:.06; }
+/* faint giant note watermark */
+#note-bg { position:absolute; inset:0; pointer-events:none; overflow:hidden; z-index:0; }
+#note-bg svg { position:absolute; right:-30px; top:12%; width:65%; height:65%; opacity:.07; }
 
-#header { background:#160303; padding:12px 16px;
+#header { background:#0a0820; padding:12px 16px;
   padding-top:max(12px,env(safe-area-inset-top)); flex-shrink:0;
   border-bottom:2px solid var(--line); z-index:1; }
 #app-title { margin:0; font-size:15px; font-weight:700; letter-spacing:.08em;
-  color:var(--bolt); text-shadow:2px 2px 0 #4d3a00;
+  color:var(--note); text-shadow:2px 2px 0 #232a66;
   display:flex; align-items:center; justify-content:space-between; }
 .mini-btn { background:var(--panel2); border:2px solid var(--line); color:var(--dim);
   font-size:11px; padding:7px 12px; cursor:pointer; margin-left:6px;
@@ -47,13 +47,13 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 
 #content { flex:1; overflow-y:auto; padding:12px; z-index:1; -webkit-overflow-scrolling:touch; }
 
-#tabbar { display:flex; background:#160303; border-top:2px solid var(--line);
+#tabbar { display:flex; background:#0a0820; border-top:2px solid var(--line);
   padding-bottom:env(safe-area-inset-bottom); flex-shrink:0; z-index:1; }
 .tab-btn { flex:1; display:flex; flex-direction:column; align-items:center; gap:3px;
   padding:8px 0 7px; border:none; background:none; cursor:pointer;
   color:var(--faint); font-weight:400; font-size:10px; white-space:nowrap;
   border-top:3px solid transparent; min-height:52px; }
-.tab-btn.active { color:var(--bolt); font-weight:700; border-top-color:var(--bolt); }
+.tab-btn.active { color:var(--note); font-weight:700; border-top-color:var(--note); }
 .tab-ico { font-size:19px; line-height:1; }
 .tab-btn:not(.active) .tab-ico { filter:grayscale(.9) brightness(.7); }
 
@@ -65,37 +65,26 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 #today-line { display:flex; align-items:baseline; justify-content:space-between; }
 #today-date { font-size:14px; font-weight:700; }
 #today-sub  { font-size:11px; color:var(--dim); }
-#week-parts { display:flex; gap:6px; margin-top:9px; flex-wrap:wrap; }
-.wp-chip { font-size:10px; padding:3px 8px; border:2px solid var(--line);
+#week-days { display:flex; gap:6px; margin-top:9px; flex-wrap:wrap; }
+.wd-chip { font-size:10px; padding:3px 8px; border:2px solid var(--line);
   color:var(--faint); background:var(--panel2); }
-.wp-chip.on { border-color:var(--bolt); color:var(--bolt); background:#3d2c00;
+.wd-chip.on { border-color:var(--note); color:var(--note); background:#232a66;
   box-shadow:2px 2px 0 var(--shadow); }
 
-/* Part tabs */
-#part-tabs { display:flex; gap:6px; overflow-x:auto; padding-bottom:2px; margin-bottom:10px;
-  scrollbar-width:none; }
-#part-tabs::-webkit-scrollbar{ display:none; }
-.part-tab { flex-shrink:0; padding:9px 14px; font-size:13px; cursor:pointer;
-  background:var(--panel2); color:var(--dim); border:2px solid var(--line);
-  box-shadow:2px 2px 0 var(--shadow); }
-.part-tab.active { color:#160303; font-weight:700; border-color:var(--txt); }
-
-/* Exercise grid */
-#ex-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
-.ex-btn { padding:13px 8px; font-size:13px; cursor:pointer; text-align:center;
+/* Item grid */
+#item-grid { display:grid; grid-template-columns:1fr 1fr; gap:8px; }
+.item-btn { padding:13px 8px; font-size:13px; cursor:pointer; text-align:center;
   background:var(--panel2); color:var(--txt); border:2px solid var(--line);
   box-shadow:2px 2px 0 var(--shadow); min-height:48px; line-height:1.25; }
-.ex-btn.active { background:#3d2c00; border-color:var(--bolt); color:var(--bolt);
+.item-btn.active { background:#232a66; border-color:var(--note); color:var(--note);
   font-weight:700; }
-.ex-btn.add { color:var(--faint); border-style:dashed; }
-.ex-last { display:block; font-size:10px; color:var(--faint); margin-top:2px; }
-.ex-btn.active .ex-last { color:var(--bolt-dark); color:#c9a52d; }
+.item-btn.add { color:var(--faint); border-style:dashed; }
+.item-last { display:block; font-size:10px; color:var(--faint); margin-top:2px; }
+.item-btn.active .item-last { color:#7d88d8; }
 
 /* Input panel */
-#input-card { border-color:var(--bolt); }
-#sel-ex-name { font-size:15px; font-weight:700; margin:0 0 10px; color:var(--bolt);
-  display:flex; justify-content:space-between; align-items:center; }
-#sel-ex-part { font-size:10px; padding:2px 8px; border:2px solid currentColor; }
+#input-card { border-color:var(--note); }
+#sel-item-name { font-size:15px; font-weight:700; margin:0 0 10px; color:var(--note); }
 .stepper-row { display:flex; align-items:center; justify-content:center; gap:6px; margin-bottom:10px; }
 .step-btn { width:52px; min-height:52px; font-size:15px; cursor:pointer;
   background:var(--panel2); color:var(--txt); border:2px solid var(--line);
@@ -105,9 +94,15 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   line-height:1.1; }
 .step-val small { font-size:12px; color:var(--dim); font-weight:400; }
 #log-btn { width:100%; min-height:58px; font-size:18px; font-weight:700; cursor:pointer;
-  background:var(--bolt); color:#160303; border:2px solid var(--txt);
+  background:var(--note); color:#0a0820; border:2px solid var(--txt);
   box-shadow:4px 4px 0 var(--shadow); letter-spacing:.1em; }
 #log-btn:active { transform:translate(2px,2px); box-shadow:2px 2px 0 var(--shadow); }
+#timer-btn { width:100%; min-height:52px; font-size:15px; font-weight:700; cursor:pointer;
+  background:var(--panel2); color:var(--note); border:2px solid var(--note);
+  box-shadow:4px 4px 0 var(--shadow); letter-spacing:.06em; margin-bottom:10px; }
+#timer-btn.running { background:#3d2c00; color:var(--gold); border-color:var(--gold);
+  animation:pulse 1.2s infinite; }
+@keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.75} }
 
 /* Today's sets */
 .set-row { display:flex; align-items:center; gap:8px; padding:8px 2px;
@@ -115,8 +110,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 .set-row:last-child { border-bottom:none; }
 .set-time { color:var(--faint); font-size:11px; width:44px; flex-shrink:0; }
 .set-main { flex:1; }
-.set-kg { font-weight:700; }
-.set-part-dot { width:8px; height:8px; flex-shrink:0; }
+.set-min { font-weight:700; }
 .set-del { background:none; border:none; color:var(--faint); font-size:16px;
   cursor:pointer; padding:6px 8px; }
 .empty-note { color:var(--faint); font-size:12px; text-align:center; padding:14px 0; }
@@ -127,24 +121,23 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   padding:7px 10px; background:var(--panel2); border-bottom:2px solid var(--line); }
 .h-day-date { font-weight:700; font-size:13px; }
 .h-day-sub { font-size:10px; color:var(--dim); }
-.h-ex { padding:7px 10px; border-bottom:1px dashed var(--line); font-size:12px; }
-.h-ex:last-child { border-bottom:none; }
-.h-ex-name { font-weight:700; }
-.h-ex-sets { color:var(--dim); margin-top:2px; }
-.quest-badge { font-size:10px; color:var(--green); }
+.h-item { padding:7px 10px; border-bottom:1px dashed var(--line); font-size:12px; }
+.h-item:last-child { border-bottom:none; }
+.h-item-name { font-weight:700; color:var(--note); }
+.h-item-sets { color:var(--dim); margin-top:2px; }
 
 /* Toast */
 #toast { display:none; position:fixed; bottom:calc(76px + env(safe-area-inset-bottom));
-  left:50%; transform:translateX(-50%); background:#160303; color:var(--bolt);
-  border:2px solid var(--bolt); padding:10px 18px; font-size:13px; z-index:50;
+  left:50%; transform:translateX(-50%); background:#0a0820; color:var(--note);
+  border:2px solid var(--note); padding:10px 18px; font-size:13px; z-index:50;
   box-shadow:4px 4px 0 var(--shadow); white-space:nowrap; }
 
-/* Lightning flash on record */
+/* Note burst on record */
 #flash { display:none; position:fixed; inset:0; z-index:40; pointer-events:none;
   align-items:center; justify-content:center; }
 #flash.on { display:flex; animation:flashbg .45s ease-out; }
-#flash .zap { font-size:90px; animation:zappop .45s ease-out; text-shadow:0 0 30px var(--bolt); }
-@keyframes flashbg { 0%{background:rgba(255,217,61,.35)} 100%{background:transparent} }
+#flash .zap { font-size:90px; animation:zappop .45s ease-out; text-shadow:0 0 30px var(--note); }
+@keyframes flashbg { 0%{background:rgba(174,182,255,.3)} 100%{background:transparent} }
 @keyframes zappop { 0%{transform:scale(.3) rotate(-15deg);opacity:1}
   60%{transform:scale(1.25) rotate(5deg)} 100%{transform:scale(1);opacity:0} }
 
@@ -153,7 +146,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   display:flex; align-items:center; justify-content:center; padding:20px; }
 .modal-box { background:var(--panel); border:2px solid var(--txt);
   box-shadow:6px 6px 0 var(--shadow); padding:16px; width:100%; max-width:340px; }
-.modal-title { margin:0 0 12px; font-size:14px; color:var(--bolt); }
+.modal-title { margin:0 0 12px; font-size:14px; color:var(--note); }
 .menu-item { display:block; width:100%; text-align:left; background:var(--panel2);
   border:2px solid var(--line); color:var(--txt); padding:14px 12px; font-size:14px;
   cursor:pointer; margin-bottom:10px; box-shadow:2px 2px 0 var(--shadow);
@@ -165,28 +158,32 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 </head>
 <body>
 <div id="app">
-  <div id="bolt-bg"><svg viewBox="0 0 100 160" fill="#ffd93d">
-    <polygon points="62,0 18,78 44,78 30,160 86,60 54,60"/>
+  <div id="note-bg"><svg viewBox="0 0 120 160" fill="#aeb6ff">
+    <ellipse cx="30" cy="130" rx="22" ry="16"/>
+    <rect x="44" y="20" width="8" height="112"/>
+    <path d="M44 20 L100 8 L100 40 L52 52 L52 32 L92 22 L92 16 L52 26 Z"/>
+    <ellipse cx="86" cy="118" rx="22" ry="16" transform="translate(-8 0)"/>
+    <rect x="92" y="36" width="8" height="84"/>
   </svg></div>
   <div id="header">
     <p id="app-title">
-      ⚡ 筋トレ記録
+      🎵 音楽練習
       <span>
         <a class="mini-btn" href="tracker.html">⚔️</a>
-        <a class="mini-btn" href="music.html">🎵</a>
+        <a class="mini-btn" href="gym.html">⚡</a>
         <button type="button" class="mini-btn" id="menu-open">⚙</button>
       </span>
     </p>
   </div>
   <div id="content"></div>
   <div id="tabbar">
-    <button class="tab-btn active" data-tab="today"><span class="tab-ico">⚡</span>きろく</button>
+    <button class="tab-btn active" data-tab="today"><span class="tab-ico">🎵</span>きろく</button>
     <button class="tab-btn" data-tab="history"><span class="tab-ico">📜</span>履歴</button>
   </div>
 </div>
 
 <div id="toast"></div>
-<div id="flash"><span class="zap">⚡</span></div>
+<div id="flash"><span class="zap">🎵</span></div>
 
 <!-- Settings menu -->
 <div class="overlay" id="menu-modal" style="display:none">
@@ -201,29 +198,15 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 </div>
 
 <script>
-// ── 部位(週間クエストと同じID体系: wt_records の workout_<id> に対応) ──────────
-const PARTS = [
-  {id:"chest",    label:"胸",   color:"#EF5350"},
-  {id:"back",     label:"背中", color:"#E53935"},
-  {id:"shoulder", label:"肩",   color:"#F44336"},
-  {id:"arm",      label:"腕",   color:"#EF9A9A"},
-  {id:"leg",      label:"脚",   color:"#C62828"},
-  {id:"core",     label:"体幹", color:"#B71C1C"},
-];
-const PART_MAP = {}; PARTS.forEach(p=>PART_MAP[p.id]=p);
+// ── 週間クエストの「楽器練習」(cat id: instrument)に連携する ──────────────────
+const QUEST_CAT="instrument";
 
-// ── プリセット種目(部位ごと) ─────────────────────────────────────────────────
-const PRESET_EX = {
-  chest:   ["ベンチプレス","ダンベルプレス","チェストフライ","腕立て伏せ"],
-  back:    ["デッドリフト","ラットプルダウン","ローイング","懸垂"],
-  shoulder:["ショルダープレス","サイドレイズ","リアレイズ"],
-  arm:     ["アームカール","ハンマーカール","トライセプスEX"],
-  leg:     ["スクワット","レッグプレス","レッグカール","カーフレイズ"],
-  core:    ["プランク","クランチ","レッグレイズ","アブローラー"],
-};
+// ── プリセット練習メニュー(＋で自由に追加できる) ─────────────────────────────
+const PRESET_ITEMS=["基礎練習","スケール","曲の練習","新しい曲","通し練習"];
 
 // ── 週間クエストと同一の週キー/曜日キー計算 ─────────────────────────────────
 const DAY_KEYS = ["mon","tue","wed","thu","fri","sat","sun"];
+const DAYS_JP  = ["月","火","水","木","金","土","日"];
 function getWeekKey(date){
   const d=new Date(date); d.setHours(0,0,0,0);
   const day=d.getDay(); d.setDate(d.getDate()-(day===0?6:day-1));
@@ -237,98 +220,111 @@ function dateKeyOf(date){
 }
 
 // ── State ─────────────────────────────────────────────────────────────────────
-// logs: [{t:ISO文字列, ex:種目名, part:部位id, kg:数値, reps:数値}]
-let logs   = JSON.parse(localStorage.getItem("gym_logs")||"[]");
-let lastEx = JSON.parse(localStorage.getItem("gym_last")||"{}");   // 種目名 → {kg,reps}
-let custom = JSON.parse(localStorage.getItem("gym_custom")||"{}"); // 部位id → [種目名]
-let sel    = JSON.parse(localStorage.getItem("gym_sel")||"null") || {part:"chest", ex:"ベンチプレス"};
-let marks  = JSON.parse(localStorage.getItem("gym_marks")||"{}");  // 週クエに自動記入したキー
-let stepPref=JSON.parse(localStorage.getItem("gym_stepkg")||"{}"); // 種目名 → 重量の刻み(kg)
+// logs: [{t:ISO文字列, item:メニュー名, min:分}]
+let logs   = JSON.parse(localStorage.getItem("mus_logs")||"[]");
+let lastMin= JSON.parse(localStorage.getItem("mus_last")||"{}");   // メニュー名 → 分
+let custom = JSON.parse(localStorage.getItem("mus_custom")||"[]"); // 追加メニュー
+let sel    = localStorage.getItem("mus_sel") || "基礎練習";
+let marks  = JSON.parse(localStorage.getItem("mus_marks")||"{}");  // 週クエに自動記入したキー
+let timer  = JSON.parse(localStorage.getItem("mus_timer")||"null");// {start:ISO,item} 実行中タイマー
 let tab    = "today";
-let kg=0, reps=10;
+let min    = 30;
 
 function persist(){
-  localStorage.setItem("gym_logs",   JSON.stringify(logs));
-  localStorage.setItem("gym_last",   JSON.stringify(lastEx));
-  localStorage.setItem("gym_custom", JSON.stringify(custom));
-  localStorage.setItem("gym_sel",    JSON.stringify(sel));
-  localStorage.setItem("gym_marks",  JSON.stringify(marks));
-  localStorage.setItem("gym_stepkg", JSON.stringify(stepPref));
+  localStorage.setItem("mus_logs",   JSON.stringify(logs));
+  localStorage.setItem("mus_last",   JSON.stringify(lastMin));
+  localStorage.setItem("mus_custom", JSON.stringify(custom));
+  localStorage.setItem("mus_sel",    sel);
+  localStorage.setItem("mus_marks",  JSON.stringify(marks));
+  localStorage.setItem("mus_timer",  JSON.stringify(timer));
 }
-
-// 種目ごとの重量の刻み。マシン都合で1kg単位の種目はここで切替(ラットプルは初期値1kg)
-const STEP_CYCLE=[2.5,1];
-function stepOf(ex){
-  if(stepPref[ex]!==undefined)return stepPref[ex];
-  return ex==="ラットプルダウン" ? 1 : 2.5;
-}
-
-// 選択種目の前回値を kg/reps に反映(ズボラ: 前回のままなら⚡を押すだけ)
-function loadDefaults(){
-  const d=lastEx[sel.ex];
-  kg   = d? d.kg   : 0;
-  reps = d? d.reps : 10;
-}
+function loadDefaults(){ min = lastMin[sel] || 30; }
 loadDefaults();
 
-function exListOf(part){ return [...(PRESET_EX[part]||[]), ...(custom[part]||[])]; }
+function itemList(){ return [...PRESET_ITEMS, ...custom]; }
 function todayLogs(){ const k=dateKeyOf(new Date()); return logs.filter(l=>dateKeyOf(new Date(l.t))===k); }
-function fmtKg(v){ return v===0 ? "自重" : (v+"kg"); }
+function totalMin(list){ return list.reduce((a,l)=>a+l.min,0); }
 function fmtTime(iso){ const d=new Date(iso);
   return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
-function volume(list){ return list.reduce((a,l)=>a+(l.kg||0)*l.reps,0); }
 
 // ── 週間クエスト連携 ──────────────────────────────────────────────────────────
-// その日のその部位のセットから wt_records の workout_<part> を自動で「完了」にする。
-// 自分で書いた記録(marksに記憶)だけを、セットが全部消えたら取り消す。
-function syncQuest(part, dateObj){
-  const wk=getWeekKey(dateObj), dk=dayKeyOf(dateObj), catId="workout_"+part;
-  const key=wk+"|"+dk+"|"+catId;
+// その日の練習ログ合計から wt_records の instrument を自動で「完了」にする。
+// 自分で書いた記録(marksに記憶)だけを、ログが全部消えたら取り消す。
+function syncQuest(dateObj){
+  const wk=getWeekKey(dateObj), dk=dayKeyOf(dateObj);
+  const key=wk+"|"+dk+"|"+QUEST_CAT;
   const dayKey=dateKeyOf(dateObj);
-  const sets=logs.filter(l=>l.part===part && dateKeyOf(new Date(l.t))===dayKey)
-                 .sort((a,b)=>a.t<b.t?-1:1);
+  const dayLogs=logs.filter(l=>dateKeyOf(new Date(l.t))===dayKey)
+                    .sort((a,b)=>a.t<b.t?-1:1);
   let records;
   try{ records=JSON.parse(localStorage.getItem("wt_records")||"{}"); }catch(e){ records={}; }
   records[wk]=records[wk]||{}; records[wk][dk]=records[wk][dk]||{};
-  const entry=records[wk][dk][catId]||{done:false,note:"",duration:"",rating:0};
-  if(sets.length){
-    const first=new Date(sets[0].t), last=new Date(sets[sets.length-1].t);
-    const span=Math.round((last-first)/60000);
+  const entry=records[wk][dk][QUEST_CAT]||{done:false,note:"",duration:"",rating:0};
+  if(dayLogs.length){
     entry.done=true;
-    entry.duration=String(Math.max(5, span+5)); // セット間の実測+前後5分ぶん
-    // 手書きメモは上書きしない(⚡始まり=このアプリが書いたメモだけ更新)
-    if(!entry.note || entry.note.startsWith("⚡")){
-      const head=sets[sets.length-1];
-      entry.note="⚡"+head.ex+" "+fmtKg(head.kg)+"×"+head.reps+" 計"+sets.length+"セット";
+    entry.duration=String(totalMin(dayLogs));
+    // 手書きメモは上書きしない(♪始まり=このアプリが書いたメモだけ更新)
+    if(!entry.note || entry.note.startsWith("♪")){
+      const head=dayLogs[dayLogs.length-1];
+      entry.note="♪"+head.item+" "+head.min+"分"+
+        (dayLogs.length>1?` ほか 計${totalMin(dayLogs)}分`:"");
     }
     marks[key]=true;
   }else if(marks[key]){
     entry.done=false; entry.duration="";
-    if(entry.note && entry.note.startsWith("⚡")) entry.note="";
+    if(entry.note && entry.note.startsWith("♪")) entry.note="";
     delete marks[key];
   }
-  records[wk][dk][catId]=entry;
+  records[wk][dk][QUEST_CAT]=entry;
   localStorage.setItem("wt_records", JSON.stringify(records));
 }
 
 // ── 記録・削除 ────────────────────────────────────────────────────────────────
-function addSet(){
+function addLog(item, minutes){
   const now=new Date();
-  logs.push({t:now.toISOString(), ex:sel.ex, part:sel.part, kg, reps});
-  lastEx[sel.ex]={kg,reps};
-  syncQuest(sel.part, now);
+  logs.push({t:now.toISOString(), item, min:minutes});
+  lastMin[item]=minutes;
+  syncQuest(now);
   persist();
   flash();
-  showToast("⚡ "+sel.ex+" "+fmtKg(kg)+"×"+reps+" 記録!(週クエ反映)");
+  showToast("🎵 "+item+" "+minutes+"分 記録!(週クエ反映)");
   render();
 }
-function delSet(iso){
+function delLog(iso){
   const i=logs.findIndex(l=>l.t===iso);
   if(i<0)return;
   const [removed]=logs.splice(i,1);
-  syncQuest(removed.part, new Date(removed.t));
+  syncQuest(new Date(removed.t));
   persist();
   render();
+}
+
+// ── タイマー ──────────────────────────────────────────────────────────────────
+let tickIv=null;
+function timerElapsedSec(){ return timer? Math.floor((Date.now()-new Date(timer.start))/1000) : 0; }
+function startTimer(){
+  timer={start:new Date().toISOString(), item:sel};
+  persist(); render();
+}
+function stopTimer(){
+  if(!timer)return;
+  const minutes=Math.max(1, Math.round(timerElapsedSec()/60));
+  const item=timer.item;
+  timer=null;
+  addLog(item, minutes);  // addLog内でpersist+render
+}
+function updateTimerBtn(){
+  const b=document.getElementById("timer-btn");
+  if(!b)return;
+  if(timer){
+    const s=timerElapsedSec();
+    const mm=Math.floor(s/60), ss=String(s%60).padStart(2,"0");
+    b.textContent=`⏹ 停止して記録 (${timer.item} ${mm}:${ss})`;
+    b.classList.add("running");
+  }else{
+    b.textContent="▶ タイマーで計る";
+    b.classList.remove("running");
+  }
 }
 
 // ── UI helpers ────────────────────────────────────────────────────────────────
@@ -351,8 +347,6 @@ function flash(){
   setTimeout(()=>f.classList.remove("on"),500);
   if(navigator.vibrate) navigator.vibrate(30);
 }
-
-// 長押しで連打できるステッパーボタン
 function stepBtn(label, cls, fn){
   const b=el("button","step-btn"+(cls?" "+cls:""),label);
   let tm=null, iv=null;
@@ -368,153 +362,110 @@ function renderToday(root){
   const now=new Date();
   const tl=todayLogs();
 
-  // 今日カード: 日付は自動、今週やった部位がチップで光る
+  // 今日カード: 日付は自動、今週練習した曜日がチップで光る
   const head=el("div","card");
   const wd=["日","月","火","水","木","金","土"][now.getDay()];
   head.appendChild(el("div","", `<div id="today-line">
     <span id="today-date">${now.getMonth()+1}/${now.getDate()}(${wd})</span>
-    <span id="today-sub">今日 ${tl.length}セット / ${volume(tl)}kg挙上</span>
+    <span id="today-sub">今日 ${totalMin(tl)}分 / ${tl.length}回</span>
   </div>`));
   const wk=getWeekKey(now);
-  const weekSet=new Set(logs.filter(l=>getWeekKey(new Date(l.t))===wk).map(l=>l.part));
-  const chips=el("div","");
-  chips.id="week-parts";
-  PARTS.forEach(p=>{
-    chips.appendChild(el("span","wp-chip"+(weekSet.has(p.id)?" on":""),
-      (weekSet.has(p.id)?"⚡":"")+p.label));
+  const weekDays=new Set(logs.filter(l=>getWeekKey(new Date(l.t))===wk)
+                             .map(l=>dayKeyOf(new Date(l.t))));
+  const chips=el("div",""); chips.id="week-days";
+  DAY_KEYS.forEach((dk,i)=>{
+    chips.appendChild(el("span","wd-chip"+(weekDays.has(dk)?" on":""),
+      (weekDays.has(dk)?"♪":"")+DAYS_JP[i]));
   });
   head.appendChild(chips);
   root.appendChild(head);
 
-  // 部位タブ
-  const tabs=el("div"); tabs.id="part-tabs";
-  PARTS.forEach(p=>{
-    const b=el("button","part-tab"+(p.id===sel.part?" active":""),p.label);
-    if(p.id===sel.part) b.style.background=p.color;
-    b.onclick=()=>{
-      sel.part=p.id;
-      const list=exListOf(p.id);
-      if(!list.includes(sel.ex)){
-        // その部位で前回使った種目を優先、なければ先頭
-        const lastUsed=[...logs].reverse().find(l=>l.part===p.id && list.includes(l.ex));
-        sel.ex=lastUsed? lastUsed.ex : list[0];
-      }
-      loadDefaults(); persist(); render();
-    };
-    tabs.appendChild(b);
-  });
-  root.appendChild(tabs);
-
-  // 種目グリッド(前回値を小さく表示)
-  const grid=el("div"); grid.id="ex-grid";
-  exListOf(sel.part).forEach(name=>{
-    const d=lastEx[name];
-    const b=el("button","ex-btn"+(name===sel.ex?" active":""),
-      esc(name)+(d?`<span class="ex-last">前回 ${fmtKg(d.kg)}×${d.reps}</span>`:""));
-    b.onclick=()=>{ sel.ex=name; loadDefaults(); persist(); render(); };
+  // メニューグリッド(前回の分数を小さく表示)
+  const grid=el("div"); grid.id="item-grid";
+  itemList().forEach(name=>{
+    const d=lastMin[name];
+    const b=el("button","item-btn"+(name===sel?" active":""),
+      esc(name)+(d?`<span class="item-last">前回 ${d}分</span>`:""));
+    b.onclick=()=>{ sel=name; loadDefaults(); persist(); render(); };
     grid.appendChild(b);
   });
-  const addB=el("button","ex-btn add","＋ 種目を追加");
+  const addB=el("button","item-btn add","＋ メニューを追加");
   addB.onclick=()=>{
-    const name=prompt("種目名を入力");
+    const name=prompt("メニュー名(曲名でもOK)");
     if(!name||!name.trim())return;
     const n=name.trim();
-    if(exListOf(sel.part).includes(n)){ showToast("もうあるよ"); return; }
-    (custom[sel.part]=custom[sel.part]||[]).push(n);
-    sel.ex=n; loadDefaults(); persist(); render();
+    if(itemList().includes(n)){ showToast("もうあるよ"); return; }
+    custom.push(n);
+    sel=n; loadDefaults(); persist(); render();
   };
   grid.appendChild(addB);
   root.appendChild(grid);
 
   // 入力パネル
-  const part=PART_MAP[sel.part];
-  const step=stepOf(sel.ex);
   const card=el("div","card"); card.id="input-card"; card.style.marginTop="12px";
-  const title=el("p","", `${esc(sel.ex)} <span id="sel-ex-part" style="color:${part.color}">${part.label}</span>`);
-  title.id="sel-ex-name";
-  // 刻み切替(2.5kg⇔1kg): マシンのプレート単位に合わせる
-  const stepTgl=el("button","mini-btn",`刻み ${step}kg`);
-  stepTgl.style.marginLeft="auto"; stepTgl.style.marginRight="8px";
-  stepTgl.onclick=()=>{
-    const i=STEP_CYCLE.indexOf(step);
-    stepPref[sel.ex]=STEP_CYCLE[(i+1)%STEP_CYCLE.length];
-    persist(); render();
-  };
-  title.insertBefore(stepTgl, title.querySelector("#sel-ex-part"));
+  const title=el("p","",esc(sel));
+  title.id="sel-item-name";
   card.appendChild(title);
 
-  // 重量: −10 / −刻み / 値 / +刻み / +10 (0で自重)
-  const wRow=el("div","stepper-row");
-  const wVal=el("div","step-val");
-  const updW=()=>{ wVal.innerHTML=(kg===0?"自重":kg)+" <small>kg</small>"; };
-  wRow.appendChild(stepBtn("-10","small",()=>{kg=Math.max(0,kg-10);updW();}));
-  wRow.appendChild(stepBtn("-"+step,"",()=>{kg=Math.max(0,Math.round((kg-step)*10)/10);updW();}));
-  wRow.appendChild(wVal);
-  wRow.appendChild(stepBtn("+"+step,"",()=>{kg=Math.round((kg+step)*10)/10;updW();}));
-  wRow.appendChild(stepBtn("+10","small",()=>{kg+=10;updW();}));
-  wVal.onclick=()=>{
-    const v=prompt("重量(kg) ※自重は0",String(kg));
-    if(v===null)return;
-    const n=parseFloat(v);
-    if(!isNaN(n)&&n>=0){ kg=Math.round(n*10)/10; updW(); }
-  };
-  updW();
-  card.appendChild(wRow);
+  // タイマー(押して始めて、止めたら自動で分数記録)
+  const tBtn=el("button","");
+  tBtn.id="timer-btn";
+  tBtn.onclick=()=>{ timer? stopTimer() : startTimer(); };
+  card.appendChild(tBtn);
 
-  // 回数: −1 / 値 / +1
-  const rRow=el("div","stepper-row");
-  const rVal=el("div","step-val");
-  const updR=()=>{ rVal.innerHTML=reps+" <small>回</small>"; };
-  rRow.appendChild(stepBtn("-1","",()=>{reps=Math.max(1,reps-1);updR();}));
-  rRow.appendChild(rVal);
-  rRow.appendChild(stepBtn("+1","",()=>{reps++;updR();}));
-  rVal.onclick=()=>{
-    const v=prompt("回数",String(reps));
+  // 分数: −10 / −5 / 値 / +5 / +10
+  const mRow=el("div","stepper-row");
+  const mVal=el("div","step-val");
+  const updM=()=>{ mVal.innerHTML=min+" <small>分</small>"; };
+  mRow.appendChild(stepBtn("-10","small",()=>{min=Math.max(1,min-10);updM();}));
+  mRow.appendChild(stepBtn("-5","",()=>{min=Math.max(1,min-5);updM();}));
+  mRow.appendChild(mVal);
+  mRow.appendChild(stepBtn("+5","",()=>{min+=5;updM();}));
+  mRow.appendChild(stepBtn("+10","small",()=>{min+=10;updM();}));
+  mVal.onclick=()=>{
+    const v=prompt("練習時間(分)",String(min));
     if(v===null)return;
     const n=parseInt(v);
-    if(!isNaN(n)&&n>=1){ reps=n; updR(); }
+    if(!isNaN(n)&&n>=1){ min=n; updM(); }
   };
-  updR();
-  card.appendChild(rRow);
+  updM();
+  card.appendChild(mRow);
 
-  const logB=el("button","", "⚡ 記録する");
+  const logB=el("button","", "🎵 記録する");
   logB.id="log-btn";
-  logB.onclick=addSet;
+  logB.onclick=()=>addLog(sel,min);
   card.appendChild(logB);
   root.appendChild(card);
 
-  // 今日のセット一覧
+  // 今日のログ一覧
   const list=el("div","card");
-  list.appendChild(el("p","card-title","📋 今日のセット(時刻は自動記録)"));
+  list.appendChild(el("p","card-title","📋 今日の練習(時刻は自動記録)"));
   if(!tl.length){
-    list.appendChild(el("div","empty-note","まだナシ。⚡を押すだけで日付も時刻も勝手に付くよ"));
+    list.appendChild(el("div","empty-note","まだナシ。タイマーを押すか🎵を押すだけで日付も時刻も勝手に付くよ"));
   }else{
     [...tl].reverse().forEach(l=>{
-      const p=PART_MAP[l.part]||PARTS[0];
       const row=el("div","set-row");
       row.appendChild(el("span","set-time",fmtTime(l.t)));
-      const dot=el("span","set-part-dot"); dot.style.background=p.color;
-      row.appendChild(dot);
       row.appendChild(el("span","set-main",
-        `${esc(l.ex)} <span class="set-kg">${fmtKg(l.kg)}×${l.reps}</span>`));
+        `${esc(l.item)} <span class="set-min">${l.min}分</span>`));
       const del=el("button","set-del","✕");
-      del.onclick=()=>{ if(confirm("このセットを消す?")) delSet(l.t); };
+      del.onclick=()=>{ if(confirm("この記録を消す?")) delLog(l.t); };
       row.appendChild(del);
       list.appendChild(row);
     });
   }
   root.appendChild(list);
+  updateTimerBtn();
 }
 
 // ── 画面: 履歴 ────────────────────────────────────────────────────────────────
 function renderHistory(root){
   if(!logs.length){
     const c=el("div","card");
-    c.appendChild(el("div","empty-note","履歴はまだナシ。今日から始めよう⚡"));
+    c.appendChild(el("div","empty-note","履歴はまだナシ。今日から始めよう🎵"));
     root.appendChild(c);
     return;
   }
-  // 日付ごとにまとめて新しい順に
   const byDay={};
   logs.forEach(l=>{
     const k=dateKeyOf(new Date(l.t));
@@ -525,20 +476,16 @@ function renderHistory(root){
     const d=new Date(dk+"T00:00:00");
     const wd=["日","月","火","水","木","金","土"][d.getDay()];
     const card=el("div","card h-day"); card.style.padding="0";
-    const parts=[...new Set(list.map(l=>l.part))]
-      .map(id=>PART_MAP[id]?.label||id).join("・");
     card.appendChild(el("div","h-day-head",
-      `<span class="h-day-date">${d.getMonth()+1}/${d.getDate()}(${wd}) <span class="quest-badge">${esc(parts)}</span></span>
-       <span class="h-day-sub">${list.length}セット / ${volume(list)}kg</span>`));
-    // 種目ごとにまとめる
-    const byEx={};
-    list.forEach(l=>{ (byEx[l.ex]=byEx[l.ex]||[]).push(l); });
-    Object.keys(byEx).forEach(ex=>{
-      const sets=byEx[ex];
-      const p=PART_MAP[sets[0].part];
-      card.appendChild(el("div","h-ex",
-        `<span class="h-ex-name" style="color:${p?.color||"#fff"}">${esc(ex)}</span>
-         <div class="h-ex-sets">${sets.map(s=>`${fmtKg(s.kg)}×${s.reps}`).join(", ")}</div>`));
+      `<span class="h-day-date">${d.getMonth()+1}/${d.getDate()}(${wd})</span>
+       <span class="h-day-sub">計${totalMin(list)}分 / ${list.length}回</span>`));
+    const byItem={};
+    list.forEach(l=>{ (byItem[l.item]=byItem[l.item]||[]).push(l); });
+    Object.keys(byItem).forEach(item=>{
+      const ls=byItem[item];
+      card.appendChild(el("div","h-item",
+        `<span class="h-item-name">${esc(item)}</span>
+         <div class="h-item-sets">${ls.map(s=>`${s.min}分`).join(", ")} (計${totalMin(ls)}分)</div>`));
     });
     root.appendChild(card);
   });
@@ -550,6 +497,8 @@ function render(){
   root.innerHTML="";
   if(tab==="today") renderToday(root);
   else renderHistory(root);
+  clearInterval(tickIv);
+  if(timer && tab==="today") tickIv=setInterval(updateTimerBtn,1000);
 }
 document.getElementById("tabbar").addEventListener("click",e=>{
   const b=e.target.closest(".tab-btn");
@@ -566,11 +515,11 @@ document.getElementById("menu-modal").addEventListener("click",e=>{
   if(e.target===e.currentTarget) e.currentTarget.style.display="none";
 });
 document.getElementById("export-btn").onclick=()=>{
-  const data={gym_logs:logs, gym_last:lastEx, gym_custom:custom, gym_marks:marks};
+  const data={mus_logs:logs, mus_last:lastMin, mus_custom:custom, mus_marks:marks};
   const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
-  a.download="gym-log-backup.json";
+  a.download="music-log-backup.json";
   a.click();
   URL.revokeObjectURL(a.href);
   document.getElementById("menu-modal").style.display="none";
@@ -585,8 +534,8 @@ document.getElementById("import-btn").onclick=()=>{
     r.onload=()=>{
       try{
         const d=JSON.parse(r.result);
-        if(!Array.isArray(d.gym_logs)) throw new Error("bad");
-        logs=d.gym_logs; lastEx=d.gym_last||{}; custom=d.gym_custom||{}; marks=d.gym_marks||{};
+        if(!Array.isArray(d.mus_logs)) throw new Error("bad");
+        logs=d.mus_logs; lastMin=d.mus_last||{}; custom=d.mus_custom||[]; marks=d.mus_marks||{};
         persist(); render();
         showToast("✅ 復元しました");
       }catch(e){ showToast("❌ 読み込めなかった…"); }
@@ -601,13 +550,12 @@ document.getElementById("import-btn").onclick=()=>{
 if("serviceWorker" in navigator&&location.protocol==="https:")
   navigator.serviceWorker.register("./sw.js").catch(()=>{});
 
-// 日付が変わったら「今日」を描き直す(開きっぱなし対策)
+// 日付が変わったら描き直す(開きっぱなし対策)。タイマー表示の復帰も兼ねる
 let lastDay=dateKeyOf(new Date());
 document.addEventListener("visibilitychange",()=>{
-  if(!document.hidden && dateKeyOf(new Date())!==lastDay){
-    lastDay=dateKeyOf(new Date());
-    render();
-  }
+  if(document.hidden)return;
+  if(dateKeyOf(new Date())!==lastDay){ lastDay=dateKeyOf(new Date()); }
+  render();
 });
 
 render();

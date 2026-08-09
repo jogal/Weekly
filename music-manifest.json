@@ -1,0 +1,15 @@
+{
+  "name": "音楽練習記録",
+  "short_name": "音楽🎵",
+  "description": "ズボラ向け音楽練習ログ。週間クエストと連動",
+  "start_url": "./music.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#0f0c26",
+  "theme_color": "#0f0c26",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
