@@ -1,0 +1,15 @@
+{
+  "name": "筋トレ記録",
+  "short_name": "ジム⚡",
+  "description": "ズボラ向け筋トレログ。週間クエストと連動",
+  "start_url": "./gym.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#1c0505",
+  "theme_color": "#1c0505",
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png" }
+  ]
+}
