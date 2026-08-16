@@ -1035,17 +1035,71 @@ function hideHint(){
   document.getElementById("drag-hint").style.display="none";
 }
 
-// ── Job character (external FF-style PNG sprites) ─────────────────────────────
-// The look changes by "job": whichever stat (track) has the highest level wins.
-// Art lives in sprites/<job>.png (authored separately), loaded as an <img>.
-const JOB_NAMES={novice:"赤魔道士",monk:"モンク",whitemage:"白魔道士",
-  blackmage:"黒魔道士",bard:"遊び人",chef:"料理人"};
-const TRACK_JOB={workout:"monk",medicine:"whitemage",instrument:"bard",english:"blackmage",cooking:"chef"};
-function currentJob(tracks){
+// ── Job character (external PNG sprites, job × level-tier) ────────────────────
+// Same person throughout; the job comes from what you keep doing, and the
+// costume evolves with level (Lv1 = modern life → Lv30 = full fantasy).
+// Art: sprites/<file>_lv<tier>.png (tier 1/10/20/30). Missing tiers fall back
+// to lower tiers → sprites/<file>.png → the primary base job's art, so new
+// art can be dropped in one file at a time without breaking anything.
+const TRACK_JOB={workout:"monk",instrument:"trickster",english:"redmage",medicine:"whitemage",cooking:"traveler"};
+const JOB_DEF={
+  // base jobs (one per habit)
+  novice:    {name:"みならい",   file:"novice"},
+  monk:      {name:"モンク",     file:"monk"},
+  trickster: {name:"遊び人",     file:"bard"},
+  redmage:   {name:"赤魔道士",   file:"novice"},
+  whitemage: {name:"白魔道士",   file:"whitemage"},
+  traveler:  {name:"旅人",       file:"chef"},
+  // composite jobs (both habits at the tier level unlock these)
+  paladin:   {name:"パラディン", file:"paladin",   pair:["workout","medicine"]},
+  sage:      {name:"賢者",       file:"sage",      pair:["medicine","english"]},
+  bardic:    {name:"吟遊詩人",   file:"bardic",    pair:["instrument","english"]},
+  ranger:    {name:"レンジャー", file:"ranger",    pair:["workout","cooking"]},
+  apothecary:{name:"薬師",       file:"apothecary",pair:["medicine","cooking"]},
+  adventurer:{name:"冒険家",     file:"adventurer",pair:["english","cooking"]},
+  dancer:    {name:"踊り子",     file:"dancer",    pair:["workout","instrument"]},
+};
+const TIER_PREFIX={10:"見習い",20:"",30:"マスター"};
+function tierOf(lvl){return lvl>=30?30:lvl>=20?20:lvl>=10?10:1;}
+// Decide the current job: a qualifying composite pair (both >= Lv10) beats the
+// single top stat; among pairs, the one with the higher shared level wins.
+function jobState(tracks){
+  const by=id=>tracks.find(t=>t.id===id);
+  let best=null;
+  Object.entries(JOB_DEF).forEach(([key,def])=>{
+    if(!def.pair)return;
+    const a=by(def.pair[0]),b=by(def.pair[1]);
+    if(!a||!b)return;
+    const m=Math.min(a.lvl,b.lvl);
+    if(m>=10&&(!best||m>best.min))
+      best={key,min:m,primary:TRACK_JOB[a.lvl>=b.lvl?a.id:b.id]};
+  });
+  if(best)return {key:best.key,tier:tierOf(best.min),primary:best.primary,composite:true};
   const max=Math.max(...tracks.map(t=>t.lvl));
   const top=tracks.filter(t=>t.lvl===max);
-  if(max<=1||top.length===tracks.length)return "novice";
-  return TRACK_JOB[top[0].id]||"novice";
+  if(max<=1||top.length===tracks.length)return {key:"novice",tier:1,primary:"novice",composite:false};
+  const jk=TRACK_JOB[top[0].id]||"novice";
+  return {key:jk,tier:tierOf(max),primary:jk,composite:false};
+}
+function jobDisplayName(st){
+  const base=JOB_DEF[st.key].name;
+  return st.composite?(TIER_PREFIX[st.tier]??"")+base:base;
+}
+// Ordered list of sprite paths to try for this job state
+function spriteCandidates(st){
+  const tiers=[30,20,10].filter(t=>t<=st.tier);
+  const out=[];
+  const push=file=>{tiers.forEach(t=>out.push(`sprites/${file}_lv${t}.png`));out.push(`sprites/${file}.png`);};
+  push(JOB_DEF[st.key].file);
+  if(st.key!==st.primary)push(JOB_DEF[st.primary].file);
+  if(!out.includes("sprites/novice.png"))out.push("sprites/novice.png");
+  return out;
+}
+function setHeroSprite(img,st){
+  const cands=spriteCandidates(st);
+  let i=0;
+  img.onerror=()=>{i++;if(i<cands.length)img.src=cands[i];else img.onerror=null;};
+  img.src=cands[0];
 }
 
 // ── Status / Level View ───────────────────────────────────────────────────────
@@ -1082,13 +1136,14 @@ function renderStatus(){
   const maxStat=Math.max(10,...tracks.map(t=>t.lvl));
 
   // Compact hero card: character on the left, level + job + stat bars on the right
-  const jobKey=currentJob(tracks);
+  const jobSt=jobState(tracks);
+  const jobName=jobDisplayName(jobSt);
   const hero=el("div","hero-card hero-compact");
   hero.innerHTML=`
-    <img class="hero-sprite" alt="${JOB_NAMES[jobKey]}" src="sprites/${jobKey}.png">
+    <img class="hero-sprite" alt="${jobName}">
     <div class="hero-info">
       <div class="hero-level">Lv.${totalLvl}</div>
-      <div class="hero-job">JOB─${JOB_NAMES[jobKey]}</div>
+      <div class="hero-job">JOB─${jobName}</div>
       ${STAT_DEFS.map(s=>{
         const t=tracks.find(x=>x.id===s.id);
         if(!t)return "";
@@ -1102,6 +1157,7 @@ function renderStatus(){
       <div class="hero-sub">総XP ${totalXP} ・ 冒険 ${doneDays.size}日 ・ 達成 ${doneTotal}回</div>
     </div>`;
   wrap.appendChild(hero);
+  setHeroSprite(hero.querySelector(".hero-sprite"),jobSt);
 
   // Track cards
   tracks.forEach(t=>{
