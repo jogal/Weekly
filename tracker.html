@@ -333,6 +333,7 @@ textarea.field-input { height:76px; resize:vertical; }
         <a class="mini-btn" href="gym.html" style="text-decoration:none">GYM</a>
         <a class="mini-btn" href="music.html" style="text-decoration:none">MUSIC</a>
         <a class="mini-btn" href="spots.html" style="text-decoration:none">TOUR</a>
+        <button type="button" class="mini-btn" id="nl-import" title="Neuro Learnの学習を取り込む">🧠</button>
         <button type="button" class="mini-btn" id="menu-open">設定</button>
       </span>
     </p>
@@ -1739,34 +1740,37 @@ window.addEventListener("storage",e=>{
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)reloadFromStorage();});
 window.addEventListener("pageshow",e=>{if(e.persisted)reloadFromStorage();});
 
-// ── Neuro Learn 連携（URLハンドオフ） ─────────────────────────────────────────
-// Neuro Learn（別オリジンのため localStorage は共有できない）が
-// `tracker.html#nl=<base64url JSON>` で開いてくる。payload は
-// {v:1, d:"YYYY-MM-DD", min:学習分, q:回答数, c:正解数, l:読了レッスン数} で、
-// **その日の累計**なので何度開かれても上書きになり二重加算されない。
+// ── Neuro Learn 連携 ──────────────────────────────────────────────────────────
+// Neuro Learn は別オリジンのため localStorage を共有できない。受け取り口は2つ：
+//   1) 記録コードのペースト（ヘッダーの 🧠 ボタン）… iPhone のホーム画面アプリ同士の主経路。
+//      リンクだとストレージの違う Safari 側で開いてしまうため、コード経由で渡す
+//   2) URLハンドオフ `tracker.html#nl=<base64url JSON>` … 同じブラウザで使っている場合
+// payload は {v:1, d:"YYYY-MM-DD", min:学習分, q:回答数, c:正解数, l:読了レッスン数} で、
+// **その日の累計**なので何度取り込んでも上書きになり二重加算されない。
 // 「専門医勉強」(medicine) をその日の完了扱いにして XP を入れる。
 const NL_MARK="🧠";
 function dayKeyOfDate(d){ return DAY_KEYS[(d.getDay()+6)%7]; }
-function importNeuroLearn(){
-  const m=location.hash.match(/[#&]nl=([A-Za-z0-9_-]+)/);
-  if(!m)return;
-  // リロードで再取り込みしないよう、先にハッシュを消す
-  history.replaceState(null,"",location.pathname+location.search);
-  let p=null;
+// `#nl=…` を含む文字列（URL全体でもコード単体でも可）から payload を取り出す
+function parseNeuroToken(text){
+  const m=String(text||"").match(/[#&]nl=([A-Za-z0-9_-]+)/);
+  if(!m)return null;
   try{
     const bin=atob(m[1].replace(/-/g,"+").replace(/_/g,"/"));
     const bytes=Uint8Array.from(bin,ch=>ch.charCodeAt(0));
-    p=JSON.parse(new TextDecoder().decode(bytes));
-  }catch(e){ return; }
-  if(!p||p.v!==1||!/^\d{4}-\d{2}-\d{2}$/.test(p.d||""))return;
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }catch(e){ return null; }
+}
+// 取り込み本体。適用できたら true
+function applyNeuroPayload(p){
+  if(!p||p.v!==1||!/^\d{4}-\d{2}-\d{2}$/.test(p.d||""))return false;
   const [y,mo,dd]=p.d.split("-").map(Number);
   const dateObj=new Date(y,mo-1,dd);
-  if(isNaN(dateObj)||daysSince(dateObj)<0||daysSince(dateObj)>30)return; // 未来日・古すぎる日付は無視
+  if(isNaN(dateObj)||daysSince(dateObj)<0||daysSince(dateObj)>30)return false; // 未来日・古すぎる日付は無視
   const min=Math.max(0,Math.min(600,Math.round(Number(p.min)||0)));
   const q=Math.max(0,Math.round(Number(p.q)||0));
   const c=Math.max(0,Math.min(q,Math.round(Number(p.c)||0)));
   const l=Math.max(0,Math.round(Number(p.l)||0));
-  if(min<=0&&q<=0&&l<=0)return; // 学習実績が空なら何もしない
+  if(min<=0&&q<=0&&l<=0)return false; // 学習実績が空なら何もしない
 
   const wk=getWeekKey(dateObj), dk=dayKeyOfDate(dateObj);
   const before=snapshotLevels();
@@ -1774,7 +1778,7 @@ function importNeuroLearn(){
   const prev=records[wk][dk]["medicine"]||{done:false,note:"",duration:"",rating:0};
   const prevXP=xpForRecord(prev);
   const entry={...prev,done:true};
-  // 手入力の実施時間は減らさない（累計なので max を取れば再送も安全）
+  // 手入力の実施時間は減らさない（累計なので max を取れば再取り込みも安全）
   if(min>0)entry.duration=String(Math.max(parseInt(prev.duration)||0,min));
   // メモは自分（🧠始まり）が書いたものだけ書き換え、手書きメモは残す
   const parts=[];
@@ -1784,9 +1788,28 @@ function importNeuroLearn(){
     entry.note=NL_MARK+" Neuro Learn"+(parts.length?"："+parts.join("・"):"");
   records[wk][dk]["medicine"]=entry;
   persist();
+  render();
   showToast("🧠 Neuro Learnの学習を専門医勉強に記録しました");
   const gained=xpForRecord(entry)-prevXP;
   if(gained>0)checkLevelUp(before,gained);
+  return true;
+}
+// 経路1: 🧠 ボタン → クリップボードの記録コードを取り込む（iOSはペースト許可が出る）
+document.getElementById("nl-import").onclick=async()=>{
+  let text="";
+  try{ text=await navigator.clipboard.readText(); }
+  catch(e){ showToast("📋 ペーストが許可されませんでした"); return; }
+  const p=parseNeuroToken(text);
+  if(!p){ showToast("🧠 記録コードが見つかりません。Neuro Learnで「記録コードをコピー」してから押してください"); return; }
+  if(!applyNeuroPayload(p)) showToast("🧠 取り込める学習記録がありませんでした");
+};
+// 経路2: URLハッシュ
+function importNeuroLearn(){
+  const p=parseNeuroToken(location.hash);
+  if(!p)return;
+  // リロードで再取り込みしないよう、先にハッシュを消す
+  history.replaceState(null,"",location.pathname+location.search);
+  applyNeuroPayload(p);
 }
 importNeuroLearn();
 
