@@ -78,7 +78,7 @@ def measure(im):
         seg = [rows[y] for y in range(top + int(H * a), top + int(H * b)) if rows[y]]
         return max(r[1] - r[0] + 1 for r in seg)
     maxw = max(r[1] - r[0] + 1 for r in rows if r)
-    return band(.05, .25) / H, band(.28, .42) / H, maxw / H
+    return band(.10, .20) / H, band(.34, .42) / H, maxw / H
 
 def gate_ok(m):
     hd, sw, mw = m
@@ -110,9 +110,18 @@ def process(path):
     m = measure(f1)
     applied = None
     if not gate_ok(m):
+        # まず全体の横絞り(継ぎ目が出ない)だけで救えるか試す
+        for sx in (0.98, 0.97, 0.96, 0.95, 0.94, 0.93):
+            c = f1.resize((int(f1.width * sx), f1.height), Image.LANCZOS)
+            if gate_ok(measure(c)):
+                f1 = c
+                f2 = f2.resize((int(f2.width * sx), f2.height), Image.LANCZOS)
+                m = measure(f1); applied = f"横絞り×{sx}"
+                break
+    if not gate_ok(m):
         best = None
-        for sh_ in (1.04, 1.05, 1.06, 1.07, 1.08, 1.09, 1.10):
-            for sb in (1.0, 0.99, 0.98, 0.97, 0.96):
+        for sh_ in (0.86,0.88,0.90,0.92,0.94,0.96,0.98,1.0,1.02,1.04,1.06,1.08,1.10):
+            for sb in (1.02,1.0,0.98,0.96,0.94,0.92):
                 c = fix(f1, sh_, sb); mm = measure(c)
                 if gate_ok(mm):
                     score = abs(mm[0] - HEAD) + abs(mm[1] - SH)
@@ -126,7 +135,11 @@ def process(path):
     for i, f in enumerate((f1, f2)):
         sheet.alpha_composite(f, (i * fw + (fw - f.width) // 2, fh - f.height))
     out = os.path.join(SPRITES, f"{name}x2.png")
-    sheet.save(out)
+    if gate_ok(m) or not os.path.exists(out):
+        sheet.save(out)
+    else:
+        out = os.path.join(INBOX, f"REJECTED_{name}.png")
+        sheet.save(out)
     hd, sw, mw = m
     status = "PASS" if gate_ok(m) else "FAIL(要再生成)"
     print(f"{name}: 頭{hd:.3f} 肩{sw:.3f} 幅{mw:.3f} → {status}"
@@ -134,7 +147,8 @@ def process(path):
     return gate_ok(m)
 
 if __name__ == "__main__":
-    files = sorted(glob.glob(os.path.join(INBOX, "*.png")))
+    files = sorted(f for f in glob.glob(os.path.join(INBOX, "*.png"))
+                   if not os.path.basename(f).startswith("REJECTED_"))
     if not files:
         print(f"art-inbox/ に画像がありません ({INBOX})"); sys.exit(1)
     done = os.path.join(INBOX, "done"); os.makedirs(done, exist_ok=True)
