@@ -1081,8 +1081,8 @@ const JOB_DEF={
   adventurer:{name:"冒険家",     file:"adventurer",pair:["english","cooking"]},
   dancer:    {name:"踊り子",     file:"dancer",    pair:["workout","instrument"]},
 };
-const TIER_PREFIX={10:"見習い",20:"",30:"マスター"};
-function tierOf(lvl){return lvl>=30?30:lvl>=20?20:lvl>=10?10:1;}
+const TIER_PREFIX={10:"見習い",20:"",30:"マスター",40:"マスター"};
+function tierOf(lvl){return lvl>=40?40:lvl>=30?30:lvl>=20?20:lvl>=10?10:1;}
 // Decide the current job: a qualifying composite pair (both >= Lv10) beats the
 // single top stat; among pairs, the one with the higher shared level wins.
 function jobState(tracks){
@@ -1111,7 +1111,7 @@ function jobDisplayName(st){
 // "<file>_lv<t>x2.png" is a 2-frame idle-animation sheet (frames side by side,
 // equal width); it is preferred over the still "<file>_lv<t>.png".
 function spriteCandidates(st){
-  const tiers=[30,20,10,1].filter(t=>t<=st.tier);
+  const tiers=[40,30,20,10,1].filter(t=>t<=st.tier);
   const out=[];
   const push=file=>{
     tiers.forEach(t=>{out.push(`sprites/${file}_lv${t}x2.png`);out.push(`sprites/${file}_lv${t}.png`);});
