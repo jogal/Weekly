@@ -70,8 +70,35 @@ def rows_of(im):
         out.append((min(xs), max(xs)) if xs else None)
     return out
 
+
+def body_rows(im):
+    """最大連結成分(キャラ本体)だけの行extentを返す。浮遊する光の粒などは無視。"""
+    px = im.load(); w, h = im.size
+    label = [[0] * w for _ in range(h)]
+    from collections import deque as _dq
+    comps = []
+    cur = 0
+    for y0 in range(h):
+        for x0 in range(w):
+            if px[x0, y0][3] > 0 and label[y0][x0] == 0:
+                cur += 1; size = 0
+                q = _dq([(x0, y0)]); label[y0][x0] = cur
+                while q:
+                    x, y = q.popleft(); size += 1
+                    for dx, dy in ((1,0),(-1,0),(0,1),(0,-1)):
+                        nx, ny = x+dx, y+dy
+                        if 0 <= nx < w and 0 <= ny < h and px[nx,ny][3] > 0 and label[ny][nx] == 0:
+                            label[ny][nx] = cur; q.append((nx, ny))
+                comps.append((size, cur))
+    main = max(comps)[1]
+    rows = []
+    for y in range(h):
+        xs = [x for x in range(w) if label[y][x] == main]
+        rows.append((min(xs), max(xs)) if xs else None)
+    return rows
+
 def measure(im):
-    rows = rows_of(im)
+    rows = body_rows(im)
     ys = [y for y, r in enumerate(rows) if r]
     top, bot = min(ys), max(ys); H = bot - top + 1
     def band(a, b):
@@ -80,9 +107,9 @@ def measure(im):
     maxw = max(r[1] - r[0] + 1 for r in rows if r)
     return band(.10, .20) / H, band(.34, .42) / H, maxw / H
 
-def gate_ok(m):
+def gate_ok(m, maxw_limit=MAXW):
     hd, sw, mw = m
-    return abs(hd - HEAD) <= HEAD_TOL and abs(sw - SH) <= SH_TOL and mw <= MAXW
+    return abs(hd - HEAD) <= HEAD_TOL and abs(sw - SH) <= SH_TOL and mw <= maxw_limit
 
 def fix(frame, s_head, s_bodyx):
     rows = rows_of(frame)
@@ -106,24 +133,27 @@ def fix(frame, s_head, s_bodyx):
 
 def process(path):
     name = os.path.splitext(os.path.basename(path))[0]  # e.g. monk_lv10
+    # Lv40(最上位)は儀礼装束の裾広がりのみ0.46まで許容(骨格基準は同一)
+    limit = 0.46 if name.endswith("_lv40") else MAXW
+    global gate_ok_limit
     f1, f2 = cut_frames(path)
     m = measure(f1)
     applied = None
-    if not gate_ok(m):
+    if not gate_ok(m, limit):
         # まず全体の横絞り(継ぎ目が出ない)だけで救えるか試す
         for sx in (0.98, 0.97, 0.96, 0.95, 0.94, 0.93):
             c = f1.resize((int(f1.width * sx), f1.height), Image.LANCZOS)
-            if gate_ok(measure(c)):
+            if gate_ok(measure(c), limit):
                 f1 = c
                 f2 = f2.resize((int(f2.width * sx), f2.height), Image.LANCZOS)
                 m = measure(f1); applied = f"横絞り×{sx}"
                 break
-    if not gate_ok(m):
+    if not gate_ok(m, limit):
         best = None
         for sh_ in (0.86,0.88,0.90,0.92,0.94,0.96,0.98,1.0,1.02,1.04,1.06,1.08,1.10):
             for sb in (1.02,1.0,0.98,0.96,0.94,0.92):
                 c = fix(f1, sh_, sb); mm = measure(c)
-                if gate_ok(mm):
+                if gate_ok(mm, limit):
                     score = abs(mm[0] - HEAD) + abs(mm[1] - SH)
                     if best is None or score < best[0]: best = (score, sh_, sb)
         if best:
@@ -135,16 +165,16 @@ def process(path):
     for i, f in enumerate((f1, f2)):
         sheet.alpha_composite(f, (i * fw + (fw - f.width) // 2, fh - f.height))
     out = os.path.join(SPRITES, f"{name}x2.png")
-    if gate_ok(m) or not os.path.exists(out):
+    if gate_ok(m, limit) or not os.path.exists(out):
         sheet.save(out)
     else:
         out = os.path.join(INBOX, f"REJECTED_{name}.png")
         sheet.save(out)
     hd, sw, mw = m
-    status = "PASS" if gate_ok(m) else "FAIL(要再生成)"
+    status = "PASS" if gate_ok(m, limit) else "FAIL(要再生成)"
     print(f"{name}: 頭{hd:.3f} 肩{sw:.3f} 幅{mw:.3f} → {status}"
           + (f" [{applied}]" if applied else "") + f" → {out}")
-    return gate_ok(m)
+    return gate_ok(m, limit)
 
 if __name__ == "__main__":
     files = sorted(f for f in glob.glob(os.path.join(INBOX, "*.png"))

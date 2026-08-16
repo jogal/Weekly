@@ -7,6 +7,7 @@
 ※帯は鉢巻のリボン等の装飾を拾わない骨格位置で採る
 """
 import sys
+from collections import deque
 from PIL import Image
 
 HEAD, HEAD_TOL = 0.298, 0.010
@@ -17,10 +18,26 @@ def analyze(path):
     im = Image.open(path).convert("RGBA")
     if path.endswith("x2.png"):
         im = im.crop((0, 0, im.width // 2, im.height))
-    px = im.load()
+    px = im.load(); w, h = im.size
+    # 最大連結成分(本体)のみを計測対象にする(光の粒などの浮遊装飾を無視)
+    label = [[0] * w for _ in range(h)]
+    comps = []; cur = 0
+    for y0 in range(h):
+        for x0 in range(w):
+            if px[x0, y0][3] > 0 and label[y0][x0] == 0:
+                cur += 1; size = 0
+                q = deque([(x0, y0)]); label[y0][x0] = cur
+                while q:
+                    x, y = q.popleft(); size += 1
+                    for dx, dy in ((1,0),(-1,0),(0,1),(0,-1)):
+                        nx, ny = x+dx, y+dy
+                        if 0 <= nx < w and 0 <= ny < h and px[nx,ny][3] > 0 and label[ny][nx] == 0:
+                            label[ny][nx] = cur; q.append((nx, ny))
+                comps.append((size, cur))
+    main = max(comps)[1]
     rows = []
-    for y in range(im.height):
-        xs = [x for x in range(im.width) if px[x, y][3] > 0]
+    for y in range(h):
+        xs = [x for x in range(w) if label[y][x] == main]
         rows.append((min(xs), max(xs)) if xs else None)
     ys = [y for y, r in enumerate(rows) if r]
     top, bot = min(ys), max(ys)
@@ -36,12 +53,13 @@ def analyze(path):
 
     ok_head = abs(head - HEAD) <= HEAD_TOL
     ok_sh = abs(shoulder - SHOULDER) <= SHOULDER_TOL
-    ok_w = maxw <= MAXW_LIMIT
+    limit = 0.46 if "_lv40" in path else MAXW_LIMIT   # Lv40のみ儀礼装束の裾例外
+    ok_w = maxw <= limit
     verdict = "PASS" if (ok_head and ok_sh and ok_w) else "FAIL"
     print(f"{path}")
     print(f"  頭蓋幅/身長 {head:.3f}  (基準 {HEAD}±{HEAD_TOL})  {'OK' if ok_head else 'NG'}")
     print(f"  肩幅/身長   {shoulder:.3f}  (基準 {SHOULDER}±{SHOULDER_TOL})  {'OK' if ok_sh else 'NG'}")
-    print(f"  最大幅/身長 {maxw:.3f}  (上限 {MAXW_LIMIT})  {'OK' if ok_w else 'NG'}")
+    print(f"  最大幅/身長 {maxw:.3f}  (上限 {limit})  {'OK' if ok_w else 'NG'}")
     print(f"  → {verdict}")
     return verdict == "PASS"
 
