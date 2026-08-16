@@ -285,13 +285,27 @@ textarea.field-input { height:76px; resize:vertical; }
 .mcal-legend i { width:9px; height:9px; display:inline-block; }
 
 /* Hero character (dossier profile style) */
-.hero-sprite { image-rendering:pixelated; width:82px; height:auto; display:block;
-  filter:saturate(.75) contrast(1.05); }
+.hero-sprite { width:auto; height:148px; display:block;
+  filter:saturate(.9) contrast(1.03); }
+/* 2-frame idle animation: the img holds both frames side by side, the clip
+   shows one frame, and the img steps left by exactly one frame width */
+.hero-sprite-clip { display:block; overflow:hidden; }
+.hero-sprite.anim2 { animation:heroStep 1s steps(1,end) infinite; }
+@keyframes heroStep { 50% { transform:translateX(-50%); } }
+/* Tap-to-expand fullscreen viewer */
+.hero-compact .hero-sprite-box { cursor:pointer; }
+#hero-zoom { flex-direction:column; gap:12px; background:rgba(10,10,12,.96); cursor:pointer; }
+#hero-zoom .hero-sprite { height:min(56vh,460px); }
+.hero-zoom-job { font-size:13px; color:var(--gold); letter-spacing:.3em;
+  font-family:var(--cond); text-transform:uppercase; }
+.hero-zoom-lvl { font-size:30px; font-weight:700; line-height:1; }
+.hero-zoom-hint { font-size:11px; color:var(--dim); margin-top:10px; }
 .hero-job { font-size:11px; color:var(--gold); letter-spacing:.3em; margin-bottom:4px;
   font-family:var(--cond); text-transform:uppercase; }
 /* Compact side-by-side: character left, level+job+stats right */
 .hero-compact { display:flex; align-items:center; gap:14px; text-align:left; padding:14px; }
-.hero-compact .hero-sprite { margin:0; flex-shrink:0;
+.hero-compact .hero-sprite { margin:0; }
+.hero-compact .hero-sprite-box { flex-shrink:0;
   border:1px solid var(--line); padding:6px; background:#0f0f12; }
 .hero-compact::after { display:none; }
 .hero-info { flex:1; min-width:0; }
@@ -413,6 +427,14 @@ textarea.field-input { height:76px; resize:vertical; }
       <button class="btn btn-primary" id="gcal-test">保存して接続</button>
     </div>
   </div>
+</div>
+
+<!-- Hero fullscreen viewer (tap character to open, tap anywhere to close) -->
+<div class="overlay" id="hero-zoom" style="display:none">
+  <span class="hero-sprite-clip"><img class="hero-sprite" alt=""></span>
+  <div class="hero-zoom-job"></div>
+  <div class="hero-zoom-lvl"></div>
+  <div class="hero-zoom-hint">タップで閉じる</div>
 </div>
 
 <div id="toast">✅ 保存しました</div>
@@ -1035,18 +1057,103 @@ function hideHint(){
   document.getElementById("drag-hint").style.display="none";
 }
 
-// ── Job character (external FF-style PNG sprites) ─────────────────────────────
-// The look changes by "job": whichever stat (track) has the highest level wins.
-// Art lives in sprites/<job>.png (authored separately), loaded as an <img>.
-const JOB_NAMES={novice:"すっぴん",monk:"モンク",whitemage:"白魔道士",
-  blackmage:"黒魔道士",bard:"吟遊詩人",chef:"料理人"};
-const TRACK_JOB={workout:"monk",medicine:"whitemage",instrument:"bard",english:"blackmage",cooking:"chef"};
-function currentJob(tracks){
+// ── Job character (external PNG sprites, job × level-tier) ────────────────────
+// Same person throughout; the job comes from what you keep doing, and the
+// costume evolves with level (Lv1 = modern life → Lv30 = full fantasy).
+// Art: sprites/<file>_lv<tier>.png (tier 1/10/20/30). Missing tiers fall back
+// to lower tiers → sprites/<file>.png → the primary base job's art, so new
+// art can be dropped in one file at a time without breaking anything.
+const TRACK_JOB={workout:"monk",instrument:"trickster",english:"redmage",medicine:"whitemage",cooking:"traveler"};
+const JOB_DEF={
+  // base jobs (one per habit)
+  novice:    {name:"みならい",   file:"novice"},
+  monk:      {name:"モンク",     file:"monk"},
+  trickster: {name:"遊び人",     file:"bard"},
+  redmage:   {name:"赤魔道士",   file:"novice"},
+  whitemage: {name:"白魔道士",   file:"whitemage"},
+  traveler:  {name:"旅人",       file:"chef"},
+  // composite jobs (both habits at the tier level unlock these)
+  paladin:   {name:"パラディン", file:"paladin",   pair:["workout","medicine"]},
+  sage:      {name:"賢者",       file:"sage",      pair:["medicine","english"]},
+  bardic:    {name:"吟遊詩人",   file:"bardic",    pair:["instrument","english"]},
+  ranger:    {name:"レンジャー", file:"ranger",    pair:["workout","cooking"]},
+  apothecary:{name:"薬師",       file:"apothecary",pair:["medicine","cooking"]},
+  adventurer:{name:"冒険家",     file:"adventurer",pair:["english","cooking"]},
+  dancer:    {name:"踊り子",     file:"dancer",    pair:["workout","instrument"]},
+};
+const TIER_PREFIX={10:"見習い",20:"",30:"マスター",40:"マスター"};
+function tierOf(lvl){return lvl>=40?40:lvl>=30?30:lvl>=20?20:lvl>=10?10:1;}
+// Decide the current job: a qualifying composite pair (both >= Lv10) beats the
+// single top stat; among pairs, the one with the higher shared level wins.
+function jobState(tracks){
+  const by=id=>tracks.find(t=>t.id===id);
+  let best=null;
+  Object.entries(JOB_DEF).forEach(([key,def])=>{
+    if(!def.pair)return;
+    const a=by(def.pair[0]),b=by(def.pair[1]);
+    if(!a||!b)return;
+    const m=Math.min(a.lvl,b.lvl);
+    if(m>=10&&(!best||m>best.min))
+      best={key,min:m,primary:TRACK_JOB[a.lvl>=b.lvl?a.id:b.id]};
+  });
+  if(best)return {key:best.key,tier:tierOf(best.min),primary:best.primary,composite:true};
   const max=Math.max(...tracks.map(t=>t.lvl));
   const top=tracks.filter(t=>t.lvl===max);
-  if(max<=1||top.length===tracks.length)return "novice";
-  return TRACK_JOB[top[0].id]||"novice";
+  if(max<=1||top.length===tracks.length)return {key:"novice",tier:1,primary:"novice",composite:false};
+  const jk=TRACK_JOB[top[0].id]||"novice";
+  return {key:jk,tier:tierOf(max),primary:jk,composite:false};
 }
+function jobDisplayName(st){
+  const base=JOB_DEF[st.key].name;
+  return st.composite?(TIER_PREFIX[st.tier]??"")+base:base;
+}
+// Ordered list of sprite paths to try for this job state.
+// "<file>_lv<t>x2.png" is a 2-frame idle-animation sheet (frames side by side,
+// equal width); it is preferred over the still "<file>_lv<t>.png".
+function spriteCandidates(st){
+  const tiers=[40,30,20,10,1].filter(t=>t<=st.tier);
+  const out=[];
+  const push=file=>{
+    tiers.forEach(t=>{out.push(`sprites/${file}_lv${t}x2.png`);out.push(`sprites/${file}_lv${t}.png`);});
+    out.push(`sprites/${file}x2.png`);
+    out.push(`sprites/${file}.png`);
+  };
+  push(JOB_DEF[st.key].file);
+  if(st.key!==st.primary)push(JOB_DEF[st.primary].file);
+  if(!out.includes("sprites/novice.png"))out.push("sprites/novice.png");
+  return out;
+}
+function setHeroSprite(img,st){
+  const cands=spriteCandidates(st);
+  let i=0;
+  img.onerror=()=>{i++;if(i<cands.length)img.src=cands[i];else img.onerror=null;};
+  img.onload=()=>{
+    const two=img.src.includes("x2.png");
+    img.classList.toggle("anim2",two);
+    const clip=img.closest(".hero-sprite-clip");
+    if(clip)clip.style.width=two?(img.getBoundingClientRect().width/2)+"px":"";
+  };
+  img.src=cands[0];
+}
+// Fullscreen character viewer
+function openHeroZoom(src,jobName,lvl){
+  const ov=document.getElementById("hero-zoom");
+  const img=ov.querySelector("img");
+  const clip=ov.querySelector(".hero-sprite-clip");
+  img.classList.remove("anim2"); clip.style.width="";
+  img.onload=()=>{
+    const two=img.src.includes("x2.png");
+    img.classList.toggle("anim2",two);
+    clip.style.width=two?(img.getBoundingClientRect().width/2)+"px":"";
+  };
+  img.src=src;
+  ov.querySelector(".hero-zoom-job").textContent="JOB─"+jobName;
+  ov.querySelector(".hero-zoom-lvl").textContent="Lv."+lvl;
+  ov.style.display="flex";
+}
+document.getElementById("hero-zoom").addEventListener("click",e=>{
+  e.currentTarget.style.display="none";
+});
 
 // ── Status / Level View ───────────────────────────────────────────────────────
 function renderStatus(){
@@ -1082,13 +1189,14 @@ function renderStatus(){
   const maxStat=Math.max(10,...tracks.map(t=>t.lvl));
 
   // Compact hero card: character on the left, level + job + stat bars on the right
-  const jobKey=currentJob(tracks);
+  const jobSt=jobState(tracks);
+  const jobName=jobDisplayName(jobSt);
   const hero=el("div","hero-card hero-compact");
   hero.innerHTML=`
-    <img class="hero-sprite" alt="${JOB_NAMES[jobKey]}" src="sprites/${jobKey}.png">
+    <span class="hero-sprite-box"><span class="hero-sprite-clip"><img class="hero-sprite" alt="${jobName}"></span></span>
     <div class="hero-info">
       <div class="hero-level">Lv.${totalLvl}</div>
-      <div class="hero-job">JOB─${JOB_NAMES[jobKey]}</div>
+      <div class="hero-job">JOB─${jobName}</div>
       ${STAT_DEFS.map(s=>{
         const t=tracks.find(x=>x.id===s.id);
         if(!t)return "";
@@ -1102,6 +1210,9 @@ function renderStatus(){
       <div class="hero-sub">総XP ${totalXP} ・ 冒険 ${doneDays.size}日 ・ 達成 ${doneTotal}回</div>
     </div>`;
   wrap.appendChild(hero);
+  const heroImg=hero.querySelector(".hero-sprite");
+  setHeroSprite(heroImg,jobSt);
+  hero.querySelector(".hero-sprite-box").onclick=()=>openHeroZoom(heroImg.src,jobName,totalLvl);
 
   // Track cards
   tracks.forEach(t=>{
