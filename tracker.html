@@ -287,11 +287,17 @@ textarea.field-input { height:76px; resize:vertical; }
 /* Hero character (dossier profile style) */
 .hero-sprite { width:auto; height:104px; display:block;
   filter:saturate(.9) contrast(1.03); }
+/* 2-frame idle animation: the img holds both frames side by side, the clip
+   shows one frame, and the img steps left by exactly one frame width */
+.hero-sprite-clip { display:block; overflow:hidden; }
+.hero-sprite.anim2 { animation:heroStep 1s steps(1,end) infinite; }
+@keyframes heroStep { 50% { transform:translateX(-50%); } }
 .hero-job { font-size:11px; color:var(--gold); letter-spacing:.3em; margin-bottom:4px;
   font-family:var(--cond); text-transform:uppercase; }
 /* Compact side-by-side: character left, level+job+stats right */
 .hero-compact { display:flex; align-items:center; gap:14px; text-align:left; padding:14px; }
-.hero-compact .hero-sprite { margin:0; flex-shrink:0;
+.hero-compact .hero-sprite { margin:0; }
+.hero-compact .hero-sprite-box { flex-shrink:0;
   border:1px solid var(--line); padding:6px; background:#0f0f12; }
 .hero-compact::after { display:none; }
 .hero-info { flex:1; min-width:0; }
@@ -1085,11 +1091,17 @@ function jobDisplayName(st){
   const base=JOB_DEF[st.key].name;
   return st.composite?(TIER_PREFIX[st.tier]??"")+base:base;
 }
-// Ordered list of sprite paths to try for this job state
+// Ordered list of sprite paths to try for this job state.
+// "<file>_lv<t>x2.png" is a 2-frame idle-animation sheet (frames side by side,
+// equal width); it is preferred over the still "<file>_lv<t>.png".
 function spriteCandidates(st){
-  const tiers=[30,20,10].filter(t=>t<=st.tier);
+  const tiers=[30,20,10,1].filter(t=>t<=st.tier);
   const out=[];
-  const push=file=>{tiers.forEach(t=>out.push(`sprites/${file}_lv${t}.png`));out.push(`sprites/${file}.png`);};
+  const push=file=>{
+    tiers.forEach(t=>{out.push(`sprites/${file}_lv${t}x2.png`);out.push(`sprites/${file}_lv${t}.png`);});
+    out.push(`sprites/${file}x2.png`);
+    out.push(`sprites/${file}.png`);
+  };
   push(JOB_DEF[st.key].file);
   if(st.key!==st.primary)push(JOB_DEF[st.primary].file);
   if(!out.includes("sprites/novice.png"))out.push("sprites/novice.png");
@@ -1099,6 +1111,12 @@ function setHeroSprite(img,st){
   const cands=spriteCandidates(st);
   let i=0;
   img.onerror=()=>{i++;if(i<cands.length)img.src=cands[i];else img.onerror=null;};
+  img.onload=()=>{
+    const two=img.src.includes("x2.png");
+    img.classList.toggle("anim2",two);
+    const clip=img.closest(".hero-sprite-clip");
+    if(clip)clip.style.width=two?(img.getBoundingClientRect().width/2)+"px":"";
+  };
   img.src=cands[0];
 }
 
@@ -1140,7 +1158,7 @@ function renderStatus(){
   const jobName=jobDisplayName(jobSt);
   const hero=el("div","hero-card hero-compact");
   hero.innerHTML=`
-    <img class="hero-sprite" alt="${jobName}">
+    <span class="hero-sprite-box"><span class="hero-sprite-clip"><img class="hero-sprite" alt="${jobName}"></span></span>
     <div class="hero-info">
       <div class="hero-level">Lv.${totalLvl}</div>
       <div class="hero-job">JOB─${jobName}</div>
