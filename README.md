@@ -110,3 +110,20 @@
 
 - データはすべて端末内（localStorage）に保存されます。サーバーには送信されません
 - 「データ保存」ボタンでJSONファイルとしてバックアップ、「復元」で読み込みができます
+
+## 外部アプリ連携API（ディープリンク）
+
+他のアプリから週間クエストへ成果を記録するには、次のURLを開くだけ:
+
+```
+tracker.html?quest=<カテゴリID>&min=<分>&label=<メモ>
+例: tracker.html?quest=medicine&min=30&label=Neurolearn%20Ch.5
+```
+
+- カテゴリID: `medicine`(専門医勉強) / `english` / `instrument` / `cooking` / `workout_chest`等
+- 今日の該当カテゴリが「完了」になり、XP獲得・レベルアップ演出が実行される
+- 同じ日に複数回呼ぶと実施時間(min)が加算され、メモは連結される
+- 予定が未登録の日は自動で予定も作成される
+
+NeurolearnなどからはチャプタークリアUIに上記URLへのリンク/ボタンを置けばよい。
+同一オリジンで動くアプリなら、music.html同様に `wt_records` へ直接書き込む方式も使える。

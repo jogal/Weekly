@@ -1748,6 +1748,48 @@ function render(){
   else renderList();
 }
 render();
+
+// ── 外部アプリ連携: ディープリンクAPI ──────────────────────────────────────────
+// 例: tracker.html?quest=medicine&min=30&label=Neurolearn%20Ch.5
+// NeurolearnなどからこのURLを開くと、今日の該当カテゴリを「完了」として記録し、
+// XP獲得・レベルアップ演出を実行する。同じ日に複数回呼ぶと実施時間(min)が加算される。
+function handleQuestParam(){
+  const params=new URLSearchParams(location.search);
+  const cat=params.get("quest");
+  if(!cat)return;
+  history.replaceState(null,"",location.pathname);   // 再読込での二重記録を防ぐ
+  if(!catById(cat)){showToast("⚠️ 不明なカテゴリ: "+cat);return;}
+  const min=parseInt(params.get("min")||"",10);
+  const label=params.get("label")||"";
+  const today=new Date();
+  const wk=getWeekKey(today);
+  const dk=DAY_KEYS[(today.getDay()+6)%7];
+  const before=snapshotLevels();
+  // その日の予定が無ければ自動で1件作る(リスト画面に見えるように)
+  if(!schedules[wk])schedules[wk]=emptyWeek();
+  if(!schedules[wk][dk].some(e=>e.cat===cat)){
+    const hh=String(today.getHours()).padStart(2,"0");
+    const mm=String(today.getMinutes()).padStart(2,"0");
+    schedules[wk][dk].push({cat,time:`${hh}:${mm}`,endTime:`${hh}:${mm}`,label,id:Date.now()});
+    schedules[wk][dk].sort((a,b)=>a.time.localeCompare(b.time));
+  }
+  if(!records[wk])records[wk]={};
+  if(!records[wk][dk])records[wk][dk]={};
+  const prev=records[wk][dk][cat]||{done:false,note:"",duration:"",rating:0};
+  const prevXP=xpForRecord(prev);
+  const totalMin=(parseInt(prev.duration,10)||0)+(isNaN(min)?0:min);
+  records[wk][dk][cat]={
+    done:true,
+    note:label?(prev.note?prev.note+" / ":"")+label:prev.note,
+    duration:totalMin>0?String(totalMin):prev.duration,
+    rating:prev.rating,
+  };
+  const gained=xpForRecord(records[wk][dk][cat])-prevXP;
+  weekKey=wk;
+  saveData();render();
+  checkLevelUp(before,gained);
+}
+handleQuestParam();
 </script>
 </body>
 </html>
