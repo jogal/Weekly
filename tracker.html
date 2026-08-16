@@ -285,8 +285,8 @@ textarea.field-input { height:76px; resize:vertical; }
 .mcal-legend i { width:9px; height:9px; display:inline-block; }
 
 /* Hero character (dossier profile style) */
-.hero-sprite { image-rendering:pixelated; width:82px; height:auto; display:block;
-  filter:saturate(.75) contrast(1.05); }
+.hero-sprite { width:auto; height:104px; display:block;
+  filter:saturate(.9) contrast(1.03); }
 .hero-job { font-size:11px; color:var(--gold); letter-spacing:.3em; margin-bottom:4px;
   font-family:var(--cond); text-transform:uppercase; }
 /* Compact side-by-side: character left, level+job+stats right */
@@ -1038,8 +1038,8 @@ function hideHint(){
 // ── Job character (external FF-style PNG sprites) ─────────────────────────────
 // The look changes by "job": whichever stat (track) has the highest level wins.
 // Art lives in sprites/<job>.png (authored separately), loaded as an <img>.
-const JOB_NAMES={novice:"すっぴん",monk:"モンク",whitemage:"白魔道士",
-  blackmage:"黒魔道士",bard:"吟遊詩人",chef:"料理人"};
+const JOB_NAMES={novice:"赤魔道士",monk:"モンク",whitemage:"白魔道士",
+  blackmage:"黒魔道士",bard:"遊び人",chef:"料理人"};
 const TRACK_JOB={workout:"monk",medicine:"whitemage",instrument:"bard",english:"blackmage",cooking:"chef"};
 function currentJob(tracks){
   const max=Math.max(...tracks.map(t=>t.lvl));
