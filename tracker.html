@@ -292,6 +292,14 @@ textarea.field-input { height:76px; resize:vertical; }
 .hero-sprite-clip { display:block; overflow:hidden; }
 .hero-sprite.anim2 { animation:heroStep 1s steps(1,end) infinite; }
 @keyframes heroStep { 50% { transform:translateX(-50%); } }
+/* Tap-to-expand fullscreen viewer */
+.hero-compact .hero-sprite-box { cursor:pointer; }
+#hero-zoom { flex-direction:column; gap:12px; background:rgba(10,10,12,.96); cursor:pointer; }
+#hero-zoom .hero-sprite { height:min(56vh,460px); }
+.hero-zoom-job { font-size:13px; color:var(--gold); letter-spacing:.3em;
+  font-family:var(--cond); text-transform:uppercase; }
+.hero-zoom-lvl { font-size:30px; font-weight:700; line-height:1; }
+.hero-zoom-hint { font-size:11px; color:var(--dim); margin-top:10px; }
 .hero-job { font-size:11px; color:var(--gold); letter-spacing:.3em; margin-bottom:4px;
   font-family:var(--cond); text-transform:uppercase; }
 /* Compact side-by-side: character left, level+job+stats right */
@@ -419,6 +427,14 @@ textarea.field-input { height:76px; resize:vertical; }
       <button class="btn btn-primary" id="gcal-test">保存して接続</button>
     </div>
   </div>
+</div>
+
+<!-- Hero fullscreen viewer (tap character to open, tap anywhere to close) -->
+<div class="overlay" id="hero-zoom" style="display:none">
+  <span class="hero-sprite-clip"><img class="hero-sprite" alt=""></span>
+  <div class="hero-zoom-job"></div>
+  <div class="hero-zoom-lvl"></div>
+  <div class="hero-zoom-hint">タップで閉じる</div>
 </div>
 
 <div id="toast">✅ 保存しました</div>
@@ -1119,6 +1135,25 @@ function setHeroSprite(img,st){
   };
   img.src=cands[0];
 }
+// Fullscreen character viewer
+function openHeroZoom(src,jobName,lvl){
+  const ov=document.getElementById("hero-zoom");
+  const img=ov.querySelector("img");
+  const clip=ov.querySelector(".hero-sprite-clip");
+  img.classList.remove("anim2"); clip.style.width="";
+  img.onload=()=>{
+    const two=img.src.includes("x2.png");
+    img.classList.toggle("anim2",two);
+    clip.style.width=two?(img.getBoundingClientRect().width/2)+"px":"";
+  };
+  img.src=src;
+  ov.querySelector(".hero-zoom-job").textContent="JOB─"+jobName;
+  ov.querySelector(".hero-zoom-lvl").textContent="Lv."+lvl;
+  ov.style.display="flex";
+}
+document.getElementById("hero-zoom").addEventListener("click",e=>{
+  e.currentTarget.style.display="none";
+});
 
 // ── Status / Level View ───────────────────────────────────────────────────────
 function renderStatus(){
@@ -1175,7 +1210,9 @@ function renderStatus(){
       <div class="hero-sub">総XP ${totalXP} ・ 冒険 ${doneDays.size}日 ・ 達成 ${doneTotal}回</div>
     </div>`;
   wrap.appendChild(hero);
-  setHeroSprite(hero.querySelector(".hero-sprite"),jobSt);
+  const heroImg=hero.querySelector(".hero-sprite");
+  setHeroSprite(heroImg,jobSt);
+  hero.querySelector(".hero-sprite-box").onclick=()=>openHeroZoom(heroImg.src,jobName,totalLvl);
 
   // Track cards
   tracks.forEach(t=>{
