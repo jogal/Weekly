@@ -197,8 +197,9 @@ function setTargetsFrom(prevSets, targetSets, repMin, repMax, targetTotal) {
 
 // ── Body condition(体重7日移動平均・増量ペース判定) ──────────────────────────
 // daily: gym_daily_v2形式 {dateKey: {weightKg?, proteinG?}}
-// endKeyを含む過去windowDays日のうち、記録がある日だけの平均
-export function movingAvgWeight(daily, endKey, windowDays = 7) {
+// endKeyを含む過去windowDays日のウィンドウ統計(記録がある日だけ)。
+// countはtrend判定のminimum data coverageチェックに使う
+export function weightWindowStats(daily, endKey, windowDays = 7) {
   const end = new Date(endKey + "T12:00:00");
   const ws = [];
   for (let i = 0; i < windowDays; i++) {
@@ -206,41 +207,83 @@ export function movingAvgWeight(daily, endKey, windowDays = 7) {
     const w = daily[localDayKey(d)]?.weightKg;
     if (typeof w === "number") ws.push(w);
   }
-  if (!ws.length) return null;
-  return Math.round(ws.reduce((a, b) => a + b, 0) / ws.length * 100) / 100;
+  return {
+    avg: ws.length ? Math.round(ws.reduce((a, b) => a + b, 0) / ws.length * 100) / 100 : null,
+    count: ws.length,
+  };
+}
+// 既存互換API(平均だけ返す)
+export function movingAvgWeight(daily, endKey, windowDays = 7) {
+  return weightWindowStats(daily, endKey, windowDays).avg;
 }
 
 // 増量ペース判定(カロリー記録は要求しない)。目安0.1〜0.25%BW/週。
-// - 14(なければ21)日前の7日平均と比較し、+0.1kg未満なら停滞、>0.3%/週なら速め
+// - 判定にはcurrent/referenceウィンドウとも測定4件以上を要求(coverage不足はinsufficient)
+// - 判定は%BW/週で行い、14日ref/21日refのどちらでも同じペースなら同じstatusになる
+//   stalled: <=0.02%/週(横ばい・減少) → +100〜150kcal提案はこの場合だけ
+//   slow:    <0.1%/週(増えてはいる) → 様子見
+//   ok:      0.1〜0.3%/週(0.25〜0.30は許容境界)
+//   fast:    >0.3%/週
+const MIN_WINDOW_COUNT = 4;
 export function weightTrend(daily, todayKey) {
-  const avg7 = movingAvgWeight(daily, todayKey);
-  if (avg7 == null) {
+  const cur = weightWindowStats(daily, todayKey);
+  if (!cur.count) {
     return { status: "no_data", avg7: null, perWeek: null,
       message: "体重を記録すると7日平均とペース判定が出ます" };
   }
   const back = n => {
     const d = new Date(todayKey + "T12:00:00"); d.setDate(d.getDate() - n);
-    return movingAvgWeight(daily, localDayKey(d));
+    return weightWindowStats(daily, localDayKey(d));
   };
-  const avg14 = back(14), avg21 = back(21);
-  const ref = avg14 ?? avg21;
-  const refDays = avg14 != null ? 14 : (avg21 != null ? 21 : null);
-  if (refDays == null) {
-    return { status: "insufficient", avg7, perWeek: null,
-      message: "記録を2週間続けるとペース判定が出ます" };
+  const ref14 = back(14), ref21 = back(21);
+  let ref = null, refDays = null;
+  if (ref14.count >= MIN_WINDOW_COUNT) { ref = ref14; refDays = 14; }
+  else if (ref21.count >= MIN_WINDOW_COUNT) { ref = ref21; refDays = 21; }
+  if (cur.count < MIN_WINDOW_COUNT || !ref) {
+    return { status: "insufficient", avg7: cur.avg, count: cur.count, perWeek: null,
+      message: "記録を2週間続けるとペース判定が出ます(週4日以上の測定推奨)" };
   }
-  const perWeek = Math.round((avg7 - ref) / (refDays / 7) * 100) / 100;
-  const pctPerWeek = perWeek / avg7 * 100;
-  if (avg7 - ref < 0.1) {
-    return { status: "stalled", avg7, perWeek,
+  const perWeek = Math.round((cur.avg - ref.avg) / (refDays / 7) * 1000) / 1000;
+  const pctPerWeek = perWeek / cur.avg * 100;
+  const base = { avg7: cur.avg, count: cur.count, perWeek, pctPerWeek, refDays };
+  if (pctPerWeek <= 0.02) {
+    return { ...base, status: "stalled",
       message: "増量が止まっています。食事を約100〜150kcal/日増やすことを検討" };
   }
+  if (pctPerWeek < 0.1) {
+    return { ...base, status: "slow",
+      message: `ややゆっくり(+${perWeek.toFixed(2)}kg/週)。もう少し経過を見る` };
+  }
   if (pctPerWeek > 0.3) {
-    return { status: "fast", avg7, perWeek,
+    return { ...base, status: "fast",
       message: `増量速度が速め(+${perWeek.toFixed(2)}kg/週)。目安は0.1〜0.25%/週` };
   }
-  return { status: "ok", avg7, perWeek,
-    message: `良いペース(+${perWeek.toFixed(2)}kg/週)` };
+  return { ...base, status: "ok", message: `良いペース(+${perWeek.toFixed(2)}kg/週)` };
+}
+
+// 最新体重のsource of truth: gym_daily_v2の最新weightKg > fallback(profile値)
+export function latestWeightKg(daily, fallback = null) {
+  const keys = Object.keys(daily || {})
+    .filter(k => typeof daily[k]?.weightKg === "number").sort();
+  return keys.length ? daily[keys[keys.length - 1]].weightKg : fallback;
+}
+
+// AI Coach向けタンパク質サマリ(直近7日・todayKey含む)
+export function proteinSummary(daily, todayKey, target = 105) {
+  const end = new Date(todayKey + "T12:00:00");
+  const vals = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(end); d.setDate(end.getDate() - i);
+    const g = daily[localDayKey(d)]?.proteinG;
+    if (typeof g === "number") vals.push(g);
+  }
+  return {
+    avg7: vals.length ? Math.round(vals.reduce((a, b) => a + b, 0) / vals.length) : null,
+    recordedDays: vals.length,
+    daysAtLeast90: vals.filter(g => g >= 90).length,
+    todayG: daily[todayKey]?.proteinG ?? null,
+    targetG: target,
+  };
 }
 
 // セッション中の入力プリフィル: 直前セット > 前回実績の1セット目 > null

@@ -837,22 +837,40 @@ function renderIdle(root){
   }
 }
 
-// BODY CHECK-IN: Weight/Proteinの2入力だけ。7日平均とペース判定を小さく表示
+// BODY CHECK-IN: Weight/Proteinの2入力だけ。7日平均とペース判定を小さく表示。
+// blurでは保存とtrend行の更新のみ行い、full renderしない(連続入力でDOMを壊さない)。
+// 空欄でblurすると当日のそのフィールドを削除できる(誤記録の取り消し)
 function buildBodyCard(todayKey){
   const profile=TD.loadProfile();
-  const daily=TD.loadDaily();
-  const todayE=daily[todayKey]||{};
+  const todayE=TD.loadDaily()[todayKey]||{};
   const card=el("div","card");
   card.appendChild(el("p","card-title","BODY CHECK-IN"));
+
+  const tl=el("div","bc-trend");
+  function updateTrend(){
+    const trend=core.weightTrend(TD.loadDaily(), todayKey);
+    tl.className="bc-trend"+((trend.status==="stalled"||trend.status==="fast")?" warn":"");
+    tl.innerHTML=(trend.avg7!=null? `7日平均 <b>${trend.avg7}kg</b>（目標${profile.targetWeightKg}kg）・`:"")
+      + esc(trend.message);
+  }
 
   const wRow=el("div","bc-row");
   wRow.appendChild(el("span","bc-lbl","体重"));
   const wIn=el("input","bc-in"); wIn.type="text"; wIn.inputMode="decimal";
-  wIn.value=todayE.weightKg??""; wIn.placeholder=String(profile.currentWeightKg);
+  wIn.value=todayE.weightKg??""; wIn.placeholder=String(core.latestWeightKg(TD.loadDaily(), profile.currentWeightKg));
   wIn.onblur=()=>{
+    if(wIn.value.trim()===""){                       // 空欄 → 当日の体重を削除
+      TD.saveDailyEntry(todayKey,{weightKg:null});
+      updateTrend(); return;
+    }
     const v=parseFloat(wIn.value);
-    if(!isNaN(v)&&v>20&&v<200){ TD.saveDailyEntry(todayKey,{weightKg:Math.round(v*10)/10}); render(); }
-    else if(wIn.value==="") wIn.value=todayE.weightKg??"";
+    if(!isNaN(v)&&v>20&&v<200){
+      TD.saveDailyEntry(todayKey,{weightKg:Math.round(v*10)/10});
+      updateTrend();
+    }else{
+      const cur=TD.loadDaily()[todayKey]||{};
+      wIn.value=cur.weightKg??"";
+    }
   };
   wRow.appendChild(wIn);
   wRow.appendChild(el("span","bc-unit","kg"));
@@ -863,18 +881,23 @@ function buildBodyCard(todayKey){
   const pIn=el("input","bc-in"); pIn.type="text"; pIn.inputMode="numeric";
   pIn.value=todayE.proteinG??"";
   pIn.onblur=()=>{
+    if(pIn.value.trim()===""){                       // 空欄 → 当日のたんぱく質を削除
+      TD.saveDailyEntry(todayKey,{proteinG:null});
+      return;
+    }
     const v=parseInt(pIn.value);
-    if(!isNaN(v)&&v>=0&&v<400){ TD.saveDailyEntry(todayKey,{proteinG:v}); render(); }
-    else if(pIn.value==="") pIn.value=todayE.proteinG??"";
+    if(!isNaN(v)&&v>=0&&v<400){
+      TD.saveDailyEntry(todayKey,{proteinG:v});
+    }else{
+      const cur=TD.loadDaily()[todayKey]||{};
+      pIn.value=cur.proteinG??"";
+    }
   };
   pRow.appendChild(pIn);
   pRow.appendChild(el("span","bc-unit",`/ ${profile.proteinTargetG} g`));
   card.appendChild(pRow);
 
-  const trend=core.weightTrend(daily, todayKey);
-  const tl=el("div","bc-trend"+((trend.status==="stalled"||trend.status==="fast")?" warn":""));
-  tl.innerHTML=(trend.avg7!=null? `7日平均 <b>${trend.avg7}kg</b>（目標${profile.targetWeightKg}kg）・`:"")
-    + esc(trend.message);
+  updateTrend();
   card.appendChild(tl);
   return card;
 }

@@ -131,9 +131,15 @@ export function abortSession(id) {
 
 // ── Daily check-in(体重・タンパク質のみ) ─────────────────────────────────────
 export function loadDaily() { return rd(K.daily, {}); }
+// patchの値がnull/undefinedならそのフィールドを削除(誤記録の取り消し)。
+// 全フィールドが消えたらその日のエントリ自体を消す
 export function saveDailyEntry(dateKey, patch) {
   const d = rd(K.daily, {});
-  d[dateKey] = { ...(d[dateKey] || {}), ...patch };
+  const cur = { ...(d[dateKey] || {}) };
+  Object.entries(patch).forEach(([k, v]) => {
+    if (v === null || v === undefined) delete cur[k]; else cur[k] = v;
+  });
+  if (Object.keys(cur).length) d[dateKey] = cur; else delete d[dateKey];
   wr(K.daily, d);
   return d;
 }

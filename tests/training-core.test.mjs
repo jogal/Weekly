@@ -362,3 +362,69 @@ test("weightTrend: 記録5日ぶんでは判定しない(insufficient)", () => {
 test("weightTrend: 記録ゼロ → no_data", () => {
   assert.equal(weightTrend({}, "2026-08-22").status, "no_data");
 });
+
+// ── Phase 5 hardening: coverage・pct基準・最新体重・タンパク質summary ─────────
+import { weightWindowStats, latestWeightKg, proteinSummary } from "../js/training-core.mjs";
+
+test("coverage: current 1件 + 14日前1件 → insufficient", () => {
+  const daily = { "2026-08-22": { weightKg: 54.5 }, "2026-08-08": { weightKg: 54.0 } };
+  const t = weightTrend(daily, "2026-08-22");
+  assert.equal(t.status, "insufficient");
+});
+
+test("coverage: current/refとも4件以上なら判定可能・欠測込みでもOK", () => {
+  // 週4日測定(3日おきに欠測)を4週間 → cur/refとも4件以上
+  const daily = makeDaily(28, 54.0, 0, [2, 5, 9, 12, 16, 19, 23, 26]);
+  const stats = weightWindowStats(daily, "2026-08-28");
+  assert.ok(stats.count >= 4, "count=" + stats.count);
+  const t = weightTrend(daily, "2026-08-28");
+  assert.equal(t.status, "stalled");             // フラットなので判定はstalled
+});
+
+test("pace: flat → stalled(+100〜150kcal提案はこの場合だけ)", () => {
+  const t = weightTrend(makeDaily(22, 54.0, 0), "2026-08-22");
+  assert.equal(t.status, "stalled");
+  assert.ok(t.message.includes("100〜150"));
+});
+
+test("pace: わずかな増加(+0.04kg/週) → slow(カロリー追加を即提案しない)", () => {
+  const daily = makeDaily(22, 54.0, 0.006);      // +0.042kg/週 ≈ 0.078%BW/週
+  const t = weightTrend(daily, "2026-08-22");
+  assert.equal(t.status, "slow");
+  assert.ok(!t.message.includes("100〜150"));
+});
+
+test("pace: 0.1〜0.25%BW/週 → ok / >0.3% → fast", () => {
+  assert.equal(weightTrend(makeDaily(22, 54.0, 0.015), "2026-08-22").status, "ok");   // +0.105kg/週≈0.19%
+  assert.equal(weightTrend(makeDaily(22, 54.0, 0.06), "2026-08-22").status, "fast");  // +0.42kg/週≈0.78%
+});
+
+test("pace: 14日refと21日refで同じweekly paceなら同じstatus", () => {
+  // 同じ+0.02kg/日ペース。片方はref14ウィンドウ(8〜14日前)を欠測させref21で判定させる
+  const full = makeDaily(28, 54.0, 0.02);
+  const skipRef14 = makeDaily(28, 54.0, 0.02, [7, 8, 9, 10]);  // ref14窓(8/8-8/14)を4日欠測させ3件に
+  const t1 = weightTrend(full, "2026-08-28");
+  const t2 = weightTrend(skipRef14, "2026-08-28");
+  assert.equal(t2.refDays === 14, false);        // ref14が使えないケースになっている
+  assert.equal(t1.status, t2.status);            // それでも同じstatus
+});
+
+test("latestWeightKg: dailyの最新を優先・なければfallback", () => {
+  const daily = { "2026-08-20": { weightKg: 54.0 }, "2026-08-25": { weightKg: 54.6 },
+                  "2026-08-26": { proteinG: 90 } };
+  assert.equal(latestWeightKg(daily, 54), 54.6);
+  assert.equal(latestWeightKg({}, 54), 54);
+});
+
+test("proteinSummary: 直近7日のavg/記録日数/90g以上日数/今日", () => {
+  const daily = {
+    "2026-08-22": { proteinG: 100 }, "2026-08-24": { proteinG: 80 },
+    "2026-08-26": { proteinG: 95 },  "2026-08-28": { proteinG: 110 },
+  };
+  const s = proteinSummary(daily, "2026-08-28");
+  assert.equal(s.recordedDays, 4);
+  assert.equal(s.avg7, Math.round((100 + 80 + 95 + 110) / 4));
+  assert.equal(s.daysAtLeast90, 3);
+  assert.equal(s.todayG, 110);
+  assert.equal(s.targetG, 105);
+});
