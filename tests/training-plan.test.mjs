@@ -191,3 +191,52 @@ test("normalizeEvent: 長時間overnightイベントが減点対象になる", (
     manualOverrides: { [MON]: "blocked", [TUE]: "blocked", [SAT]: "blocked", [SUN]: "blocked" } });
   assert.equal(p.recommendedDays[0].date, FRI);
 });
+
+// ── Phase 4: Google Calendar → 派生情報マッピング ────────────────────────────
+import { mapGcalEvents, classOf } from "../js/training-plan.mjs";
+
+test("mapGcalEvents: タイトルを出力に残さない(派生clsのみ)", () => {
+  const out = mapGcalEvents([
+    { summary: "当直", start: { dateTime: new Date(2026, 7, 26, 17, 0).toISOString() },
+      end: { dateTime: new Date(2026, 7, 27, 9, 0).toISOString() } },
+  ], DATES);
+  const ev = out[WED][0];
+  assert.equal(ev.cls, "hard");
+  assert.ok(!("title" in ev) && !("summary" in ev), "タイトルを保持しない");
+  assert.equal(ev.durMin, 16 * 60);              // overnight duration
+});
+
+test("mapGcalEvents: 全日イベントはclsのみ(長時間減点なし)・週外は捨てる", () => {
+  const out = mapGcalEvents([
+    { summary: "学会", start: { date: THU }, end: { date: FRI } },
+    { summary: "学会", start: { date: "2026-09-10" } },          // 週外
+    { summary: "メモ", start: { date: TUE } },                    // 分類なし全日→捨てる
+    { summary: "会食", status: "cancelled",
+      start: { dateTime: new Date(2026, 7, 25, 19, 0).toISOString() } }, // キャンセル
+  ], DATES);
+  assert.equal(out[THU].length, 1);
+  assert.equal(out[THU][0].cls, "medium");
+  assert.equal(out[THU][0].durMin, undefined);
+  assert.equal(out["2026-09-10"], undefined);
+  assert.equal(out[TUE], undefined);
+  assert.equal(out[MON], undefined);
+});
+
+test("planner: 事前分類cls(hard)のイベントでその日がblockされる", () => {
+  const p = generateWeeklyTrainingPlan({ ...base,
+    events: { [THU]: [{ cls: "hard", startMin: 17 * 60, durMin: 16 * 60 }] } });
+  assert.equal(p.dayInfo[THU].status, "blocked");
+  assert.ok(!p.recommendedDays.some(r => r.date === THU));
+});
+
+test("planner: 事前分類cls(soft夜)は減点として効く", () => {
+  const p = generateWeeklyTrainingPlan({ ...base, targetSessions: 1,
+    events: { [THU]: [{ cls: "soft", startMin: 19 * 60, durMin: 120 }] },
+    manualOverrides: { [MON]: "blocked", [TUE]: "blocked", [SAT]: "blocked", [SUN]: "blocked" } });
+  assert.equal(p.recommendedDays[0].date, FRI);
+});
+
+test("classOf: clsがあればタイトル分類より優先", () => {
+  assert.equal(classOf({ cls: "hard", title: "会食" }), "hard");
+  assert.equal(classOf({ title: "会食" }), "soft");
+});

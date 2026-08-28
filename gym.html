@@ -732,7 +732,7 @@ render();
 // PART_MAP, stepOf, delSet, render)を利用する。既存きろくタブとは独立に動く。
 import * as core from "./js/training-core.mjs";
 import * as TD from "./js/training-data.mjs";
-import { generateWeeklyTrainingPlan } from "./js/training-plan.mjs";
+import { generateWeeklyTrainingPlan, mapGcalEvents } from "./js/training-plan.mjs";
 
 let justCompleted = null;  // 完了直後のリワード表示用(遷移すると消える一時状態)
 let staleResumeAck = null; // 前日以前のactive sessionを「再開する」と明示したid
@@ -1040,6 +1040,67 @@ function weekDatesOf(wk){
   const [y,m,d]=wk.split("-").map(Number);
   return Array.from({length:7},(_,i)=>core.localDayKey(new Date(y,m-1,d+i)));
 }
+// ── Google Calendar読み取り(trackerのOAuth設定を再利用) ──────────────────────
+// タイトルは分類にだけ使い、派生情報(cls/startMin/durMin)のみメモリ保持。
+// 永続保存もAI送信もしない(プライバシー優先)。専用カレンダー「週間クエスト」は
+// primary以外の別カレンダーなので読み取り対象(primaryのみ)から自然に外れる。
+let gcalDerived=null;      // {dateKey:[{cls,startMin,durMin}]} 今週ぶん
+let gcalState="idle";      // idle|loading|ok|off|error
+let gcalToken2=null, gcalTokenExp2=0, gcalTokenClient2=null;
+function gcalConfigured(){
+  return localStorage.getItem("wt_gcal_auto")==="1" && !!localStorage.getItem("wt_gcal_client_id");
+}
+function loadGis(){
+  return new Promise((res,rej)=>{
+    if(window.google?.accounts?.oauth2) return res();
+    const s=document.createElement("script");
+    s.src="https://accounts.google.com/gsi/client"; s.async=true; s.defer=true;
+    s.onload=()=>res(); s.onerror=()=>rej(new Error("GIS読込失敗"));
+    document.head.appendChild(s);
+  });
+}
+function gcalGetToken2(){
+  return new Promise((res,rej)=>{
+    if(gcalToken2 && Date.now()<gcalTokenExp2-60000) return res(gcalToken2);
+    if(!gcalTokenClient2){
+      gcalTokenClient2=google.accounts.oauth2.initTokenClient({
+        client_id:localStorage.getItem("wt_gcal_client_id"),
+        scope:"https://www.googleapis.com/auth/calendar", callback:()=>{}});
+    }
+    gcalTokenClient2.callback=r=>{
+      if(r.error||!r.access_token) return rej(new Error(r.error||"no token"));
+      gcalToken2=r.access_token;
+      gcalTokenExp2=Date.now()+(r.expires_in||3600)*1000;
+      res(gcalToken2);
+    };
+    gcalTokenClient2.requestAccessToken({prompt:""});  // tracker側で同意済みなら無言
+  });
+}
+async function fetchGcalWeek(){
+  if(!gcalConfigured()){ gcalState="off"; return; }
+  gcalState="loading";
+  try{
+    await loadGis();
+    const token=await gcalGetToken2();
+    const wk=getWeekKey(new Date());
+    const dates=weekDatesOf(wk);
+    const tmin=new Date(dates[0]+"T00:00:00").toISOString();
+    const tmaxD=new Date(dates[6]+"T00:00:00"); tmaxD.setDate(tmaxD.getDate()+1);
+    const q=new URLSearchParams({timeMin:tmin, timeMax:tmaxD.toISOString(),
+      singleEvents:"true", maxResults:"100"});
+    const res=await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?"+q,
+      {headers:{Authorization:"Bearer "+token}});
+    if(!res.ok) throw new Error("GCal "+res.status);
+    const data=await res.json();
+    gcalDerived=mapGcalEvents(data.items, dates);   // タイトルはここで捨てる
+    gcalState="ok";
+  }catch(e){
+    console.warn("GCal読み取り不可:", e.message);
+    gcalState="error";
+  }
+  render();
+}
+
 // 今週のプラン入力をtracker(wt_schedules)・sessions・overridesから組み立てる
 function currentPlanInput(){
   const wk=getWeekKey(new Date());
@@ -1055,6 +1116,12 @@ function currentPlanInput(){
       (events[dates[i]]=events[dates[i]]||[]).push(ev);
     });
   });
+  // GCal由来の派生情報(取得済みのときだけ)をマージ
+  if(gcalDerived){
+    Object.keys(gcalDerived).forEach(d=>{
+      events[d]=[...(events[d]||[]), ...gcalDerived[d]];
+    });
+  }
   const sessions=TD.loadSessions();
   const program=TD.loadProgram();
   const profile=TD.loadProfile();
@@ -1135,8 +1202,23 @@ function renderPlan(root){
   re.style.marginTop="10px";
   re.onclick=()=>{ render(); showToast("プランを再計算しました"); };
   rcard.appendChild(re);
+  // GCal状態(タイトルは保持しない旨も明示)
+  const gline=el("div","wo-progress");
+  gline.style.marginTop="8px";
+  if(gcalState==="ok"){
+    const n=Object.values(gcalDerived||{}).reduce((a,l)=>a+l.length,0);
+    gline.textContent=`📅 Googleカレンダー反映済み(今週${n}件・タイトルは保存しません)`;
+  }else if(gcalState==="loading"){ gline.textContent="📅 Googleカレンダー読み込み中…"; }
+  else if(gcalState==="error"){
+    gline.textContent="📅 Googleカレンダーを読めませんでした(タップで再試行)";
+    gline.style.cursor="pointer";
+    gline.onclick=()=>fetchGcalWeek();
+  }else if(gcalState==="off"){ gline.textContent="📅 GCal連携はトラッカーの設定から(未接続でも予定はwt_schedulesを利用)"; }
+  rcard.appendChild(gline);
   rcard.appendChild(el("div","wo-progress","日をタップ: 可→△→不可→自動。手動指定は自動判定より優先"));
   root.appendChild(rcard);
+  // 初回表示時に自動取得(未取得のときだけ)
+  if(gcalState==="idle") fetchGcalWeek();
 }
 
 // ── 前日以前のactive session: 再開 / 中断 を選ばせる ─────────────────────────

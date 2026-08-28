@@ -23,22 +23,59 @@ function wdOf(dateKey) {
   return new Date(y, m - 1, d).getDay();
 }
 
-// イベントを{title, startMin, durMin}へ正規化。
+// イベントを{title, cls, startMin, durMin}へ正規化。
 // {start,end}のISO日時形式も許容し(Phase4 GCal)、日マタギ(overnight)も
-// durationが正になるよう扱う。
+// durationが正になるよう扱う。clsは事前分類済みイベント用(タイトル非保持のGCal由来)。
 export function normalizeEvent(e) {
   let startMin = e.startMin ?? null;
-  let durMin = null;
+  let durMin = e.durMin ?? null;
   if (e.start) {
     const st = new Date(e.start);
     startMin = st.getHours() * 60 + st.getMinutes();
     if (e.end) durMin = Math.max(0, (new Date(e.end) - st) / 60000);
-  } else if (e.startMin != null && e.endMin != null) {
+  } else if (durMin == null && e.startMin != null && e.endMin != null) {
     durMin = e.endMin >= e.startMin
       ? e.endMin - e.startMin
       : e.endMin + 1440 - e.startMin;   // overnight (22:00→06:00 等)
   }
-  return { title: e.title, startMin, durMin };
+  return { title: e.title, cls: e.cls ?? null, startMin, durMin };
+}
+
+// イベントの分類: 事前分類(cls)があればそれを優先、なければタイトルから
+export function classOf(e) {
+  return e.cls || classifyEventTitle(e.title);
+}
+
+// Google Calendar APIのevents.list結果を、プランナー用のtitleを含まない
+// 派生情報 {dateKey: [{cls, startMin, durMin}]} に変換する(プライバシー優先:
+// タイトルは分類にだけ使い、返り値には残さない)。
+// - 全日イベント: 時刻情報なし(clsのみ)。長時間減点はかけない
+// - overnight: 開始日に割り当て、durationは実時間
+export function mapGcalEvents(items, dates) {
+  const out = {};
+  (items || []).forEach(it => {
+    if (it.status === "cancelled") return;
+    const allDay = !it.start?.dateTime;
+    const startRaw = it.start?.dateTime || it.start?.date;
+    if (!startRaw) return;
+    let dateKey, ev;
+    const cls = classifyEventTitle(it.summary || "");
+    if (allDay) {
+      dateKey = it.start.date;
+      ev = { cls };
+    } else {
+      const st = new Date(startRaw);
+      dateKey = `${st.getFullYear()}-${String(st.getMonth() + 1).padStart(2, "0")}-${String(st.getDate()).padStart(2, "0")}`;
+      ev = { cls, startMin: st.getHours() * 60 + st.getMinutes() };
+      if (it.end?.dateTime) {
+        ev.durMin = Math.max(0, (new Date(it.end.dateTime) - st) / 60000);
+      }
+    }
+    if (!dates.includes(dateKey)) return;
+    if (!cls && ev.startMin == null) return;   // 情報を持たない全日イベントは捨てる
+    (out[dateKey] = out[dateKey] || []).push(ev);
+  });
+  return out;
 }
 
 // ── 週間プラン生成 ────────────────────────────────────────────────────────────
@@ -75,7 +112,7 @@ export function generateWeeklyTrainingPlan({
       // manual AVAILABLEは自動判定(水曜default・イベント減点)より常に優先
       info.score += 3; info.notes.push("手動で可");
     } else {
-      const hard = evs.some(e => classifyEventTitle(e.title) === "hard");
+      const hard = evs.some(e => classOf(e) === "hard");
       if (hard) {
         info.status = "blocked"; info.notes.push("当直/勤務ブロック");
       } else if (wd === 3 && defaultWednesdayBlocked) {
@@ -83,7 +120,7 @@ export function generateWeeklyTrainingPlan({
       } else {
         if (ov === "maybe") { info.score -= 2; info.notes.push("△扱い"); }
         evs.map(normalizeEvent).forEach(e => {
-          const c = classifyEventTitle(e.title);
+          const c = classOf(e);
           const evening = e.startMin != null && e.startMin >= 17 * 60;
           const long = e.durMin != null && e.durMin >= 6 * 60;
           if (c === "soft") { info.score -= evening ? 2 : 1; info.notes.push("夜の予定"); }
