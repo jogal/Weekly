@@ -144,5 +144,32 @@
 
 ## データについて
 
-- データはすべて端末内（localStorage）に保存されます。サーバーには送信されません
+- 通常、データはすべて端末内（localStorage）に保存され、サーバーには送信されません
+- 例外は **AI Coachを明示的に利用した場合のみ**: トレーニング要約・次回ターゲット・
+  体重/タンパク質トレンド等の**派生情報だけ**が、自分で設定したAI endpointへ送られます
+  （Googleカレンダーの生タイトルや生ログは送られません。詳細は下のAI Coach欄）
 - 「データ保存」ボタンでJSONファイルとしてバックアップ、「復元」で読み込みができます
+  （バックアップにAI Coachのアクセストークンは含まれません）
+
+## 🤖 AI Coach（gym.html・任意機能）
+
+ルールベースのProgressive Overload計算の結果を、AIが短い日本語で説明・補足する機能。
+**未設定でもアプリは全機能動作する**（AIはoptional enhancement）。
+
+**サーバ側（Vercel）**: このリポジトリをVercelへデプロイすると `api/coach.js` が
+`POST /api/coach` として動く。環境変数をVercelのProject Settingsで設定:
+
+| 変数 | 必須 | 説明 |
+|---|---|---|
+| `OPENAI_API_KEY` | ✅ | OpenAIのAPIキー（サーバのみ。ブラウザには一切出ない） |
+| `OPENAI_MODEL` | - | 使用モデル（未設定時のデフォルトあり） |
+| `COACH_TOKEN` | ✅(production) | 呼び出しに `Authorization: Bearer <token>` を要求。**未設定だと本番では503を返す（fail closed）**。第三者にAPIキー利用料を消費されないための必須設定。ローカル開発だけ `ALLOW_UNAUTHENTICATED_COACH=1` で明示解除可 |
+| `ALLOWED_ORIGIN` | - | CORS許可オリジン（未設定は `*`）。**認証の代替にはならない** |
+
+**アプリ側**: gym.htmlの「設定 → 🤖 AI Coach設定」でendpoint URL
+（`https://<プロジェクト>.vercel.app/api/coach`）とトークン（任意）を登録。
+TODAY画面のAI COACHカードから取得できる（応答は同日キャッシュ）。
+
+送信されるのは派生情報のみ: 直近セッション要約・次回ターゲット・週間プラン・
+体重/タンパク質トレンド・「水: blocked(当直/勤務ブロック)」等の定型制約。
+**Googleカレンダーの生タイトルは送信しない。**
