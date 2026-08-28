@@ -333,6 +333,7 @@ textarea.field-input { height:76px; resize:vertical; }
         <a class="mini-btn" href="gym.html" style="text-decoration:none">GYM</a>
         <a class="mini-btn" href="music.html" style="text-decoration:none">MUSIC</a>
         <a class="mini-btn" href="spots.html" style="text-decoration:none">TOUR</a>
+        <button type="button" class="mini-btn" id="nl-import" title="Neuro Learnの学習を取り込む">🧠</button>
         <button type="button" class="mini-btn" id="menu-open">設定</button>
       </span>
     </p>
@@ -356,6 +357,7 @@ textarea.field-input { height:76px; resize:vertical; }
 <div class="overlay" id="menu-modal" style="display:none">
   <div class="modal-box">
     <h3 class="modal-title">⚙ 設定</h3>
+    <button type="button" class="menu-item" id="nl-open">🧠 Neuro Learn 自動同期</button>
     <button type="button" class="menu-item" id="gcal-open">📅 Googleカレンダー連携</button>
     <button type="button" class="menu-item" id="export-btn">💾 データを書き出す</button>
     <button type="button" class="menu-item" id="import-btn">📂 データを復元する</button>
@@ -425,6 +427,26 @@ textarea.field-input { height:76px; resize:vertical; }
     <div class="btn-row">
       <button class="btn btn-secondary" id="gcal-close">閉じる</button>
       <button class="btn btn-primary" id="gcal-test">保存して接続</button>
+    </div>
+  </div>
+</div>
+
+<!-- Neuro Learn auto-sync settings -->
+<div class="overlay" id="nl-modal" style="display:none">
+  <div class="modal-box">
+    <h3 class="modal-title">🧠 Neuro Learn 自動同期</h3>
+    <p class="modal-sub">一度接続すれば、Neuro Learnでのその日の学習（時間・問題数・読了レッスン）が、
+      週クエを開くたびに<b>自動で</b>「専門医勉強」に反映されます。
+      Neuro Learn側の「⚔️ 週間クエスト」カードで<b>🔗 接続コードをコピー</b>して貼ってください。</p>
+    <span class="field-label">接続コード（URL|キー）</span>
+    <input type="text" class="field-input" id="nl-code"
+      placeholder="https://…|xxxxxxxx-xxxx-…" autocomplete="off"
+      autocapitalize="none" autocorrect="off" spellcheck="false">
+    <p class="modal-sub" id="nl-status" style="min-height:1em"></p>
+    <p class="modal-sub" style="font-size:11px">空欄で保存すると自動同期を解除します。ヘッダーの 🧠 ボタンでいつでも手動同期できます。</p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="nl-close">閉じる</button>
+      <button class="btn btn-primary" id="nl-save">保存して接続</button>
     </div>
   </div>
 </div>
@@ -710,6 +732,8 @@ function gcalEventBody(entry,dateObj){
     start:{dateTime:`${dstr}T${entry.time}:00`,timeZone:"Asia/Tokyo"},
     end:{dateTime:`${dstr}T${entry.endTime||entry.time}:00`,timeZone:"Asia/Tokyo"},
     visibility:"private",
+    // gym.htmlのbusy判定がWeekly自作イベントを除外できるようsource markerを付ける
+    extendedProperties:{private:{source:"weekly-quest"}},
   };
 }
 async function gcalApi(path,method,body){
@@ -1738,6 +1762,181 @@ window.addEventListener("storage",e=>{
 });
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)reloadFromStorage();});
 window.addEventListener("pageshow",e=>{if(e.persisted)reloadFromStorage();});
+
+// ── Neuro Learn 連携 ──────────────────────────────────────────────────────────
+// Neuro Learn は別オリジンのため localStorage を共有できない。受け取り口は3つ：
+//   1) 自動同期 … Neuro Learn が学習のたびに自分のサーバー（/api/quest）へ累計を送り、
+//      週クエは起動・復帰時にそこへ取りに行く。設定（接続コード）を一度貼れば以後は全自動
+//   2) 記録コードのペースト（ヘッダーの 🧠 ボタン）… サーバー未設定時の手動経路
+//   3) URLハンドオフ `tracker.html#nl=<base64url JSON>` … 同じブラウザで使っている場合
+// 1日分の payload は {d:"YYYY-MM-DD", min:学習分, q:回答数, c:正解数, l:読了レッスン数} で、
+// **その日の累計**なので何度取り込んでも上書きになり二重加算されない。
+// 「専門医勉強」(medicine) をその日の完了扱いにして XP を入れる。
+const NL_MARK="🧠";
+function dayKeyOfDate(d){ return DAY_KEYS[(d.getDay()+6)%7]; }
+// `#nl=…` を含む文字列（URL全体でもコード単体でも可）から payload を取り出す
+function parseNeuroToken(text){
+  const m=String(text||"").match(/[#&]nl=([A-Za-z0-9_-]+)/);
+  if(!m)return null;
+  try{
+    const bin=atob(m[1].replace(/-/g,"+").replace(/_/g,"/"));
+    const bytes=Uint8Array.from(bin,ch=>ch.charCodeAt(0));
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }catch(e){ return null; }
+}
+// 1日分を records にマージする（保存・描画・演出はしない）。
+// 戻り値: null（不正・実績なし）/ {changed, gained}
+function mergeNeuroDay(p){
+  if(!p||!/^\d{4}-\d{2}-\d{2}$/.test(p.d||""))return null;
+  const [y,mo,dd]=p.d.split("-").map(Number);
+  const dateObj=new Date(y,mo-1,dd);
+  if(isNaN(dateObj)||daysSince(dateObj)<0||daysSince(dateObj)>30)return null; // 未来日・古すぎる日付は無視
+  const min=Math.max(0,Math.min(600,Math.round(Number(p.min)||0)));
+  const q=Math.max(0,Math.round(Number(p.q)||0));
+  const c=Math.max(0,Math.min(q,Math.round(Number(p.c)||0)));
+  const l=Math.max(0,Math.round(Number(p.l)||0));
+  if(min<=0&&q<=0&&l<=0)return null; // 学習実績が空なら何もしない
+
+  const wk=getWeekKey(dateObj), dk=dayKeyOfDate(dateObj);
+  records[wk]=records[wk]||{}; records[wk][dk]=records[wk][dk]||{};
+  const prev=records[wk][dk]["medicine"]||{done:false,note:"",duration:"",rating:0};
+  const prevXP=xpForRecord(prev);
+  const entry={...prev,done:true};
+  // 手入力の実施時間は減らさない（累計なので max を取れば再取り込みも安全）
+  if(min>0)entry.duration=String(Math.max(parseInt(prev.duration)||0,min));
+  // メモは自分（🧠始まり）が書いたものだけ書き換え、手書きメモは残す
+  const parts=[];
+  if(l>0)parts.push(`レッスン${l}本読了`);
+  if(q>0)parts.push(`${q}問中${c}問正解`);
+  if(!prev.note||prev.note.startsWith(NL_MARK))
+    entry.note=NL_MARK+" Neuro Learn"+(parts.length?"："+parts.join("・"):"");
+  const changed=JSON.stringify(prev)!==JSON.stringify(entry);
+  records[wk][dk]["medicine"]=entry;
+  return { changed, gained:xpForRecord(entry)-prevXP };
+}
+// 手動経路（コード・URLハッシュ）用：1日分を取り込んで保存・演出まで行う
+function applyNeuroPayload(p){
+  if(!p||p.v!==1)return false;
+  const before=snapshotLevels();
+  const r=mergeNeuroDay(p);
+  if(!r)return false;
+  persist();
+  render();
+  showToast("🧠 Neuro Learnの学習を専門医勉強に記録しました");
+  if(r.gained>0)checkLevelUp(before,r.gained);
+  return true;
+}
+// 経路2: 🧠 ボタン → クリップボードの記録コードを取り込む（iOSはペースト許可が出る）
+document.getElementById("nl-import").onclick=async()=>{
+  // 自動同期を設定済みなら、ボタンは「いますぐ同期」としても働く
+  const conf=nlConf();
+  if(conf.url&&conf.key){
+    const n=await nlAutoSync(true);
+    if(n===0)showToast("🧠 新しい学習記録はありませんでした");
+    else if(n<0)showToast("⚠️ Neuro Learnに接続できませんでした");
+    return;
+  }
+  let text="";
+  try{ text=await navigator.clipboard.readText(); }
+  catch(e){ showToast("📋 ペーストが許可されませんでした"); return; }
+  const p=parseNeuroToken(text);
+  if(!p){ showToast("🧠 記録コードが見つかりません。Neuro Learnで「記録コードをコピー」してから押してください"); return; }
+  if(!applyNeuroPayload(p)) showToast("🧠 取り込める学習記録がありませんでした");
+};
+// 経路3: URLハッシュ
+function importNeuroLearn(){
+  const p=parseNeuroToken(location.hash);
+  if(!p)return;
+  // リロードで再取り込みしないよう、先にハッシュを消す
+  history.replaceState(null,"",location.pathname+location.search);
+  applyNeuroPayload(p);
+}
+importNeuroLearn();
+
+// ── 経路1: 自動同期（Neuro Learn のサーバーから直近の学習を取り込む） ────────
+function nlConf(){
+  return { url:localStorage.getItem("wt_nl_url")||"", key:localStorage.getItem("wt_nl_key")||"" };
+}
+async function nlFetchDays(url,key){
+  const res=await fetch(url.replace(/\/+$/,"")+"/api/quest?key="+encodeURIComponent(key));
+  if(!res.ok){
+    let msg="";
+    try{ msg=(await res.json()).error||""; }catch(e){}
+    throw new Error(msg||("HTTP "+res.status));
+  }
+  const data=await res.json();
+  return Array.isArray(data.days)?data.days:[];
+}
+let nlSyncing=false, nlLastSync=0;
+// 戻り値: 取り込んで変化のあった日数（エラー時は -1）
+async function nlAutoSync(force){
+  const {url,key}=nlConf();
+  if(!url||!key)return 0;
+  const now=Date.now();
+  if(!force&&(nlSyncing||now-nlLastSync<60000))return 0; // 1分以内の再実行はスキップ
+  nlSyncing=true;
+  try{
+    const days=await nlFetchDays(url,key);
+    nlLastSync=Date.now();
+    const before=snapshotLevels();
+    let changed=0, gained=0;
+    days.forEach(day=>{
+      const r=mergeNeuroDay(day);
+      if(r&&r.changed){ changed++; gained+=r.gained; }
+    });
+    if(changed>0){
+      persist();
+      render();
+      showToast("🧠 Neuro Learnの学習を専門医勉強に記録しました");
+      if(gained>0)checkLevelUp(before,gained);
+    }
+    return changed;
+  }catch(e){
+    return -1;
+  }finally{
+    nlSyncing=false;
+  }
+}
+// 起動時・アプリに戻ってきた時に自動で取り込む
+nlAutoSync();
+document.addEventListener("visibilitychange",()=>{if(!document.hidden)nlAutoSync();});
+window.addEventListener("pageshow",e=>{if(e.persisted)nlAutoSync();});
+
+// 設定モーダル（接続コード = <Neuro LearnのURL>|<同期キー>）
+function setNlStatus(msg){document.getElementById("nl-status").textContent=msg;}
+document.getElementById("nl-open").onclick=()=>{
+  const {url,key}=nlConf();
+  document.getElementById("nl-code").value=url&&key?url+"|"+key:"";
+  setNlStatus(url&&key?"✅ 自動同期ON：起動時にNeuro Learnの学習を取り込みます":"");
+  document.getElementById("nl-modal").style.display="flex";
+};
+document.getElementById("nl-close").onclick=()=>document.getElementById("nl-modal").style.display="none";
+document.getElementById("nl-modal").addEventListener("click",e=>{if(e.target===e.currentTarget)e.currentTarget.style.display="none";});
+document.getElementById("nl-save").onclick=async()=>{
+  const raw=document.getElementById("nl-code").value.trim();
+  if(!raw){
+    localStorage.removeItem("wt_nl_url");
+    localStorage.removeItem("wt_nl_key");
+    setNlStatus("自動同期を解除しました");
+    return;
+  }
+  const parts=raw.split("|").map(s=>s.trim());
+  const url=parts[0]||"", key=parts[1]||"";
+  if(!/^https?:\/\//.test(url)||!key){
+    setNlStatus("❌ 形式が違います。Neuro Learnの「🔗 接続コードをコピー」で取得した1行（URL|キー）をそのまま貼ってください");
+    return;
+  }
+  setNlStatus("接続中…");
+  try{
+    const days=await nlFetchDays(url,key);
+    localStorage.setItem("wt_nl_url",url);
+    localStorage.setItem("wt_nl_key",key);
+    setNlStatus(`✅ 接続できました（学習データ ${days.length}日分）。以後は開くだけで自動反映されます`);
+    nlAutoSync(true);
+  }catch(err){
+    setNlStatus("❌ 接続失敗: "+(err.message||"")+"（URLとキー、Neuro Learn側のサーバー設定を確認してください）");
+  }
+};
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function render(){
