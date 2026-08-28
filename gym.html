@@ -284,6 +284,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
     <h3 class="modal-title">⚙ 設定</h3>
     <button type="button" class="menu-item" id="export-btn">💾 データを書き出す</button>
     <button type="button" class="menu-item" id="import-btn">📂 データを復元する</button>
+    <button type="button" class="menu-item" id="tpl-edit-btn">📋 Workoutテンプレート編集</button>
     <button type="button" class="menu-item" id="ai-config-btn">🤖 AI Coach設定</button>
     <div class="btn-row">
       <button class="btn" id="menu-close">閉じる</button>
@@ -618,7 +619,22 @@ function renderToday(root){
 }
 
 // ── 画面: 履歴 ────────────────────────────────────────────────────────────────
+let histMode="day";   // "day"(既存の日別) | "ex"(種目別の前回比較)
 function renderHistory(root){
+  // モード切替(既存の日別表示は無変更で残す)
+  const bar=el("div","wo-chips"); bar.style.marginBottom="10px";
+  [["day","📅 日別"],["ex","🏋 種目別"]].forEach(([m,label])=>{
+    const b=el("button","wo-chip",label);
+    if(histMode===m){ b.style.borderColor="var(--bolt)"; b.style.color="var(--bolt)"; }
+    b.onclick=()=>{ histMode=m; render(); };
+    bar.appendChild(b);
+  });
+  root.appendChild(bar);
+  if(histMode==="ex"){
+    if(window.TrainingUI) window.TrainingUI.renderExerciseHistory(root);
+    else root.appendChild(el("div","empty-note","読み込み中…"));
+    return;
+  }
   if(!logs.length){
     const c=el("div","card");
     c.appendChild(el("div","empty-note","履歴はまだナシ。今日から始めよう⚡"));
@@ -1494,6 +1510,43 @@ function renderPlan(root){
   if(gcalNeedsRefresh()) fetchGcalWeek();
 }
 
+// ── 履歴(種目別): 直近2回の比較。グラフは持たない(spec#28) ───────────────────
+function renderExerciseHistory(root){
+  const names=[];
+  for(let i=logs.length-1;i>=0;i--){
+    if(!names.includes(logs[i].ex)) names.push(logs[i].ex);   // 直近に使った順
+  }
+  if(!names.length){
+    const c=el("div","card");
+    c.appendChild(el("div","empty-note","記録はまだナシ。今日から始めよう⚡"));
+    root.appendChild(c);
+    return;
+  }
+  names.forEach(ex=>{
+    const h=core.sessionHistory(logs, ex, {limit:2, sessions:TD.loadSessions()});
+    if(!h.length) return;
+    const last=h[h.length-1];
+    const prev=h.length>1? h[0]:null;
+    const card=el("div","card");
+    card.appendChild(el("div","wo-head",
+      `<span style="font-size:15px;font-weight:700">${esc(ex)}</span>
+       <span class="wo-progress">${esc(last.day.slice(5).replace("-","/"))}</span>`));
+    card.appendChild(el("div","wo-prev-line",
+      `今回　<b>${esc(fmtPrevShort(last))}</b>　計${last.totalReps}回 / vol ${last.volume}kg`));
+    if(prev){
+      const dv=last.volume-prev.volume, dr=last.totalReps-prev.totalReps;
+      const sign=n=>(n>0?"+":"")+n;
+      const line=el("div","wo-prev-line",
+        `前回　${esc(fmtPrevShort(prev))}　計${prev.totalReps}回 / vol ${prev.volume}kg
+         <span style="color:${dv>=0?"var(--green)":"#EF5350"}">（vol ${sign(dv)} / reps ${sign(dr)}）</span>`);
+      card.appendChild(line);
+    }else{
+      card.appendChild(el("div","wo-progress","比較できる前回記録はまだない"));
+    }
+    root.appendChild(card);
+  });
+}
+
 // ── 前日以前のactive session: 再開 / 中断 を選ばせる ─────────────────────────
 function renderStale(root, sess){
   const program=TD.loadProgram();
@@ -1513,6 +1566,106 @@ function renderStale(root, sess){
   root.appendChild(card);
 }
 
+// ── テンプレート編集(Settings) ────────────────────────────────────────────────
+// タップ+promptの軽量エディタ。gym_program_v2へ保存(デフォルトへの復元も可能)
+const PART_IDS=["chest","back","shoulder","arm","leg","core"];
+function nextSlotId(tpl){
+  let mx=0;
+  tpl.exercises.forEach(e=>{
+    const m=String(e.slot||"").match(new RegExp("^"+tpl.id+"(\\d+)$"));
+    if(m) mx=Math.max(mx, parseInt(m[1]));
+  });
+  return tpl.id+(mx+1);
+}
+function promptExercise(cur){
+  const name=prompt("種目名", cur?.ex||"");
+  if(name===null||!name.trim()) return null;
+  const part=prompt("部位ID ("+PART_IDS.join("/")+")", cur?.part||"chest");
+  if(part===null||!PART_IDS.includes(part.trim())) { showToast("部位IDが不正です"); return null; }
+  const sets=parseInt(prompt("セット数", cur?.sets??3)||"");
+  if(!(sets>=1&&sets<=10)) { showToast("セット数が不正です"); return null; }
+  const range=prompt("rep範囲 (例 6-10)", cur? cur.repMin+"-"+cur.repMax : "8-12")||"";
+  const m=range.match(/^(\d+)\s*-\s*(\d+)$/);
+  if(!m||parseInt(m[1])<1||parseInt(m[2])<parseInt(m[1])) { showToast("rep範囲が不正です"); return null; }
+  return { ex:name.trim(), part:part.trim(), sets, repMin:parseInt(m[1]), repMax:parseInt(m[2]) };
+}
+function openTemplateEditor(){
+  const ov=el("div","overlay");
+  const box=el("div","modal-box");
+  box.style.maxHeight="80vh"; box.style.overflowY="auto";
+  let tplSel=null;   // 選択中テンプレID
+  function draw(){
+    box.innerHTML="";
+    const program=TD.loadProgram();
+    if(!tplSel){
+      box.appendChild(el("h3","modal-title","📋 テンプレート編集"));
+      program.templates.forEach(t=>{
+        const b=el("button","menu-item",
+          `${esc(t.name)}　<span class="wo-progress">${esc(t.focus)}・${t.exercises.length}種目</span>`);
+        b.onclick=()=>{ tplSel=t.id; draw(); };
+        box.appendChild(b);
+      });
+      const reset=el("button","ghost-btn","デフォルトに戻す(全テンプレート)");
+      reset.onclick=()=>{
+        if(!confirm("A〜D全テンプレートをデフォルトに戻す?(記録は消えない)")) return;
+        TD.saveProgram({templates:TD.DEFAULT_TEMPLATES, cycle:["A","B","C","D"]});
+        showToast("デフォルトに戻しました"); draw();
+      };
+      box.appendChild(reset);
+      const close=el("button","ghost-btn","閉じる");
+      close.style.marginTop="8px";
+      close.onclick=()=>{ document.body.removeChild(ov); render(); };
+      box.appendChild(close);
+      return;
+    }
+    const tpl=program.templates.find(t=>t.id===tplSel);
+    box.appendChild(el("h3","modal-title",esc(tpl.name)+"　"+esc(tpl.focus)));
+    tpl.exercises.forEach((e,i)=>{
+      const row=el("div","wo-exrow");
+      row.appendChild(el("span","",
+        `${i+1}. ${esc(e.ex)} <span class="wo-progress">${e.sets}×${e.repMin}-${e.repMax}</span>`));
+      const ops=el("span","");
+      const up=el("button","mini-btn","↑");
+      up.disabled=(i===0);
+      up.onclick=()=>{ if(i===0)return;
+        [tpl.exercises[i-1],tpl.exercises[i]]=[tpl.exercises[i],tpl.exercises[i-1]];
+        TD.saveProgram(program); draw(); };
+      const ed=el("button","mini-btn","✎");
+      ed.onclick=()=>{
+        const v=promptExercise(e);
+        if(!v) return;
+        Object.assign(e, v);          // slotは維持(履歴との紐付けを保つ)
+        TD.saveProgram(program); draw();
+      };
+      const del=el("button","mini-btn","✕");
+      del.onclick=()=>{
+        if(!confirm(`${e.ex} を${tpl.name}から外す?(過去の記録は消えない)`)) return;
+        tpl.exercises.splice(i,1); TD.saveProgram(program); draw();
+      };
+      ops.appendChild(up); ops.appendChild(ed); ops.appendChild(del);
+      row.appendChild(ops);
+      box.appendChild(row);
+    });
+    const add=el("button","ghost-btn","＋ 種目を追加");
+    add.style.marginTop="10px";
+    add.onclick=()=>{
+      const v=promptExercise(null);
+      if(!v) return;
+      tpl.exercises.push({...v, slot:nextSlotId(tpl)});
+      TD.saveProgram(program); draw();
+    };
+    box.appendChild(add);
+    const back=el("button","ghost-btn","← テンプレート一覧へ");
+    back.style.marginTop="8px";
+    back.onclick=()=>{ tplSel=null; draw(); };
+    box.appendChild(back);
+  }
+  draw();
+  ov.appendChild(box);
+  ov.addEventListener("click",e=>{ if(e.target===ov){ document.body.removeChild(ov); render(); } });
+  document.body.appendChild(ov);
+}
+
 // ── エントリポイント ──────────────────────────────────────────────────────────
 window.TrainingUI={
   render(root){
@@ -1525,8 +1678,13 @@ window.TrainingUI={
     renderActive(root, sess);
   },
   renderPlan,
+  renderExerciseHistory,
   exportV2: TD.exportV2,
   importV2: TD.importV2,
+};
+document.getElementById("tpl-edit-btn").onclick=()=>{
+  document.getElementById("menu-modal").style.display="none";
+  openTemplateEditor();
 };
 // アプリ復帰・他タブ(tracker等)でのデータ変更時にプラン表示を最新化。
 // セッション中の入力を消さないよう、TODAYはアイドル時のみ自動再描画する
