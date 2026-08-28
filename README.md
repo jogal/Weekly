@@ -146,3 +146,26 @@
 
 - データはすべて端末内（localStorage）に保存されます。サーバーには送信されません
 - 「データ保存」ボタンでJSONファイルとしてバックアップ、「復元」で読み込みができます
+
+## 🤖 AI Coach（gym.html・任意機能）
+
+ルールベースのProgressive Overload計算の結果を、AIが短い日本語で説明・補足する機能。
+**未設定でもアプリは全機能動作する**（AIはoptional enhancement）。
+
+**サーバ側（Vercel）**: このリポジトリをVercelへデプロイすると `api/coach.js` が
+`POST /api/coach` として動く。環境変数をVercelのProject Settingsで設定:
+
+| 変数 | 必須 | 説明 |
+|---|---|---|
+| `OPENAI_API_KEY` | ✅ | OpenAIのAPIキー（サーバのみ。ブラウザには一切出ない） |
+| `OPENAI_MODEL` | - | 使用モデル（未設定時のデフォルトあり） |
+| `COACH_TOKEN` | - | 設定すると呼び出しに `Authorization: Bearer <token>` を要求 |
+| `ALLOWED_ORIGIN` | - | CORS許可オリジン（未設定は `*`） |
+
+**アプリ側**: gym.htmlの「設定 → 🤖 AI Coach設定」でendpoint URL
+（`https://<プロジェクト>.vercel.app/api/coach`）とトークン（任意）を登録。
+TODAY画面のAI COACHカードから取得できる（応答は同日キャッシュ）。
+
+送信されるのは派生情報のみ: 直近セッション要約・次回ターゲット・週間プラン・
+体重/タンパク質トレンド・「水: blocked(当直/勤務ブロック)」等の定型制約。
+**Googleカレンダーの生タイトルは送信しない。**

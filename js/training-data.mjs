@@ -12,6 +12,7 @@ export const K = {
   daily:     "gym_daily_v2",
   weeklyPlan:"gym_weekly_plan_v2",
   overrides: "gym_schedule_overrides_v2",
+  aiCache:   "gym_ai_cache_v1",
 };
 
 const rd = (k, fallback) => {
@@ -28,6 +29,8 @@ export const DEFAULT_PROFILE = {
   proteinTargetG: 105,
   weeklyWorkoutTarget: 4,
   defaultWednesdayBlocked: true,
+  aiEndpoint: "",     // 例 https://<proj>.vercel.app/api/coach (任意)
+  aiToken: "",        // サーバのCOACH_TOKENに対応(任意)
 };
 export function loadProfile() { return { ...DEFAULT_PROFILE, ...rd(K.profile, {}) }; }
 export function saveProfile(p) { wr(K.profile, p); }
@@ -166,6 +169,10 @@ export function saveOverrides(o) {
 }
 export function loadWeeklyPlan() { return rd(K.weeklyPlan, null); }
 export function saveWeeklyPlan(p) { wr(K.weeklyPlan, p); }
+
+// ── AI Coach cache(応答のみ・入力payloadは保存しない) ────────────────────────
+export function loadAiCache() { return rd(K.aiCache, null); }
+export function saveAiCache(c) { wr(K.aiCache, c); }
 
 // ── Export/Import 用 ─────────────────────────────────────────────────────────
 export function exportV2() {

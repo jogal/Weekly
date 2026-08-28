@@ -224,6 +224,13 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 /* 完了リワードのモンクスプライト(2コマシートのフレーム1をクリップ表示) */
 .mk-clip { display:block; overflow:hidden; margin:6px auto; }
 .mk-img { display:block; height:110px; width:auto; image-rendering:pixelated; }
+/* AI Coach */
+.coach-headline { font-size:14px; font-weight:700; margin-bottom:6px; letter-spacing:.04em; }
+.coach-text { font-size:12px; color:var(--dim); line-height:1.7; margin-bottom:6px; }
+.coach-ex { font-size:12px; color:var(--dim); line-height:1.7; padding:5px 0;
+  border-top:1px solid var(--line); }
+.coach-ex b { color:var(--txt); }
+.coach-caution { font-size:12px; color:var(--bolt); line-height:1.6; margin-top:6px; }
 .done-big { text-align:center; font-family:var(--cond); font-size:24px; font-weight:700;
   letter-spacing:.3em; color:var(--bolt); margin:18px 0 6px; }
 .done-sub { text-align:center; font-size:12px; color:var(--dim); margin-bottom:14px; }
@@ -277,6 +284,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
     <h3 class="modal-title">⚙ 設定</h3>
     <button type="button" class="menu-item" id="export-btn">💾 データを書き出す</button>
     <button type="button" class="menu-item" id="import-btn">📂 データを復元する</button>
+    <button type="button" class="menu-item" id="ai-config-btn">🤖 AI Coach設定</button>
     <div class="btn-row">
       <button class="btn" id="menu-close">閉じる</button>
     </div>
@@ -746,6 +754,7 @@ render();
 import * as core from "./js/training-core.mjs";
 import * as TD from "./js/training-data.mjs";
 import { generateWeeklyTrainingPlan, mapGcalEvents, gcalCacheStale } from "./js/training-plan.mjs";
+import * as AIC from "./js/ai-coach.mjs";
 
 let justCompleted = null;  // 完了直後のリワード表示用(遷移すると消える一時状態)
 let staleResumeAck = null; // 前日以前のactive sessionを「再開する」と明示したid
@@ -816,9 +825,6 @@ function renderIdle(root){
   card.appendChild(start);
   root.appendChild(card);
 
-  // BODY CHECK-IN(体重・タンパク質のみ・小さく。カロリーは記録しない)
-  root.appendChild(buildBodyCard(todayKey));
-
   // NEXT EXERCISE: 最初の種目の前回実績と今日の目標(spec#8)
   const first=tpl.exercises[0];
   if(first){
@@ -838,6 +844,12 @@ function renderIdle(root){
     }
     root.appendChild(nx);
   }
+
+  // BODY CHECK-IN(体重・タンパク質のみ・小さく。カロリーは記録しない)
+  root.appendChild(buildBodyCard(todayKey));
+
+  // AI COACH(optional enhancement: 未設定・失敗でもアプリは完全動作)
+  root.appendChild(buildCoachCard());
 }
 
 // BODY CHECK-IN: Weight/Proteinの2入力だけ。7日平均とペース判定を小さく表示。
@@ -902,6 +914,92 @@ function buildBodyCard(todayKey){
 
   updateTrend();
   card.appendChild(tl);
+  return card;
+}
+
+// ── AI Coach ──────────────────────────────────────────────────────────────────
+// payloadを組み立てる(GCal生タイトルは一切含めない。dayConstraintsは
+// プランナー定型ラベルの派生文字列のみ)
+function gatherCoachPayload(){
+  const profile=TD.loadProfile();
+  const daily=TD.loadDaily();
+  const todayK=core.localDayKey(new Date());
+  const sessions=TD.loadSessions();
+  const program=TD.loadProgram();
+  const done=sessions.filter(s=>s.status==="completed").slice(-3);
+  const recent=done.map(s=>{
+    const by={};
+    logs.filter(l=>l.sessionId===s.id).forEach(l=>{(by[l.ex]=by[l.ex]||[]).push({kg:l.kg,reps:l.reps});});
+    return {date:s.date, templateId:s.templateId, difficulty:s.difficulty,
+      exercises:Object.entries(by).map(([ex,sets])=>({ex,sets}))};
+  });
+  const nextId=TD.nextWorkoutTemplateId(program);
+  const tpl=TD.templateById(program,nextId);
+  const nextTargets=tpl.exercises.map(e=>{
+    const hist=core.sessionHistory(logs,e.ex,{slot:e.slot,sessions});
+    const t=core.getNextExerciseTarget({history:hist,targetSets:e.sets,
+      repMin:e.repMin,repMax:e.repMax,increment:stepOf(e.ex)});
+    return {exercise:e.ex, status:t.status, weightKg:t.weight, targetTotalReps:t.targetTotalReps};
+  });
+  const {plan}=getCurrentPlan();
+  const dayConstraints=Object.values(plan.dayInfo)
+    .filter(i=>i.status==="blocked")
+    .map(i=>`${i.date}: blocked(${i.notes[0]||""})`);
+  const lastDone=done[done.length-1];
+  const painFlags=lastDone&&lastDone.pain? Object.keys(lastDone.pain):[];
+  return AIC.buildCoachPayload({
+    profile,
+    latestWeight:core.latestWeightKg(daily, profile.currentWeightKg),
+    weightTrend:core.weightTrend(daily, todayK),
+    protein:core.proteinSummary(daily, todayK, profile.proteinTargetG),
+    recentSessions:recent,
+    nextWorkout:{templateId:nextId, name:tpl.name, focus:tpl.focus},
+    nextTargets,
+    weeklyPlan:{recommendedDays:plan.recommendedDays, reasons:plan.reasons},
+    dayConstraints, painFlags,
+  });
+}
+function renderAdvice(root,a){
+  root.innerHTML="";
+  root.appendChild(el("div","coach-headline",esc(a.headline)));
+  root.appendChild(el("div","coach-text",esc(a.workoutAdvice)));
+  (a.exerciseAdvice||[]).forEach(e=>
+    root.appendChild(el("div","coach-ex",`<b>${esc(e.exercise)}</b>　${esc(e.advice)}`)));
+  if(a.nutritionAdvice) root.appendChild(el("div","coach-text",esc(a.nutritionAdvice)));
+  if(a.caution) root.appendChild(el("div","coach-caution","⚠ "+esc(a.caution)));
+}
+function buildCoachCard(){
+  const profile=TD.loadProfile();
+  const card=el("div","card");
+  card.appendChild(el("p","card-title","AI COACH"));
+  if(!profile.aiEndpoint){
+    card.appendChild(el("div","empty-note","任意機能: 設定→🤖AI Coach設定でendpoint URLを登録すると使えます"));
+    return card;
+  }
+  const todayK=core.localDayKey(new Date());
+  const cache=TD.loadAiCache();
+  const body=el("div","");
+  const hasCache=cache&&cache.dayKey===todayK&&cache.advice;
+  if(hasCache) renderAdvice(body, cache.advice);
+  const btn=el("button","ghost-btn", hasCache? "🤖 更新":"🤖 アドバイスを見る");
+  btn.style.marginTop="8px";
+  btn.onclick=async()=>{
+    btn.disabled=true; const old=btn.textContent; btn.textContent="考え中…";
+    try{
+      const payload=gatherCoachPayload();
+      const advice=await AIC.requestCoach(profile.aiEndpoint, payload, profile.aiToken||null);
+      TD.saveAiCache({dayKey:todayK, fp:AIC.coachFingerprint(payload),
+        advice, fetchedAt:new Date().toISOString()});
+      renderAdvice(body, advice);
+      btn.textContent="🤖 更新";
+    }catch(e){
+      showToast("AI Coachに接続できませんでした(rule-based提案は有効)");
+      btn.textContent=old;
+    }
+    btn.disabled=false;
+  };
+  card.appendChild(body);
+  card.appendChild(btn);
   return card;
 }
 
@@ -1429,6 +1527,23 @@ window.addEventListener("pageshow",refreshIfStale);
 window.addEventListener("storage",e=>{
   if(e.key && (e.key.startsWith("wt_")||e.key.startsWith("gym_"))) refreshIfStale();
 });
+
+// AI Coach設定(endpoint URL + 任意token)。APIキーはここでは扱わない(サーバ側のみ)
+document.getElementById("ai-config-btn").onclick=()=>{
+  const profile=TD.loadProfile();
+  const url=prompt("AI Coach endpoint URL\n(例 https://<プロジェクト>.vercel.app/api/coach、空欄で無効化)",
+    profile.aiEndpoint||"");
+  if(url===null) return;
+  let token=profile.aiToken||"";
+  if(url.trim()){
+    const t=prompt("アクセストークン(サーバのCOACH_TOKEN。未設定なら空欄)", token);
+    if(t!==null) token=t.trim();
+  }
+  TD.saveProfile({...profile, aiEndpoint:url.trim(), aiToken:token});
+  document.getElementById("menu-modal").style.display="none";
+  showToast(url.trim()? "AI Coachを設定しました":"AI Coachを無効化しました");
+  if(tab==="workout"&&!TD.activeSession()) render();
+};
 
 if(tab==="workout") render();
 // 起動時: GCal設定済みならタブに関係なくバックグラウンドで取得を開始。
