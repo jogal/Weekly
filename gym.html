@@ -926,7 +926,8 @@ function renderCompleteCard(root){
     clip.appendChild(img);
     card.appendChild(clip);
     card.appendChild(el("div","done-sub",
-      `MONK <b style="color:var(--bolt)">+${c.monk.gained} XP</b>　Lv.${c.monk.lvl}`));
+      (c.monk.gained!=null? `MONK <b style="color:var(--bolt)">+${c.monk.gained} XP</b>　`:"MONK　")
+      + `Lv.${c.monk.lvl}`));
   }
   card.appendChild(el("div","done-sub",
     `${esc(c.name)}　${c.sets}セット / ${c.volume}kg挙上　→ 週クエ反映済み<br>Next: ${esc(c.nextName)}`));
@@ -1127,18 +1128,15 @@ function doFinish(sess, tpl, difficulty, all){
   const program=TD.loadProgram();
   const nextName=TD.templateById(program, TD.nextWorkoutTemplateId(program)).name;
   // Monkリワード(表示専用・source of truthはwt_records)。
-  // このセッションで触れた部位の今日ぶんレコードXPを「獲得」として表示し、
-  // レベル/ティアはtracker同一式のミラーで導出する
+  // 開始時snapshotとのraw XP差分だけを「獲得」として表示する。
+  // decay解除で表示XPが戻った分は含めない。baselineのないlegacy sessionでは
+  // +XP表示を省略(誤った値を出さない)
   let monk=null;
   try{
     const records=JSON.parse(localStorage.getItem("wt_records")||"{}");
-    const todayK=core.localDayKey(new Date());
-    const wk=getWeekKey(new Date()), dk=dayKeyOf(new Date());
-    const parts=[...new Set(all.map(l=>l.part))];
-    const gained=parts.reduce((a,p)=>a+core.xpForQuestRecord(records?.[wk]?.[dk]?.["workout_"+p]),0);
-    const after=core.monkStateFromRecords(records, todayK);
-    const lvlBefore=core.questLevelFromXP(Math.max(0, after.xp-gained));
-    monk={ gained, lvl:after.lvl, tier:after.tier, leveledUp:after.lvl>lvlBefore };
+    const after=core.monkStateFromRecords(records, core.localDayKey(new Date()));
+    const delta=core.monkRewardDelta(sess.rewardBaseline, after);
+    monk={ gained:delta.earnedXP, lvl:after.lvl, tier:after.tier, leveledUp:delta.leveledUp };
   }catch(e){ /* 表示のみの機能なので失敗しても完了処理は続行 */ }
   justCompleted={ name:tpl.name, sets:all.length,
     volume:all.reduce((a,l)=>a+(l.kg||0)*l.reps,0), nextName, monk };

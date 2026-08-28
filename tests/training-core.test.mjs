@@ -472,3 +472,82 @@ test("quest-mirror: monkStateFromRecordsはworkout_*だけ合算し減衰も反�
   const s3 = monkStateFromRecords(records, "2026-10-01");
   assert.equal(s3.xp, 0);
 });
+
+// ── Phase 6 hardening: リワードbaseline snapshot方式 ─────────────────────────
+import { monkRewardDelta, QUEST_DAY_KEYS } from "../js/training-core.mjs";
+
+// wt_records風のfixtureを作るヘルパ
+const wrec = (entries) => {
+  // entries: [{wk, dk, cat, rec}]
+  const r = {};
+  entries.forEach(({ wk, dk, cat, rec }) => {
+    r[wk] = r[wk] || {}; r[wk][dk] = r[wk][dk] || {}; r[wk][dk][cat] = rec;
+  });
+  return r;
+};
+
+test("reward: 同日既存chest recordがあっても差分XPだけ", () => {
+  // 開始前: 朝の手動ログでchest 30分(10+6=16XP)が既に存在
+  const before = wrec([{ wk: "2026-08-24", dk: "mon",
+    cat: "workout_chest", rec: { done: true, duration: "30" } }]);
+  // 完了後: chest 60分(22XP)に更新 + leg追加(10XP) → raw 32
+  const after = wrec([
+    { wk: "2026-08-24", dk: "mon", cat: "workout_chest", rec: { done: true, duration: "60" } },
+    { wk: "2026-08-24", dk: "mon", cat: "workout_leg", rec: { done: true } },
+  ]);
+  const b = monkStateFromRecords(before, "2026-08-24");
+  const a = monkStateFromRecords(after, "2026-08-24");
+  const d = monkRewardDelta({ rawXP: b.rawXP, displayXP: b.xp, lvl: b.lvl }, a);
+  assert.equal(d.earnedXP, 32 - 16);             // 既存分は数えない
+});
+
+test("reward: 同日2回目のWorkoutは2回目の増分だけ", () => {
+  const after1 = wrec([{ wk: "2026-08-24", dk: "mon",
+    cat: "workout_chest", rec: { done: true, duration: "60", rating: 4 } }]); // 30XP
+  const after2 = wrec([
+    { wk: "2026-08-24", dk: "mon", cat: "workout_chest", rec: { done: true, duration: "60", rating: 4 } },
+    { wk: "2026-08-24", dk: "mon", cat: "workout_leg", rec: { done: true, duration: "40" } }, // +18
+  ]);
+  const s1 = monkStateFromRecords(after1, "2026-08-24");
+  const s2 = monkStateFromRecords(after2, "2026-08-24");
+  const d = monkRewardDelta({ rawXP: s1.rawXP, displayXP: s1.xp, lvl: s1.lvl }, s2);
+  assert.equal(d.earnedXP, 18);
+});
+
+test("reward: decay中からのWorkoutはraw差分だけ(decay解除分を含めない)", () => {
+  // 30日前に大量のXP(raw100相当)。今日時点でdisplayはdecayで大きく減っている
+  const old = [];
+  for (let i = 0; i < 5; i++) old.push({ wk: "2026-07-27", dk: QUEST_DAY_KEYS[i],
+    cat: "workout_chest", rec: { done: true, duration: "50", rating: 0 } }); // 各20XP=100
+  const before = wrec(old);
+  const b = monkStateFromRecords(before, "2026-08-28");
+  assert.ok(b.xp < b.rawXP, "decayが効いている前提");
+  // 今日chestを1回(10XP)追加 → lastDoneが今日になりdisplayはraw110へ全回復
+  const after = wrec([...old, { wk: "2026-08-24", dk: "fri",
+    cat: "workout_leg", rec: { done: true } }]);
+  const a = monkStateFromRecords(after, "2026-08-28");
+  const d = monkRewardDelta({ rawXP: b.rawXP, displayXP: b.xp, lvl: b.lvl }, a);
+  assert.equal(d.earnedXP, 10);                  // 110-100。回復した表示XPは含めない
+});
+
+test("reward: decay解除でlevelが上がればleveledUp=true(earnedは小さいまま)", () => {
+  const old = [];
+  for (let i = 0; i < 5; i++) old.push({ wk: "2026-07-27", dk: QUEST_DAY_KEYS[i],
+    cat: "workout_chest", rec: { done: true, duration: "50", rating: 0 } });
+  const before = wrec(old);
+  const b = monkStateFromRecords(before, "2026-08-28");
+  const after = wrec([...old, { wk: "2026-08-24", dk: "fri",
+    cat: "workout_leg", rec: { done: true } }]);
+  const a = monkStateFromRecords(after, "2026-08-28");
+  assert.ok(a.lvl > b.lvl, `display復活でlvl上昇の前提: ${b.lvl}→${a.lvl}`);
+  const d = monkRewardDelta({ rawXP: b.rawXP, displayXP: b.xp, lvl: b.lvl }, a);
+  assert.equal(d.leveledUp, true);
+  assert.equal(d.earnedXP, 10);
+});
+
+test("reward: baselineなし(legacy session)はearnedXP=null", () => {
+  const a = monkStateFromRecords(wrec([{ wk: "2026-08-24", dk: "mon",
+    cat: "workout_chest", rec: { done: true } }]), "2026-08-24");
+  assert.deepEqual(monkRewardDelta(null, a), { earnedXP: null, leveledUp: false });
+  assert.deepEqual(monkRewardDelta({}, a), { earnedXP: null, leveledUp: false });
+});

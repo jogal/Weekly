@@ -289,6 +289,8 @@ export function proteinSummary(daily, todayKey, target = 105) {
 // ── Quest連携(表示専用ミラー) ────────────────────────────────────────────────
 // XP/レベルのsource of truthはtracker側(wt_records)。ここはtrackerと同一式を
 // 読み取り専用で再現し、完了リワードの表示にだけ使う。値の保存はしない。
+// ※TECH DEBT(Phase 8): この式はtracker.htmlと重複している。式を変更する場合は
+//   両方を同時に更新すること。Phase 8でquest rulesのshared pure module化を検討。
 export const QUEST_DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
 
 export function xpForQuestRecord(rec) {
@@ -340,6 +342,21 @@ export function monkStateFromRecords(records, todayKey) {
   }
   const lvl = questLevelFromXP(xp);
   return { rawXP: raw, xp, lvl, tier: questTierOf(lvl), lastDone };
+}
+
+// 完了リワードのdelta計算。baselineはWorkout開始時のsnapshot
+// {rawXP, displayXP, lvl}(sessionのoptional metadata)。
+// - earnedXPはraw XPの差分のみ: decay解除で表示XPが戻った分は「獲得」に含めない
+// - leveledUpは表示レベル(decay込み)の比較: 実際にLvが上がればtrue
+// - baselineがないlegacy sessionでは earnedXP:null(表示を省略させる)
+export function monkRewardDelta(baseline, after) {
+  if (!after || !baseline || typeof baseline.rawXP !== "number") {
+    return { earnedXP: null, leveledUp: false };
+  }
+  return {
+    earnedXP: Math.max(0, after.rawXP - baseline.rawXP),
+    leveledUp: typeof baseline.lvl === "number" && after.lvl > baseline.lvl,
+  };
 }
 
 // セッション中の入力プリフィル: 直前セット > 前回実績の1セット目 > null

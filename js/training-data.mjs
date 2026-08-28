@@ -2,7 +2,8 @@
 // 新キーはすべてversion付き。読み込みは常にdefaultへフォールバックし、
 // 旧データが無くても壊れない(additive / 後方互換最優先)。
 
-import { nextTemplateId, lastCompletedTemplateIdFrom, localDayKey } from "./training-core.mjs";
+import { nextTemplateId, lastCompletedTemplateIdFrom, localDayKey,
+         monkStateFromRecords } from "./training-core.mjs";
 
 export const K = {
   profile:   "gym_profile_v2",
@@ -99,9 +100,18 @@ export function startSession(templateId) {
   const act = sessions.find(s => s.status === "active");
   if (act) return act;
   const now = new Date();
+  // Monkリワードのdelta計算用snapshot(XPの二重管理ではない。source of truthは
+  // wt_recordsのまま)。既存記録・同日2回目・decayがあっても正確な差分が出せる
+  let rewardBaseline = null;
+  try {
+    const records = JSON.parse(localStorage.getItem("wt_records") || "{}");
+    const st = monkStateFromRecords(records, localDayKey(now));
+    rewardBaseline = { rawXP: st.rawXP, displayXP: st.xp, lvl: st.lvl };
+  } catch (e) { /* baselineはoptional */ }
   const s = {
     id: "ws_" + now.getTime(),
     date: localDayKey(now),
+    rewardBaseline,
     templateId,
     startedAt: now.toISOString(),
     completedAt: null,
