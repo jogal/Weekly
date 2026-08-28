@@ -770,15 +770,14 @@ function renderIdle(root){
   const nextId=TD.nextWorkoutTemplateId(program);
   const tpl=TD.templateById(program, nextId);
 
-  // 週間プランに基づく今日の位置づけ(なければ従来表示)
-  const saved=TD.loadWeeklyPlan();
+  // 週間プランに基づく今日の位置づけ。保存値を盲信せず、常に最新入力で
+  // 再計算した結果を使う(完了直後・override変更後もnextWorkoutと矛盾しない)
+  const {plan:curPlan}=getCurrentPlan();
   const todayKey=core.localDayKey(now);
-  let sub=`次は ${esc(tpl.name)}`;
-  if(saved && saved.weekKey===getWeekKey(now)){
-    const rec=(saved.recommendedDays||[]).find(r=>r.date===todayKey);
-    sub = rec ? `今日は ${esc("Workout "+rec.templateId)} の日`
-              : `今日はREST DAY予定（次は ${esc(tpl.name)}）`;
-  }
+  const rec=curPlan.recommendedDays.find(r=>r.date===todayKey);
+  const sub = rec ? `今日は ${esc("Workout "+rec.templateId)} の日`
+            : curPlan.remaining===0 ? `今週の目標は達成済み（次は ${esc(tpl.name)}）`
+            : `今日はREST DAY予定（次は ${esc(tpl.name)}）`;
   const head=el("div","card");
   head.appendChild(el("div","",`<div id="today-line">
     <span id="today-date">TODAY　${now.getMonth()+1}/${now.getDate()}(${wd})</span>
@@ -1072,15 +1071,28 @@ function currentPlanInput(){
     cycle:program.cycle,
   }};
 }
-function computeAndSavePlan(){
+// 入力のfingerprint。完了/中断・override変更・wt_schedules変更・日付変化の
+// いずれでも変わるので、保存済みプランのstale検出に使う
+function planFingerprint(input){
+  const s=JSON.stringify(input);
+  let h=5381;
+  for(let i=0;i<s.length;i++){ h=((h<<5)+h+s.charCodeAt(i))|0; }
+  return String(h);
+}
+// 常に最新入力でプランを決定論的に計算。fingerprintが変わった時だけ保存を更新
+function getCurrentPlan(){
   const {wk,dates,input}=currentPlanInput();
+  const fp=planFingerprint(input);
   const plan=generateWeeklyTrainingPlan(input);
-  TD.saveWeeklyPlan({weekKey:wk, generatedAt:new Date().toISOString(),
-    recommendedDays:plan.recommendedDays, reasons:plan.reasons});
+  const saved=TD.loadWeeklyPlan();
+  if(!saved || saved.weekKey!==wk || saved.fingerprint!==fp){
+    TD.saveWeeklyPlan({weekKey:wk, generatedAt:new Date().toISOString(), fingerprint:fp,
+      recommendedDays:plan.recommendedDays, reasons:plan.reasons});
+  }
   return {wk,dates,plan};
 }
 function renderPlan(root){
-  const {dates,plan}=computeAndSavePlan();
+  const {dates,plan}=getCurrentPlan();
   const today=core.localDayKey(new Date());
   const overrides=TD.loadOverrides();
   const card=el("div","card");
@@ -1119,7 +1131,7 @@ function renderPlan(root){
   const rcard=el("div","card");
   rcard.appendChild(el("p","card-title","REASON"));
   rcard.appendChild(el("div","plan-reasons",plan.reasons.map(esc).join("<br>")));
-  const re=el("button","ghost-btn","🔄 再提案");
+  const re=el("button","ghost-btn","🔄 再計算");
   re.style.marginTop="10px";
   re.onclick=()=>{ render(); showToast("プランを再計算しました"); };
   rcard.appendChild(re);
@@ -1161,6 +1173,18 @@ window.TrainingUI={
   exportV2: TD.exportV2,
   importV2: TD.importV2,
 };
+// アプリ復帰・他タブ(tracker等)でのデータ変更時にプラン表示を最新化。
+// セッション中の入力を消さないよう、TODAYはアイドル時のみ自動再描画する
+function refreshIfStale(){
+  if(tab==="plan"){ render(); return; }
+  if(tab==="workout" && !TD.activeSession()) render();
+}
+document.addEventListener("visibilitychange",()=>{ if(!document.hidden) refreshIfStale(); });
+window.addEventListener("pageshow",refreshIfStale);
+window.addEventListener("storage",e=>{
+  if(e.key && (e.key.startsWith("wt_")||e.key.startsWith("gym_"))) refreshIfStale();
+});
+
 if(tab==="workout") render();
 </script>
 </body>

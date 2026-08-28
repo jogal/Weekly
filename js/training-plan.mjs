@@ -23,6 +23,24 @@ function wdOf(dateKey) {
   return new Date(y, m - 1, d).getDay();
 }
 
+// イベントを{title, startMin, durMin}へ正規化。
+// {start,end}のISO日時形式も許容し(Phase4 GCal)、日マタギ(overnight)も
+// durationが正になるよう扱う。
+export function normalizeEvent(e) {
+  let startMin = e.startMin ?? null;
+  let durMin = null;
+  if (e.start) {
+    const st = new Date(e.start);
+    startMin = st.getHours() * 60 + st.getMinutes();
+    if (e.end) durMin = Math.max(0, (new Date(e.end) - st) / 60000);
+  } else if (e.startMin != null && e.endMin != null) {
+    durMin = e.endMin >= e.startMin
+      ? e.endMin - e.startMin
+      : e.endMin + 1440 - e.startMin;   // overnight (22:00→06:00 等)
+  }
+  return { title: e.title, startMin, durMin };
+}
+
 // ── 週間プラン生成 ────────────────────────────────────────────────────────────
 // dates: 週7日のlocal date key(月曜始まり) 例 ["2026-08-24",...]
 // events: {dateKey: [{title, startMin?, endMin?}]}
@@ -64,10 +82,10 @@ export function generateWeeklyTrainingPlan({
         info.status = "blocked"; info.notes.push("水曜(当直勤務があり得る日)");
       } else {
         if (ov === "maybe") { info.score -= 2; info.notes.push("△扱い"); }
-        evs.forEach(e => {
+        evs.map(normalizeEvent).forEach(e => {
           const c = classifyEventTitle(e.title);
           const evening = e.startMin != null && e.startMin >= 17 * 60;
-          const long = e.startMin != null && e.endMin != null && (e.endMin - e.startMin) >= 6 * 60;
+          const long = e.durMin != null && e.durMin >= 6 * 60;
           if (c === "soft") { info.score -= evening ? 2 : 1; info.notes.push("夜の予定"); }
           else if (c === "medium") { info.score -= 1; info.notes.push("予定あり"); }
           if (long) { info.score -= 2; info.notes.push("長時間の予定"); }
@@ -86,25 +104,33 @@ export function generateWeeklyTrainingPlan({
   let best = null;
   if (k > 0) {
     const idxOf = {}; dates.forEach((d, i) => idxOf[d] = i);
+    // 完了済みセッションも同じ時系列に固定要素として置き、回復制約
+    // (連続日数・D→Aの48h)を「完了済み↔提案」の境界にも適用する。
+    // ただしsoft penalty: 他に候補がなければ許容される
+    const fixed = dates
+      .filter(d => dayInfo[d].status === "done")
+      .map(d => ({ i: idxOf[d], templateId: doneByDate[d] }));
     for (const combo of combos(eligible, k)) {
       const days = combo.slice().sort();
       // サイクル順にテンプレートを割り当て(スキップしない)
       const start = Math.max(0, cycle.indexOf(nextWorkout));
       const assign = days.map((d, j) => ({ date: d, templateId: cycle[(start + j) % cycle.length] }));
       let score = days.reduce((a, d) => a + dayInfo[d].score, 0);
+      // 完了済み+提案を時系列マージしてパターンを評価
+      const seq = [...fixed, ...assign.map(a => ({ i: idxOf[a.date], templateId: a.templateId }))]
+        .sort((a, b) => a.i - b.i);
       // 連続日数ペナルティ: 3連続以降は1日ごとに-3。隣接自体は軽く-0.5
-      const di = days.map(d => idxOf[d]);
       let run = 1;
-      for (let j = 1; j < di.length; j++) {
-        if (di[j] === di[j - 1] + 1) {
+      for (let j = 1; j < seq.length; j++) {
+        if (seq[j].i === seq[j - 1].i + 1) {
           run++; score -= 0.5;
           if (run >= 3) score -= 3;
         } else run = 1;
       }
       // D→Aの連日は可能なら避ける(48h空ける)
-      for (let j = 1; j < assign.length; j++) {
-        if (di[j] === di[j - 1] + 1 &&
-            assign[j - 1].templateId === "D" && assign[j].templateId === "A") score -= 2;
+      for (let j = 1; j < seq.length; j++) {
+        if (seq[j].i === seq[j - 1].i + 1 &&
+            seq[j - 1].templateId === "D" && seq[j].templateId === "A") score -= 2;
       }
       if (!best || score > best.score) best = { score, assign };
     }

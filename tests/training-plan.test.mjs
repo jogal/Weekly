@@ -123,3 +123,71 @@ test("planner: 目標達成済みなら追加提案しない", () => {
   assert.equal(p.recommendedDays.length, 0);
   assert.ok(p.reasons.some(r => r.includes("達成済み")));
 });
+
+// ── Phase 3 hardening: 完了済み↔提案の境界に回復制約 ─────────────────────────
+import { normalizeEvent } from "../js/training-plan.mjs";
+
+test("recovery: completed D(木) → next A(金)を可能なら避ける", () => {
+  // 木曜D完了、残り1回。金・土・日が空き → 金(D翌日)を避けて土以降にA
+  const p = generateWeeklyTrainingPlan({ ...base, nextWorkout: "A", targetSessions: 4,
+    todayKey: FRI,
+    completedSessions: [
+      { date: MON, templateId: "B" }, { date: TUE, templateId: "C" },
+      { date: THU, templateId: "D" }],
+  });
+  assert.equal(p.recommendedDays.length, 1);
+  assert.equal(p.recommendedDays[0].templateId, "A");
+  assert.ok(p.recommendedDays[0].date >= SAT,
+    "D(木)翌日の金Aを避ける: " + JSON.stringify(p.recommendedDays));
+});
+
+test("recovery: completed Mon/Tue → 水曜availableでも3連続を可能なら避ける", () => {
+  // 月火完了、水は手動available、木金も空き → 3連続になる水を避けて木以降を選ぶ
+  const p = generateWeeklyTrainingPlan({ ...base, nextWorkout: "C", targetSessions: 3,
+    todayKey: WED,
+    manualOverrides: { [WED]: "available" },
+    completedSessions: [
+      { date: MON, templateId: "A" }, { date: TUE, templateId: "B" }],
+  });
+  assert.equal(p.recommendedDays.length, 1);
+  assert.ok(p.recommendedDays[0].date !== WED,
+    "月火完了後の水は3連続: " + JSON.stringify(p.recommendedDays));
+});
+
+test("recovery: 他に候補がなければsoft penaltyとして許容する", () => {
+  // 木曜D完了、金曜しか空きがない → 制約はsoftなので金曜Aを許容
+  const p = generateWeeklyTrainingPlan({ ...base, nextWorkout: "A", targetSessions: 4,
+    todayKey: FRI,
+    manualOverrides: { [SAT]: "blocked", [SUN]: "blocked" },
+    completedSessions: [
+      { date: MON, templateId: "B" }, { date: TUE, templateId: "C" },
+      { date: THU, templateId: "D" }],
+  });
+  assert.equal(p.recommendedDays.length, 1);
+  assert.equal(p.recommendedDays[0].date, FRI);
+  assert.equal(p.recommendedDays[0].templateId, "A");
+});
+
+// ── イベント正規化(overnight / ISO日時) ──────────────────────────────────────
+test("normalizeEvent: overnight(22:00→06:00)のdurationが正しく8時間になる", () => {
+  const e = normalizeEvent({ title: "当直", startMin: 22 * 60, endMin: 6 * 60 });
+  assert.equal(e.durMin, 8 * 60);
+});
+
+test("normalizeEvent: ISO start/end形式(日マタギ)も扱える", () => {
+  const e = normalizeEvent({ title: "夜勤",
+    start: new Date(2026, 7, 27, 21, 0).toISOString(),
+    end: new Date(2026, 7, 28, 7, 0).toISOString() });
+  assert.equal(e.startMin, 21 * 60);
+  assert.equal(e.durMin, 10 * 60);
+});
+
+test("normalizeEvent: 長時間overnightイベントが減点対象になる", () => {
+  // 木曜21:00〜翌7:00の(hardに該当しない)予定 → 長時間減点で他の日が優先される
+  const p = generateWeeklyTrainingPlan({ ...base, targetSessions: 1,
+    events: { [THU]: [{ title: "録画作業",
+      start: new Date(2026, 7, 27, 21, 0).toISOString(),
+      end: new Date(2026, 7, 28, 7, 0).toISOString() }] },
+    manualOverrides: { [MON]: "blocked", [TUE]: "blocked", [SAT]: "blocked", [SUN]: "blocked" } });
+  assert.equal(p.recommendedDays[0].date, FRI);
+});
