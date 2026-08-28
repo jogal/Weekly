@@ -73,10 +73,15 @@ export const DEFAULT_TEMPLATES = [
   ]},
 ];
 
+// DEFAULT_TEMPLATESは絶対にmutateさせない: fallback/resetは必ずdeep cloneを返す
+const deepClone = o => (typeof structuredClone === "function"
+  ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
+export function cloneDefaultTemplates() { return deepClone(DEFAULT_TEMPLATES); }
+
 export function loadProgram() {
   const p = rd(K.program, null);
   if (p && Array.isArray(p.templates) && p.templates.length) return p;
-  return { templates: DEFAULT_TEMPLATES, cycle: ["A", "B", "C", "D"] };
+  return { templates: cloneDefaultTemplates(), cycle: ["A", "B", "C", "D"] };
 }
 export function saveProgram(p) { wr(K.program, p); }
 export function templateById(program, id) {

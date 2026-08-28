@@ -344,6 +344,35 @@ export function monkStateFromRecords(records, todayKey) {
   return { rawXP: raw, xp, lvl, tier: questTierOf(lvl), lastDone };
 }
 
+// ── Template編集の不変条件(pure) ─────────────────────────────────────────────
+// slot IDは過去ログ(workoutTemplate+slot)を含めて絶対に再利用しない。
+// 再利用すると旧種目のgym_logsを新種目がprogression履歴として誤継承するため。
+// usedSlots: 現programの全slot + gym_logsに出現する全slot
+export function allocateSlotId(templateId, usedSlots) {
+  const used = new Set((usedSlots || []).filter(Boolean).map(String));
+  let mx = 0;
+  used.forEach(s => {
+    const m = s.match(new RegExp("^" + templateId + "(\\d+)$"));
+    if (m) mx = Math.max(mx, parseInt(m[1]));
+  });
+  let n = mx + 1;
+  while (used.has(templateId + n)) n++;
+  return templateId + n;
+}
+
+// ── 種目別履歴の比較(pure) ───────────────────────────────────────────────────
+// Δvolume/Δrepsのperformance比較はcompleted同士(legacy sessionStatus=nullは
+// 既存履歴として比較可能扱い)。active/abortedはラベル表示のみでdeltaを出さない
+export function compareSessions(last, prev) {
+  const label = s => s?.sessionStatus === "aborted" ? "中断"
+    : s?.sessionStatus === "active" ? "進行中" : null;
+  const comparable = s => s && (s.sessionStatus == null || s.sessionStatus === "completed");
+  const delta = (last && prev && comparable(last) && comparable(prev))
+    ? { vol: last.volume - prev.volume, reps: last.totalReps - prev.totalReps }
+    : null;
+  return { lastLabel: label(last), prevLabel: prev ? label(prev) : null, delta };
+}
+
 // 同一templateの直近completed sessionでのexercise pain flag。
 // Workout UIとAI Coach payloadの両方がこれを使い、pain判定を統一する
 export function lastSessionPainFlag(sessions, templateId, key) {

@@ -591,3 +591,55 @@ test("pain: AI payloadとWorkout UIは同一入力で同一target(同じ関数�
   assert.deepEqual(uiTarget, aiTarget);
   assert.equal(aiTarget.status, "hold_pain");
 });
+
+// ── Phase 8 final hardening: slot再利用禁止・比較ルール ──────────────────────
+import { allocateSlotId, compareSessions } from "../js/training-core.mjs";
+
+test("slot: 過去ログにA5があれば削除後の新規はA5を再利用しない", () => {
+  // programからA5は削除済みだがgym_logsにA5が残っている状況
+  const used = ["A1", "A2", "A3", "A4",          // 現programのslot
+                "A5"];                            // gym_logsに出現する削除済みslot
+  assert.equal(allocateSlotId("A", used), "A6");
+});
+
+test("slot: 連番の穴もmax+1で埋めない(常に未使用の新番号)", () => {
+  assert.equal(allocateSlotId("B", ["B1", "B3", "B7"]), "B8");
+  assert.equal(allocateSlotId("C", []), "C1");
+  assert.equal(allocateSlotId("D", ["D1", "Dx", "other"]), "D2");  // 非数値slotは無視
+});
+
+test("slot: 新slotの種目が旧slotの履歴を拾わない", () => {
+  const logs = [
+    { t: T(2026, 8, 20, 10, 0), ex: "トライセプスプレスダウン", part: "arm",
+      kg: 20, reps: 12, sessionId: "s1", workoutTemplate: "A", slot: "A5" },
+  ];
+  // A5を削除→新種目にA6が割当。A6での履歴照会は旧A5ログを継承しない
+  const h = sessionHistory(logs, "ケーブルキックバック", { slot: "A6" });
+  assert.deepEqual(h, []);
+});
+
+test("compare: completed同士(またはlegacy)はdeltaあり", () => {
+  const a = sess(50, [8, 8], { sessionStatus: "completed" });
+  const b2 = sess(50, [8, 8, 8], { sessionStatus: "completed" });
+  const c = compareSessions(b2, a);
+  assert.deepEqual(c.delta, { vol: 50 * 8, reps: 8 });
+  assert.equal(c.lastLabel, null);
+  // legacy(sessionStatus=null)も比較可能
+  assert.ok(compareSessions(sess(50, [8]), sess(50, [7])).delta);
+});
+
+test("compare: completed vs aborted → 中断表示・delta比較なし", () => {
+  const c = compareSessions(
+    sess(50, [8, 8, 8], { sessionStatus: "completed" }),
+    sess(50, [3], { sessionStatus: "aborted" }));
+  assert.equal(c.prevLabel, "中断");
+  assert.equal(c.delta, null);
+});
+
+test("compare: active → 進行中表示・deltaなし", () => {
+  const c = compareSessions(
+    sess(50, [8], { sessionStatus: "active" }),
+    sess(50, [8, 8, 8, 8], { sessionStatus: "completed" }));
+  assert.equal(c.lastLabel, "進行中");
+  assert.equal(c.delta, null);
+});
