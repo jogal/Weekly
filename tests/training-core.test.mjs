@@ -428,3 +428,47 @@ test("proteinSummary: 直近7日のavg/記録日数/90g以上日数/今日", () 
   assert.equal(s.todayG, 110);
   assert.equal(s.targetG, 105);
 });
+
+// ── Quest表示ミラー(Monkリワード) ────────────────────────────────────────────
+import { xpForQuestRecord, questLevelFromXP, questXpToReach, questTierOf,
+         monkStateFromRecords } from "../js/training-core.mjs";
+
+test("quest-mirror: xpForQuestRecordはtrackerと同一式", () => {
+  assert.equal(xpForQuestRecord(null), 0);
+  assert.equal(xpForQuestRecord({ done: false }), 0);
+  assert.equal(xpForQuestRecord({ done: true }), 10);
+  assert.equal(xpForQuestRecord({ done: true, duration: "60", rating: 4 }), 10 + 12 + 8);
+  assert.equal(xpForQuestRecord({ done: true, duration: "999", rating: 5 }), 10 + 20 + 10); // durationボーナス上限20
+});
+
+test("quest-mirror: レベル曲線50*(L-1)^1.6とtier境界", () => {
+  assert.equal(questXpToReach(1), 0);
+  assert.equal(questXpToReach(2), 50);
+  assert.equal(questLevelFromXP(0), 1);
+  assert.equal(questLevelFromXP(49), 1);
+  assert.equal(questLevelFromXP(50), 2);
+  assert.equal(questTierOf(9), 1);
+  assert.equal(questTierOf(10), 10);
+  assert.equal(questTierOf(39), 30);
+  assert.equal(questTierOf(40), 40);
+});
+
+test("quest-mirror: monkStateFromRecordsはworkout_*だけ合算し減衰も反映", () => {
+  const records = {
+    "2026-08-24": { mon: {
+      workout_chest: { done: true, duration: "60", rating: 0 },  // 10+12=22
+      workout_leg:   { done: true },                              // 10
+      medicine:      { done: true, duration: "60", rating: 5 },   // 筋トレ以外→無視
+    }}};
+  // 最終実施 8/24(月)。8/28なら猶予内で減衰なし
+  const s1 = monkStateFromRecords(records, "2026-08-28");
+  assert.equal(s1.rawXP, 32);
+  assert.equal(s1.xp, 32);
+  assert.equal(s1.lastDone, "2026-08-24");
+  // 10日後(idle=10, 猶予7日超過3日×8=24減)
+  const s2 = monkStateFromRecords(records, "2026-09-03");
+  assert.equal(s2.xp, 32 - 24);
+  // 減衰はrawを下回っても0未満にならない
+  const s3 = monkStateFromRecords(records, "2026-10-01");
+  assert.equal(s3.xp, 0);
+});

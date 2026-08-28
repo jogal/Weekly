@@ -286,6 +286,62 @@ export function proteinSummary(daily, todayKey, target = 105) {
   };
 }
 
+// ── Quest連携(表示専用ミラー) ────────────────────────────────────────────────
+// XP/レベルのsource of truthはtracker側(wt_records)。ここはtrackerと同一式を
+// 読み取り専用で再現し、完了リワードの表示にだけ使う。値の保存はしない。
+export const QUEST_DAY_KEYS = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+
+export function xpForQuestRecord(rec) {
+  if (!rec?.done) return 0;
+  let xp = 10;
+  if (rec.duration) xp += Math.min(20, Math.floor((parseInt(rec.duration) || 0) / 5));
+  if (rec.rating) xp += rec.rating * 2;
+  return xp;
+}
+export function questXpToReach(level) {
+  if (level <= 1) return 0;
+  return Math.round(50 * Math.pow(level - 1, 1.6));
+}
+export function questLevelFromXP(totalXP) {
+  let lvl = 1;
+  while (totalXP >= questXpToReach(lvl + 1)) lvl++;
+  return lvl;
+}
+export function questTierOf(lvl) {
+  return lvl >= 40 ? 40 : lvl >= 30 ? 30 : lvl >= 20 ? 20 : lvl >= 10 ? 10 : 1;
+}
+
+// wt_recordsから筋トレトラック(全workout_*合算)の状態を導出。
+// 減衰(7日猶予後8XP/日)もtrackerと同一式で反映する
+export function monkStateFromRecords(records, todayKey) {
+  let raw = 0;
+  let lastDone = null;   // dateKey
+  Object.entries(records || {}).forEach(([wk, week]) => {
+    QUEST_DAY_KEYS.forEach((dk, di) => {
+      const day = week?.[dk];
+      if (!day) return;
+      Object.entries(day).forEach(([catId, rec]) => {
+        if (!catId.startsWith("workout_")) return;
+        raw += xpForQuestRecord(rec);
+        if (rec?.done) {
+          const [y, m, d] = wk.split("-").map(Number);
+          const dt = new Date(y, m - 1, d + di);
+          const key = localDayKey(dt);
+          if (!lastDone || key > lastDone) lastDone = key;
+        }
+      });
+    });
+  });
+  let xp = raw;
+  if (lastDone && raw > 0 && todayKey) {
+    const idle = Math.round((new Date(todayKey + "T12:00:00") - new Date(lastDone + "T12:00:00")) / 86400000);
+    const decayDays = Math.max(0, idle - 7);
+    xp = Math.max(0, raw - Math.min(raw, decayDays * 8));
+  }
+  const lvl = questLevelFromXP(xp);
+  return { rawXP: raw, xp, lvl, tier: questTierOf(lvl), lastDone };
+}
+
 // セッション中の入力プリフィル: 直前セット > 前回実績の1セット目 > null
 export function prefillFor(sessionSets, previous) {
   if (sessionSets && sessionSets.length) {

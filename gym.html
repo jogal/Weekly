@@ -221,6 +221,9 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 .bc-unit { font-size:11px; color:var(--faint); }
 .bc-trend { font-size:11px; color:var(--dim); margin-top:6px; line-height:1.6; }
 .bc-trend.warn { color:var(--bolt); }
+/* 完了リワードのモンクスプライト(2コマシートのフレーム1をクリップ表示) */
+.mk-clip { display:block; overflow:hidden; margin:6px auto; }
+.mk-img { display:block; height:110px; width:auto; image-rendering:pixelated; }
 .done-big { text-align:center; font-family:var(--cond); font-size:24px; font-weight:700;
   letter-spacing:.3em; color:var(--bolt); margin:18px 0 6px; }
 .done-sub { text-align:center; font-size:12px; color:var(--dim); margin-bottom:14px; }
@@ -902,11 +905,29 @@ function buildBodyCard(todayKey){
   return card;
 }
 
-// 完了リワードカード(spec#20: RPGは前面に出しすぎず、完了時だけ)
+// 完了リワードカード(spec#20: RPGは前面に出しすぎず、完了時だけ)。
+// 既存Monkスプライト(tier該当)とtracker式のXP/レベルを再利用する
 function renderCompleteCard(root){
   const c=justCompleted;
   const card=el("div","card");
   card.appendChild(el("div","done-big","WORKOUT COMPLETE"));
+  if(c.monk){
+    if(c.monk.leveledUp){
+      const lu=el("div","done-big","★ LEVEL UP ★");
+      lu.style.fontSize="16px"; lu.style.margin="0 0 4px";
+      card.appendChild(lu);
+    }
+    const clip=el("span","mk-clip");
+    const img=el("img","mk-img");
+    img.alt="モンク";
+    img.onload=()=>{ clip.style.width=(img.width/2)+"px"; clip.style.margin="0 auto"; };
+    img.onerror=()=>{ clip.style.display="none"; };
+    img.src=`sprites/monk_lv${c.monk.tier}x2.png`;
+    clip.appendChild(img);
+    card.appendChild(clip);
+    card.appendChild(el("div","done-sub",
+      `MONK <b style="color:var(--bolt)">+${c.monk.gained} XP</b>　Lv.${c.monk.lvl}`));
+  }
   card.appendChild(el("div","done-sub",
     `${esc(c.name)}　${c.sets}セット / ${c.volume}kg挙上　→ 週クエ反映済み<br>Next: ${esc(c.nextName)}`));
   root.appendChild(card);
@@ -1105,8 +1126,22 @@ function doFinish(sess, tpl, difficulty, all){
   TD.finishSession(sess.id, difficulty);
   const program=TD.loadProgram();
   const nextName=TD.templateById(program, TD.nextWorkoutTemplateId(program)).name;
+  // Monkリワード(表示専用・source of truthはwt_records)。
+  // このセッションで触れた部位の今日ぶんレコードXPを「獲得」として表示し、
+  // レベル/ティアはtracker同一式のミラーで導出する
+  let monk=null;
+  try{
+    const records=JSON.parse(localStorage.getItem("wt_records")||"{}");
+    const todayK=core.localDayKey(new Date());
+    const wk=getWeekKey(new Date()), dk=dayKeyOf(new Date());
+    const parts=[...new Set(all.map(l=>l.part))];
+    const gained=parts.reduce((a,p)=>a+core.xpForQuestRecord(records?.[wk]?.[dk]?.["workout_"+p]),0);
+    const after=core.monkStateFromRecords(records, todayK);
+    const lvlBefore=core.questLevelFromXP(Math.max(0, after.xp-gained));
+    monk={ gained, lvl:after.lvl, tier:after.tier, leveledUp:after.lvl>lvlBefore };
+  }catch(e){ /* 表示のみの機能なので失敗しても完了処理は続行 */ }
   justCompleted={ name:tpl.name, sets:all.length,
-    volume:all.reduce((a,l)=>a+(l.kg||0)*l.reps,0), nextName };
+    volume:all.reduce((a,l)=>a+(l.kg||0)*l.reps,0), nextName, monk };
   showToast("🏆 "+tpl.name+" 完了!(週クエ反映済み)");
   render();
 }
