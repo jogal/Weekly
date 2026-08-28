@@ -197,12 +197,99 @@ test("overload: 履歴なし → first_time(数値目標を出さない)", () =>
   assert.equal(t.weight, null);
 });
 
-test("overload: ドロップセット(重量不均一)は増量条件を満たさない", () => {
-  const h = [{ ...sess(16, [12, 10, 10]), sets: [
-    { kg: 16, reps: 12 }, { kg: 16, reps: 10 }, { kg: 14, reps: 10 }] }];
-  const t = getNextExerciseTarget({ targetSets: 3, repMin: 8, repMax: 12, increment: 1, history: h });
+// mixed-load summary生成ヘルパ(sessionHistoryが返す形)
+const mixed = (pairs, extra = {}) => {
+  const sets = pairs.map(([kg, reps]) => ({ kg, reps }));
+  const primaryWeight = sets[0].kg;
+  const primarySets = sets.filter(s => s.kg === primaryWeight);
+  return {
+    day: "2026-08-24", sessionId: null, sessionStatus: null, sets,
+    firstWorkingWeight: primaryWeight, maxWeight: Math.max(...sets.map(s => s.kg)),
+    totalReps: sets.reduce((a, s) => a + s.reps, 0),
+    volume: sets.reduce((a, s) => a + s.kg * s.reps, 0),
+    primaryWeight, primarySets,
+    primaryTotalReps: primarySets.reduce((a, s) => a + s.reps, 0),
+    backoffSets: sets.filter(s => s.kg !== primaryWeight), ...extra,
+  };
+};
+
+test("overload: mixed load — backoff(14kg)のrepsをprimary(16kg)のprogressに数えない", () => {
+  // primary 16kg×12,10 = 22回。backoff 14kg×10 は無視 → 目標は22+2=24(合計32ではない)
+  const h = [mixed([[16, 12], [16, 10], [14, 10]])];
+  const t = getNextExerciseTarget({ targetSets: 2, repMin: 8, repMax: 12, increment: 1, history: h });
   assert.equal(t.status, "progress_reps");
-  assert.equal(t.weight, 16);                    // firstWorkingWeight基準
+  assert.equal(t.weight, 16);
+  assert.equal(t.targetTotalReps, 24);           // 22+2。32+2=34にならない
+});
+
+test("overload: mixed loadでprimaryセットが予定数未満なら増量もrep進行もしない", () => {
+  const h = [mixed([[16, 12], [16, 10], [14, 10]])];
+  const t = getNextExerciseTarget({ targetSets: 3, repMin: 8, repMax: 12, increment: 1, history: h });
+  assert.equal(t.status, "incomplete_prev");
+  assert.equal(t.weight, 16);
+});
+
+test("overload: incomplete 2/4セット → progressionを進めず4セットやり切る目標", () => {
+  const t = getNextExerciseTarget({ ...ARGS, history: [sess(50, [8, 8])] });
+  assert.equal(t.status, "incomplete_prev");
+  assert.equal(t.weight, 50);
+  assert.equal(t.suggestedSetTargets.length, 4);
+  assert.equal(t.targetTotalReps,
+    t.suggestedSetTargets.reduce((a, b) => a + b, 0));   // 合計不変条件
+  assert.deepEqual(t.suggestedSetTargets, [8, 8, 6, 6]); // 不足はrepMin埋め・+2しない
+});
+
+test("overload: aborted sessionはprogression基準にしない", () => {
+  const h = [
+    sess(50, [8, 8, 8, 8], { sessionStatus: "completed" }),
+    sess(50, [5], { sessionStatus: "aborted" }),          // 中断(1セットで終了)
+  ];
+  const t = getNextExerciseTarget({ ...ARGS, history: h });
+  assert.equal(t.status, "progress_reps");                // abortedを無視して前回完了が基準
+  assert.equal(t.targetTotalReps, 34);                    // 32+2
+});
+
+test("overload: increment 2kgのダンベル種目", () => {
+  const t = getNextExerciseTarget({ targetSets: 3, repMin: 8, repMax: 12, increment: 2,
+    history: [sess(16, [12, 12, 12])] });
+  assert.equal(t.status, "increase_weight");
+  assert.equal(t.weight, 18);
+});
+
+test("overload: 全ステータスで targetTotalReps === sum(suggestedSetTargets)", () => {
+  const cases = [
+    { ...ARGS, history: [sess(50, [8, 8, 6, 5])] },                      // progress
+    { ...ARGS, history: [sess(50, [10, 10, 10, 10])] },                  // increase
+    { ...ARGS, history: [sess(50, [8, 8])] },                            // incomplete
+    { ...ARGS, pain: true, history: [sess(50, [10, 10, 10, 10])] },      // hold_pain
+    { ...ARGS, history: [sess(50, [8,8,8,8]), sess(50, [7,7,6,6]), sess(50, [6,6,6,5])] }, // plateau
+    { targetSets: 2, repMin: 8, repMax: 12, increment: 1,
+      history: [mixed([[16, 12], [16, 10], [14, 10]])] },                // mixed
+  ];
+  cases.forEach(c => {
+    const t = getNextExerciseTarget(c);
+    assert.equal(t.targetTotalReps, t.suggestedSetTargets.reduce((a, b) => a + b, 0),
+      "invariant broken for status " + t.status);
+  });
+});
+
+test("sessionHistory: slotted logsが存在したらlegacyを混ぜない", () => {
+  const logs = [
+    { t: T(2026, 8, 20, 10, 0), ex: "ベンチプレス", part: "chest", kg: 47.5, reps: 10 },  // legacy
+    { t: T(2026, 8, 24, 10, 0), ex: "ベンチプレス", part: "chest", kg: 50, reps: 8, sessionId: "s1", slot: "A1" },
+  ];
+  const h = sessionHistory(logs, "ベンチプレス", { slot: "A1", limit: 10 });
+  assert.equal(h.length, 1);                     // legacy日は含まれない
+  assert.equal(h[0].sets[0].kg, 50);
+});
+
+test("sessionHistory: sessions渡しでsessionStatusが付く", () => {
+  const logs = [
+    { t: T(2026, 8, 24, 10, 0), ex: "ベンチプレス", part: "chest", kg: 50, reps: 5, sessionId: "sX", slot: "A1" },
+  ];
+  const sessions = [{ id: "sX", templateId: "A", status: "aborted" }];
+  const h = sessionHistory(logs, "ベンチプレス", { slot: "A1", sessions });
+  assert.equal(h[0].sessionStatus, "aborted");
 });
 
 test("overload: 上限到達済みの合計はcapで頭打ち", () => {

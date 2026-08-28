@@ -42,16 +42,28 @@ export function isStaleSession(session, todayKey) {
 // - opts.beforeISO: それより前のログだけを見る(進行中セッションの自セット除外)
 // - opts.slot: template slot ID(例 "A1")。指定時はslot一致を優先しつつ、
 //   slotを持たないlegacyログは種目名一致で対象に含める(後方互換)。
+// opts.slot: slot付きログが1件でも存在すればslot一致だけを見る。まだ存在しない
+//            場合のみslotなしlegacyログ(種目名一致)へfallbackする(恒久混在させない)
+// opts.sessions: gym_sessions_v2配列。渡すと各summaryにsessionStatusが付く
 export function sessionHistory(logs, exercise, opts = {}) {
-  const { beforeISO = null, slot = null, limit = 3 } = opts;
-  const match = l => {
-    if (beforeISO && l.t >= beforeISO) return false;
-    if (slot) return l.slot === slot || (!l.slot && l.ex === exercise);
-    return l.ex === exercise;
-  };
-  const hits = logs.filter(match).sort((a, b) => a.t < b.t ? -1 : 1);
+  const { beforeISO = null, slot = null, limit = 3, sessions = null } = opts;
+  const inTime = l => !beforeISO || l.t < beforeISO;
+  let hits;
+  if (slot) {
+    const slotted = logs.filter(l => l.slot === slot && inTime(l));
+    hits = slotted.length ? slotted
+         : logs.filter(l => !l.slot && l.ex === exercise && inTime(l));
+  } else {
+    hits = logs.filter(l => l.ex === exercise && inTime(l));
+  }
+  hits = hits.slice().sort((a, b) => a.t < b.t ? -1 : 1);
   if (!hits.length) return [];
 
+  const statusOf = id => {
+    if (!id || !sessions) return null;
+    const s = sessions.find(x => x.id === id);
+    return s ? s.status : null;
+  };
   const keyOf = l => l.sessionId ? "s:" + l.sessionId : "d:" + localDayKey(l.t);
   const groups = [];   // 出現順(=時系列)にグループ化
   const byKey = {};
@@ -62,14 +74,24 @@ export function sessionHistory(logs, exercise, opts = {}) {
   });
   return groups.slice(-limit).map(group => {
     const sets = group.map(l => ({ kg: l.kg || 0, reps: l.reps }));
+    // primary working weight = 最初のセットの重量。ドロップセット(途中で軽くした
+    // バックオフ)のrepsをprogressionに数えないため、primary/backoffを分けて派生。
+    const primaryWeight = sets[0].kg;
+    const primarySets = sets.filter(s => s.kg === primaryWeight);
+    const backoffSets = sets.filter(s => s.kg !== primaryWeight);
     return {
       day: localDayKey(group[group.length - 1].t),
       sessionId: group[0].sessionId || null,
-      sets,                                      // lossless: ドロップセット保持
-      firstWorkingWeight: sets[0].kg,
+      sessionStatus: statusOf(group[0].sessionId),
+      sets,                                      // lossless: 全セット保持
+      firstWorkingWeight: primaryWeight,
       maxWeight: Math.max(...sets.map(s => s.kg)),
       totalReps: sets.reduce((a, s) => a + s.reps, 0),
       volume: sets.reduce((a, s) => a + s.kg * s.reps, 0),
+      primaryWeight,
+      primarySets,
+      primaryTotalReps: primarySets.reduce((a, s) => a + s.reps, 0),
+      backoffSets,
     };
   });
 }
@@ -91,67 +113,76 @@ export function lastSessionSets(logs, exercise, opts = {}) {
 //   勝手にdeloadしない)
 // - pain=true → いかなる場合も増量しない(維持目標)。医療判断はしない
 export function getNextExerciseTarget({ history, targetSets, repMin, repMax, increment, pain = false }) {
-  if (!history || !history.length) {
-    return {
-      status: "first_time", weight: null,
-      targetTotalReps: null, suggestedSetTargets: null,
-      reason: `初回。フォームが保てる重量で${repMin}〜${repMax}回×${targetSets}セットを探る`,
-    };
-  }
-  const last = history[history.length - 1];
-  const w = last.firstWorkingWeight;
-  const uniform = last.sets.every(s => s.kg === w);
-  const hitTop = uniform && last.sets.length >= targetSets &&
-    last.sets.slice(0, targetSets).every(s => s.reps >= repMax);
+  // 中断(aborted)セッションはprogressionの基準にしない(履歴表示には残る)
+  const usable = (history || []).filter(h => h.sessionStatus !== "aborted");
+  const firstTime = {
+    status: "first_time", weight: null,
+    targetTotalReps: null, suggestedSetTargets: null,
+    reason: `初回。フォームが保てる重量で${repMin}〜${repMax}回×${targetSets}セットを探る`,
+  };
+  if (!usable.length) return firstTime;
 
+  const last = usable[usable.length - 1];
+  const primary = primaryOf(last);
+  const w = primary.weight;
+  // 戻り値の不変条件: targetTotalReps === sum(suggestedSetTargets)
+  const finish = (status, weight, arr, reason) => ({
+    status, weight,
+    targetTotalReps: arr.reduce((a, b) => a + b, 0),
+    suggestedSetTargets: arr, reason,
+  });
+
+  // 前回が予定セット数未満(primaryセット基準) → progressionを進めず、まずやり切る
+  if (primary.sets.length < targetSets) {
+    const arr = setTargetsFrom(primary.sets, targetSets, repMin, repMax, 0);
+    return finish("incomplete_prev", w, arr,
+      `前回は${primary.sets.length}/${targetSets}セット。${fmtWt(w)}でまず${targetSets}セットをやり切る`);
+  }
+  const hitTop = primary.sets.slice(0, targetSets).every(s => s.reps >= repMax);
   if (hitTop && !pain) {
     const nw = Math.round((w + increment) * 10) / 10;
-    return {
-      status: "increase_weight", weight: nw,
-      targetTotalReps: targetSets * repMin,
-      suggestedSetTargets: Array(targetSets).fill(repMin),
-      reason: `前回${fmtWt(w)}で全セット${repMax}回到達 → +${increment}kg。${repMin}回×${targetSets}セットから再構築`,
-    };
+    return finish("increase_weight", nw, Array(targetSets).fill(repMin),
+      `前回${fmtWt(w)}で全セット${repMax}回到達 → +${increment}kg。${repMin}回×${targetSets}セットから再構築`);
   }
   if (pain) {
-    return {
-      status: "hold_pain", weight: w,
-      targetTotalReps: last.totalReps,
-      suggestedSetTargets: setTargetsFrom(last, targetSets, repMin, repMax, last.totalReps),
-      reason: "痛みの報告があるため増量を止め、前回と同等を維持。悪化するなら中止を",
-    };
+    const arr = setTargetsFrom(primary.sets, targetSets, repMin, repMax, 0);
+    return finish("hold_pain", w, arr,
+      "痛みの報告があるため増量を止め、前回と同等を維持。悪化するなら中止を");
   }
-  // 同一重量で2回連続の明確な低下 → plateau
-  if (history.length >= 3) {
-    const [a, b, c] = history.slice(-3);
-    if (a.firstWorkingWeight === w && b.firstWorkingWeight === w &&
-        b.totalReps < a.totalReps && c.totalReps < b.totalReps) {
-      return {
-        status: "plateau", weight: w,
-        targetTotalReps: last.totalReps,
-        suggestedSetTargets: setTargetsFrom(last, targetSets, repMin, repMax, last.totalReps),
-        reason: "2回連続でパフォーマンス低下。重量・volumeを増やさず、睡眠と食事の回復を優先",
-      };
+  // 同一primary重量で2回連続の明確な低下 → plateau(重量維持・volume増やさない)
+  if (usable.length >= 3) {
+    const [a, b, c] = usable.slice(-3).map(h => ({ p: primaryOf(h) }));
+    if (a.p.weight === w && b.p.weight === w &&
+        b.p.total < a.p.total && c.p.total < b.p.total) {
+      const arr = setTargetsFrom(primary.sets, targetSets, repMin, repMax, 0);
+      return finish("plateau", w, arr,
+        "2回連続でパフォーマンス低下。重量・volumeを増やさず、睡眠と食事の回復を優先");
     }
   }
   const cap = targetSets * repMax;
-  const target = Math.min(last.totalReps + 2, cap);
-  return {
-    status: "progress_reps", weight: w,
-    targetTotalReps: target,
-    suggestedSetTargets: setTargetsFrom(last, targetSets, repMin, repMax, target),
-    reason: `${fmtWt(w)}を維持し、計${last.totalReps}回 → ${target}回以上を狙う`,
-  };
+  const target = Math.min(primary.total + 2, cap);
+  const arr = setTargetsFrom(primary.sets, targetSets, repMin, repMax, target);
+  return finish("progress_reps", w, arr,
+    `${fmtWt(w)}を維持し、計${primary.total}回 → ${target}回以上を狙う`);
+}
+
+// summaryからprimary working weightのセット群を取り出す。
+// 古いsummary(primarySetsなし)にも対応(先頭セット重量で自前derive)。
+function primaryOf(h) {
+  const sets = h.primarySets ?? h.sets.filter(s => s.kg === h.sets[0].kg);
+  const weight = h.primaryWeight ?? h.sets[0].kg;
+  return { weight, sets, total: sets.reduce((a, s) => a + s.reps, 0) };
 }
 
 function fmtWt(w) { return w === 0 ? "自重" : w + "kg"; }
 
-// 前回の各セットrepsを土台に、合計がtargetTotalになるよう先頭セットから+1ずつ
-// 配分する(上限repMax)。前回よりセット数が少なければrepMinで埋める。
-function setTargetsFrom(last, targetSets, repMin, repMax, targetTotal) {
+// 前回のprimaryセットrepsを土台にtargetSets本の目標rep配列を作る。
+// 足りないセットはrepMinで埋め、targetTotalに届くまで先頭から+1ずつ(上限repMax)。
+// targetTotal=0なら配分だけ(維持目標)。
+function setTargetsFrom(prevSets, targetSets, repMin, repMax, targetTotal) {
   const base = [];
   for (let i = 0; i < targetSets; i++) {
-    const r = last.sets[i] ? last.sets[i].reps : repMin;
+    const r = prevSets[i] ? prevSets[i].reps : repMin;
     base.push(Math.min(Math.max(r, 1), repMax));
   }
   let sum = base.reduce((a, b) => a + b, 0);

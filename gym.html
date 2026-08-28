@@ -307,11 +307,17 @@ function persist(){
   localStorage.setItem("gym_stepkg", JSON.stringify(stepPref));
 }
 
-// 種目ごとの重量の刻み。マシン都合で1kg単位の種目はここで切替(ラットプルは初期値1kg)
-const STEP_CYCLE=[2.5,1];
+// 種目ごとの重量の刻み。gym_stepkgの保存値が常に最優先(後方互換)。
+// デフォルト: バーベル系2.5 / ダンベル系2 / マシン・ケーブル系1。トグルで一巡できる。
+const STEP_CYCLE=[2.5,2,1,0.5,5];
+function defaultStepOf(ex){
+  if(/ラットプル|ケーブル|マシン|プレスダウン|クランチ|レッグカール|レッグプレス/.test(ex)) return 1;
+  if(/ダンベル|カール|レイズ|エクステンション/.test(ex)) return 2;
+  return 2.5;
+}
 function stepOf(ex){
   if(stepPref[ex]!==undefined)return stepPref[ex];
-  return ex==="ラットプルダウン" ? 1 : 2.5;
+  return defaultStepOf(ex);
 }
 
 // 選択種目の前回値を kg/reps に反映(ズボラ: 前回のままなら⚡を押すだけ)
@@ -765,7 +771,7 @@ function renderIdle(root){
   // NEXT EXERCISE: 最初の種目の前回実績と今日の目標(spec#8)
   const first=tpl.exercises[0];
   if(first){
-    const hist=core.sessionHistory(logs, first.ex, {slot:first.slot});
+    const hist=core.sessionHistory(logs, first.ex, {slot:first.slot, sessions:TD.loadSessions()});
     const prev=hist.length? hist[hist.length-1] : null;
     const tgt=core.getNextExerciseTarget({history:hist, targetSets:first.sets,
       repMin:first.repMin, repMax:first.repMax, increment:stepOf(first.ex)});
@@ -801,10 +807,18 @@ function renderActive(root, sess){
   const i=Math.min(Math.max(sess.curEx||0,0), n-1);
   const exDef=tpl.exercises[i];
   const part=PART_MAP[exDef.part]||{label:exDef.part,color:"#999"};
-  const hist=core.sessionHistory(logs, exDef.ex, {beforeISO:sess.startedAt, slot:exDef.slot});
+  const allSessions=TD.loadSessions();
+  const hist=core.sessionHistory(logs, exDef.ex,
+    {beforeISO:sess.startedAt, slot:exDef.slot, sessions:allSessions});
   const prev=hist.length? hist[hist.length-1] : null;
+  const painKey=exDef.slot||exDef.ex;
+  const painNow=!!(sess.pain&&sess.pain[painKey]);
+  // 前回完了セッション(同template)で痛みが付いていた場合も増量を止める
+  const doneSess=allSessions.filter(s=>s.status==="completed"&&s.templateId===sess.templateId);
+  const prevPain=!!(doneSess.length&&doneSess[doneSess.length-1].pain&&doneSess[doneSess.length-1].pain[painKey]);
   const tgt=core.getNextExerciseTarget({history:hist, targetSets:exDef.sets,
-    repMin:exDef.repMin, repMax:exDef.repMax, increment:stepOf(exDef.ex)});
+    repMin:exDef.repMin, repMax:exDef.repMax, increment:stepOf(exDef.ex),
+    pain: painNow||prevPain});
   const done=sessionSetsOf(sess, exDef.ex);
   // プリフィル: エンジンの提案(増量時は新重量+目標rep) > 直前セット > 前回
   let pre=core.prefillFor(done, prev) || {kg:0, reps:10};
@@ -821,9 +835,23 @@ function renderActive(root, sess){
   root.appendChild(head);
 
   const card=el("div","card"); card.id="input-card";
-  card.appendChild(el("div","wo-head",
-    `<span style="font-size:16px;font-weight:600">${esc(exDef.ex)}</span>
-     <span style="font-size:10px;color:${part.color};border:1px solid currentColor;padding:2px 9px;letter-spacing:.14em">${part.label}</span>`));
+  const headRow=el("div","wo-head",
+    `<span style="font-size:16px;font-weight:600">${esc(exDef.ex)}</span>`);
+  const headR=el("span","");
+  // 痛みトグル(任意入力・診断はしない)。ONでこの種目の増量提案を停止
+  const painBtn=el("button","mini-btn","⚠ 痛み");
+  if(painNow){ painBtn.style.color="#EF5350"; painBtn.style.borderColor="#EF5350"; }
+  painBtn.onclick=()=>{
+    const p={...(sess.pain||{})};
+    if(painNow) delete p[painKey]; else p[painKey]=true;
+    TD.updateSession(sess.id,{pain:p});
+    render();
+  };
+  headR.appendChild(painBtn);
+  headR.appendChild(el("span","",
+    `<span style="font-size:10px;color:${part.color};border:1px solid currentColor;padding:2px 9px;letter-spacing:.14em;margin-left:8px">${part.label}</span>`));
+  headRow.appendChild(headR);
+  card.appendChild(headRow);
   card.appendChild(el("div","wo-target",`TARGET　${exDef.sets}セット × ${exDef.repMin}–${exDef.repMax}回`));
   card.appendChild(el("div","wo-prev-line",`前回　<b>${fmtPrev(prev)}</b>`));
   // 今日の目標(progressive overload engineの決定 + 短い理由)
