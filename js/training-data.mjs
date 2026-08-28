@@ -129,6 +129,19 @@ export function abortSession(id) {
   return updateSession(id, { status: "aborted", completedAt: new Date().toISOString() });
 }
 
+// ── Weekly plan / manual overrides ───────────────────────────────────────────
+// overrides: {dateKey: "available"|"maybe"|"blocked"}。保存時に2週間より古いkeyを整理
+export function loadOverrides() { return rd(K.overrides, {}); }
+export function saveOverrides(o) {
+  const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - 14);
+  const cut = localDayKey(cutoff);
+  const pruned = {};
+  Object.keys(o).forEach(k => { if (k >= cut) pruned[k] = o[k]; });
+  wr(K.overrides, pruned);
+}
+export function loadWeeklyPlan() { return rd(K.weeklyPlan, null); }
+export function saveWeeklyPlan(p) { wr(K.weeklyPlan, p); }
+
 // ── Export/Import 用 ─────────────────────────────────────────────────────────
 export function exportV2() {
   const out = {};

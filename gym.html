@@ -193,6 +193,24 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 .diff-btn { display:block; width:100%; min-height:50px; font-size:14px; cursor:pointer;
   background:var(--panel2); border:1px solid var(--line); color:var(--txt);
   margin-bottom:10px; }
+/* PLAN tab */
+.plan-row { display:flex; align-items:center; gap:10px; padding:10px 4px;
+  border-bottom:1px solid var(--line); cursor:pointer; min-height:48px; }
+.plan-row:last-child { border-bottom:none; }
+.plan-day { width:58px; font-family:var(--cond); letter-spacing:.08em; font-size:14px;
+  flex-shrink:0; }
+.plan-day .pd-date { color:var(--faint); font-size:10px; display:block; }
+.plan-chip { font-family:var(--cond); font-weight:700; font-size:14px;
+  letter-spacing:.14em; padding:4px 12px; border:1px solid var(--line);
+  color:var(--faint); flex-shrink:0; min-width:56px; text-align:center; }
+.plan-chip.rec { border-color:var(--bolt); color:var(--bolt); background:rgba(255,179,0,.08); }
+.plan-chip.done { border-color:var(--green); color:var(--green); }
+.plan-chip.blocked { color:#EF5350; border-color:#4a2626; }
+.plan-note { flex:1; text-align:right; font-size:10px; color:var(--faint);
+  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.plan-ov { font-size:10px; padding:2px 7px; border:1px solid var(--line);
+  color:var(--dim); letter-spacing:.06em; flex-shrink:0; }
+.plan-reasons { font-size:11px; color:var(--dim); line-height:1.7; margin-top:10px; }
 .done-big { text-align:center; font-family:var(--cond); font-size:24px; font-weight:700;
   letter-spacing:.3em; color:var(--bolt); margin:18px 0 6px; }
 .done-sub { text-align:center; font-size:12px; color:var(--dim); margin-bottom:14px; }
@@ -231,6 +249,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   <div id="content"></div>
   <div id="tabbar">
     <button class="tab-btn active" data-tab="workout"><span class="tab-ico">🏋</span>TODAY</button>
+    <button class="tab-btn" data-tab="plan"><span class="tab-ico">🗓</span>PLAN</button>
     <button class="tab-btn" data-tab="today"><span class="tab-ico">⚡</span>きろく</button>
     <button class="tab-btn" data-tab="history"><span class="tab-ico">📜</span>履歴</button>
   </div>
@@ -620,14 +639,21 @@ function render(){
   const root=document.getElementById("content");
   root.innerHTML="";
   if(tab==="workout") renderWorkout(root);
+  else if(tab==="plan") renderPlanTab(root);
   else if(tab==="today") renderToday(root);
   else renderHistory(root);
 }
-// TODAY(Workout mode)のDOMはmoduleスクリプト側で組む。読み込み前はプレースホルダ。
+// TODAY/PLANのDOMはmoduleスクリプト側で組む。読み込み前はプレースホルダ。
 function renderWorkout(root){
   if(window.TrainingUI){ window.TrainingUI.render(root); return; }
   const c=el("div","card");
   c.appendChild(el("div","empty-note","読み込み中…（オフライン初回はきろくタブを使ってね）"));
+  root.appendChild(c);
+}
+function renderPlanTab(root){
+  if(window.TrainingUI){ window.TrainingUI.renderPlan(root); return; }
+  const c=el("div","card");
+  c.appendChild(el("div","empty-note","読み込み中…"));
   root.appendChild(c);
 }
 document.getElementById("tabbar").addEventListener("click",e=>{
@@ -706,6 +732,7 @@ render();
 // PART_MAP, stepOf, delSet, render)を利用する。既存きろくタブとは独立に動く。
 import * as core from "./js/training-core.mjs";
 import * as TD from "./js/training-data.mjs";
+import { generateWeeklyTrainingPlan } from "./js/training-plan.mjs";
 
 let justCompleted = null;  // 完了直後のリワード表示用(遷移すると消える一時状態)
 let staleResumeAck = null; // 前日以前のactive sessionを「再開する」と明示したid
@@ -743,10 +770,19 @@ function renderIdle(root){
   const nextId=TD.nextWorkoutTemplateId(program);
   const tpl=TD.templateById(program, nextId);
 
+  // 週間プランに基づく今日の位置づけ(なければ従来表示)
+  const saved=TD.loadWeeklyPlan();
+  const todayKey=core.localDayKey(now);
+  let sub=`次は ${esc(tpl.name)}`;
+  if(saved && saved.weekKey===getWeekKey(now)){
+    const rec=(saved.recommendedDays||[]).find(r=>r.date===todayKey);
+    sub = rec ? `今日は ${esc("Workout "+rec.templateId)} の日`
+              : `今日はREST DAY予定（次は ${esc(tpl.name)}）`;
+  }
   const head=el("div","card");
   head.appendChild(el("div","",`<div id="today-line">
     <span id="today-date">TODAY　${now.getMonth()+1}/${now.getDate()}(${wd})</span>
-    <span id="today-sub">次は ${esc(tpl.name)}</span></div>`));
+    <span id="today-sub">${sub}</span></div>`));
   root.appendChild(head);
 
   if(justCompleted){ renderCompleteCard(root); }
@@ -998,6 +1034,99 @@ function doFinish(sess, tpl, difficulty, all){
   render();
 }
 
+// ── PLAN(週間プランナー) ──────────────────────────────────────────────────────
+const WD_JP=["日","月","火","水","木","金","土"];
+function timeToMinP(t){ const[h,m]=String(t).split(":").map(Number); return h*60+(m||0); }
+function weekDatesOf(wk){
+  const [y,m,d]=wk.split("-").map(Number);
+  return Array.from({length:7},(_,i)=>core.localDayKey(new Date(y,m-1,d+i)));
+}
+// 今週のプラン入力をtracker(wt_schedules)・sessions・overridesから組み立てる
+function currentPlanInput(){
+  const wk=getWeekKey(new Date());
+  const dates=weekDatesOf(wk);
+  let sched={}; try{ sched=JSON.parse(localStorage.getItem("wt_schedules")||"{}"); }catch(e){}
+  const wkSched=sched[wk]||{};
+  const events={};
+  DAY_KEYS.forEach((dk,i)=>{
+    (wkSched[dk]||[]).forEach(e=>{
+      const ev={title:e.label||e.cat||""};
+      if(e.time){ ev.startMin=timeToMinP(e.time);
+        ev.endMin=e.endTime? timeToMinP(e.endTime): null; }
+      (events[dates[i]]=events[dates[i]]||[]).push(ev);
+    });
+  });
+  const sessions=TD.loadSessions();
+  const program=TD.loadProgram();
+  const profile=TD.loadProfile();
+  return { wk, dates, input:{
+    dates, events,
+    manualOverrides:TD.loadOverrides(),
+    completedSessions:sessions
+      .filter(s=>s.status==="completed"&&dates.includes(s.date))
+      .map(s=>({date:s.date,templateId:s.templateId})),
+    nextWorkout:TD.nextWorkoutTemplateId(program),
+    targetSessions:profile.weeklyWorkoutTarget,
+    todayKey:core.localDayKey(new Date()),
+    defaultWednesdayBlocked:profile.defaultWednesdayBlocked,
+    cycle:program.cycle,
+  }};
+}
+function computeAndSavePlan(){
+  const {wk,dates,input}=currentPlanInput();
+  const plan=generateWeeklyTrainingPlan(input);
+  TD.saveWeeklyPlan({weekKey:wk, generatedAt:new Date().toISOString(),
+    recommendedDays:plan.recommendedDays, reasons:plan.reasons});
+  return {wk,dates,plan};
+}
+function renderPlan(root){
+  const {dates,plan}=computeAndSavePlan();
+  const today=core.localDayKey(new Date());
+  const overrides=TD.loadOverrides();
+  const card=el("div","card");
+  card.appendChild(el("p","card-title","🗓 今週のトレーニングプラン"));
+  dates.forEach(d=>{
+    const info=plan.dayInfo[d];
+    const wd=WD_JP[new Date(d+"T12:00:00").getDay()];
+    const row=el("div","plan-row");
+    if(d===today) row.style.background="rgba(255,179,0,.04)";
+    row.appendChild(el("span","plan-day",
+      `${wd}<span class="pd-date">${parseInt(d.slice(5,7))}/${parseInt(d.slice(8,10))}${d===today?"・今日":""}</span>`));
+    let chip, cls="";
+    if(info.status==="done"){ chip="済 "+(info.templateId||""); cls="done"; }
+    else if(info.recommended){ chip=info.templateId; cls="rec"; }
+    else if(info.status==="blocked"){ chip="✕"; cls="blocked"; }
+    else if(info.status==="past"){ chip="－"; }
+    else chip="REST";
+    row.appendChild(el("span","plan-chip"+(cls?" "+cls:""),chip));
+    row.appendChild(el("span","plan-note",esc(info.notes[0]||"")));
+    const ov=overrides[d];
+    row.appendChild(el("span","plan-ov",
+      ov==="available"?"✅可":ov==="maybe"?"△":ov==="blocked"?"⛔不可":"自動"));
+    // タップで AVAILABLE → MAYBE → BLOCKED → 自動 を巡回(手動が常に自動判定より優先)
+    row.onclick=()=>{
+      const cur=overrides[d]||null;
+      const next=cur===null?"available":cur==="available"?"maybe":cur==="maybe"?"blocked":null;
+      const o={...overrides};
+      if(next===null) delete o[d]; else o[d]=next;
+      TD.saveOverrides(o);
+      render();
+    };
+    card.appendChild(row);
+  });
+  root.appendChild(card);
+
+  const rcard=el("div","card");
+  rcard.appendChild(el("p","card-title","REASON"));
+  rcard.appendChild(el("div","plan-reasons",plan.reasons.map(esc).join("<br>")));
+  const re=el("button","ghost-btn","🔄 再提案");
+  re.style.marginTop="10px";
+  re.onclick=()=>{ render(); showToast("プランを再計算しました"); };
+  rcard.appendChild(re);
+  rcard.appendChild(el("div","wo-progress","日をタップ: 可→△→不可→自動。手動指定は自動判定より優先"));
+  root.appendChild(rcard);
+}
+
 // ── 前日以前のactive session: 再開 / 中断 を選ばせる ─────────────────────────
 function renderStale(root, sess){
   const program=TD.loadProgram();
@@ -1028,6 +1157,7 @@ window.TrainingUI={
     }
     renderActive(root, sess);
   },
+  renderPlan,
   exportV2: TD.exportV2,
   importV2: TD.importV2,
 };

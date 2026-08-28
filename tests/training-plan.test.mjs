@@ -1,0 +1,125 @@
+// node --test tests/training-plan.test.mjs (依存なし・node:test)
+process.env.TZ = "Asia/Tokyo";
+
+import test from "node:test";
+import assert from "node:assert/strict";
+import { generateWeeklyTrainingPlan, classifyEventTitle } from "../js/training-plan.mjs";
+
+// 2026-08-24(月) 〜 2026-08-30(日)
+const DATES = ["2026-08-24", "2026-08-25", "2026-08-26", "2026-08-27",
+               "2026-08-28", "2026-08-29", "2026-08-30"];
+const [MON, TUE, WED, THU, FRI, SAT, SUN] = DATES;
+const base = { dates: DATES, nextWorkout: "A", targetSessions: 4 };
+
+test("classify: hard/soft/medium/null", () => {
+  assert.equal(classifyEventTitle("当直"), "hard");
+  assert.equal(classifyEventTitle("on call"), "hard");
+  assert.equal(classifyEventTitle("会食"), "soft");
+  assert.equal(classifyEventTitle("学会"), "medium");
+  assert.equal(classifyEventTitle("ジム"), null);         // 曖昧ならblockしない
+});
+
+test("planner: Wednesday on-call → 水曜を選ばない", () => {
+  const p = generateWeeklyTrainingPlan({ ...base,
+    events: { [WED]: [{ title: "当直" }] } });
+  assert.ok(!p.recommendedDays.some(r => r.date === WED));
+  assert.equal(p.dayInfo[WED].status, "blocked");
+});
+
+test("planner: 水曜はイベントなしでもdefault BLOCKED", () => {
+  const p = generateWeeklyTrainingPlan({ ...base });
+  assert.equal(p.dayInfo[WED].status, "blocked");
+  assert.ok(!p.recommendedDays.some(r => r.date === WED));
+});
+
+test("planner: 4 free days → 4 sessions・cycle順", () => {
+  // 月火のみ自由、木金も自由、他ブロック
+  const p = generateWeeklyTrainingPlan({ ...base,
+    manualOverrides: { [SAT]: "blocked", [SUN]: "blocked" } });
+  assert.equal(p.recommendedDays.length, 4);
+  assert.deepEqual(p.recommendedDays.map(r => r.templateId), ["A", "B", "C", "D"]);
+});
+
+test("planner: 3 free daysなら3 sessions・cycleを飛ばさない", () => {
+  const p = generateWeeklyTrainingPlan({ ...base, nextWorkout: "C",
+    manualOverrides: { [MON]: "blocked", [TUE]: "blocked", [SAT]: "blocked", [SUN]: "blocked" } });
+  // 空きは木金のみ+…水曜default blockedなので木・金の2日 → 2 sessions
+  assert.equal(p.recommendedDays.length, 2);
+  assert.deepEqual(p.recommendedDays.map(r => r.templateId), ["C", "D"]);  // Cから継続
+});
+
+test("planner: 5日空いていても4回まで", () => {
+  const p = generateWeeklyTrainingPlan({ ...base });
+  assert.equal(p.recommendedDays.length, 4);
+});
+
+test("planner: manual BLOCKED は必ず除外", () => {
+  const p = generateWeeklyTrainingPlan({ ...base,
+    manualOverrides: { [MON]: "blocked", [TUE]: "blocked", [THU]: "blocked" } });
+  [MON, TUE, THU].forEach(d =>
+    assert.ok(!p.recommendedDays.some(r => r.date === d), d + " should be excluded"));
+});
+
+test("planner: manual AVAILABLE は自動ペナルティ(水曜default)より優先", () => {
+  const p = generateWeeklyTrainingPlan({ ...base,
+    manualOverrides: { [WED]: "available",
+      [MON]: "blocked", [TUE]: "blocked", [FRI]: "blocked", [SAT]: "blocked", [SUN]: "blocked" } });
+  // 空きは水・木のみ → 水曜が使われる
+  assert.ok(p.recommendedDays.some(r => r.date === WED));
+});
+
+test("planner: D→Aの連日を可能なら避ける", () => {
+  // nextWorkout=D、残り2回。金土日のみ空き → D(金)+A(土)よりD(金)+A(日)が高スコア
+  const p = generateWeeklyTrainingPlan({ ...base, nextWorkout: "D", targetSessions: 2,
+    manualOverrides: { [MON]: "blocked", [TUE]: "blocked", [THU]: "blocked" } });
+  assert.equal(p.recommendedDays.length, 2);
+  assert.equal(p.recommendedDays[0].templateId, "D");
+  assert.equal(p.recommendedDays[1].templateId, "A");
+  const [d1, d2] = p.recommendedDays.map(r => DATES.indexOf(r.date));
+  assert.ok(d2 - d1 >= 2, "D→Aは48h空けるべき: " + JSON.stringify(p.recommendedDays));
+});
+
+test("planner: 完了済みセッションは残り回数から差し引く", () => {
+  const p = generateWeeklyTrainingPlan({ ...base, nextWorkout: "C", todayKey: WED,
+    completedSessions: [{ date: MON, templateId: "A" }, { date: TUE, templateId: "B" }] });
+  assert.equal(p.remaining, 2);
+  assert.equal(p.recommendedDays.length, 2);
+  assert.deepEqual(p.recommendedDays.map(r => r.templateId), ["C", "D"]);
+  assert.equal(p.dayInfo[MON].status, "done");
+  // 過去日は候補にならない
+  assert.ok(p.recommendedDays.every(r => r.date >= WED));
+});
+
+test("planner: 夜の飲み会は低優先(他に空きがあれば避ける)", () => {
+  // 木曜夜に会食。残り1回、木・金が空き → 金を選ぶ
+  const p = generateWeeklyTrainingPlan({ ...base, targetSessions: 1,
+    events: { [THU]: [{ title: "会食", startMin: 19 * 60, endMin: 21 * 60 }] },
+    manualOverrides: { [MON]: "blocked", [TUE]: "blocked", [SAT]: "blocked", [SUN]: "blocked" } });
+  assert.equal(p.recommendedDays.length, 1);
+  assert.equal(p.recommendedDays[0].date, FRI);
+  // hard blockではないので、他に空きがなければ選ばれる
+  const p2 = generateWeeklyTrainingPlan({ ...base, targetSessions: 1,
+    events: { [THU]: [{ title: "会食", startMin: 19 * 60, endMin: 21 * 60 }] },
+    manualOverrides: { [MON]: "blocked", [TUE]: "blocked", [FRI]: "blocked", [SAT]: "blocked", [SUN]: "blocked" } });
+  assert.equal(p2.recommendedDays[0].date, THU);
+});
+
+test("planner: 3連続日を可能なら避ける", () => {
+  // 月火木金土日空き(水block)、4回 → 月火木金 or 月火金土等。木金土の3連続を含む案より
+  // 分散した案が選ばれる(3連続run無し)
+  const p = generateWeeklyTrainingPlan({ ...base });
+  const idx = p.recommendedDays.map(r => DATES.indexOf(r.date));
+  let run = 1, maxRun = 1;
+  for (let i = 1; i < idx.length; i++) {
+    run = idx[i] === idx[i - 1] + 1 ? run + 1 : 1;
+    maxRun = Math.max(maxRun, run);
+  }
+  assert.ok(maxRun <= 2, "3連続を避ける: " + JSON.stringify(p.recommendedDays));
+});
+
+test("planner: 目標達成済みなら追加提案しない", () => {
+  const p = generateWeeklyTrainingPlan({ ...base, targetSessions: 2,
+    completedSessions: [{ date: MON, templateId: "A" }, { date: TUE, templateId: "B" }] });
+  assert.equal(p.recommendedDays.length, 0);
+  assert.ok(p.reasons.some(r => r.includes("達成済み")));
+});
