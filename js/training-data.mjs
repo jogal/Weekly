@@ -2,7 +2,7 @@
 // 新キーはすべてversion付き。読み込みは常にdefaultへフォールバックし、
 // 旧データが無くても壊れない(additive / 後方互換最優先)。
 
-import { nextTemplateId } from "./training-core.mjs";
+import { nextTemplateId, lastCompletedTemplateIdFrom, localDayKey } from "./training-core.mjs";
 
 export const K = {
   profile:   "gym_profile_v2",
@@ -36,36 +36,36 @@ export function saveProfile(p) { wr(K.profile, p); }
 // part は既存の部位ID(chest/back/shoulder/arm/leg/core) = wt_records の workout_<part>。
 export const DEFAULT_TEMPLATES = [
   { id: "A", name: "Workout A", focus: "胸・肩・三頭", exercises: [
-    { ex: "ベンチプレス",             part: "chest",    sets: 4, repMin: 6,  repMax: 10 },
-    { ex: "インクラインダンベルプレス", part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "ケーブルフライ",           part: "chest",    sets: 3, repMin: 10, repMax: 15 },
-    { ex: "サイドレイズ",             part: "shoulder", sets: 4, repMin: 12, repMax: 20 },
-    { ex: "トライセプスプレスダウン",   part: "arm",      sets: 3, repMin: 8,  repMax: 15 },
+    { ex: "ベンチプレス",             slot: "A1", part: "chest",    sets: 4, repMin: 6,  repMax: 10 },
+    { ex: "インクラインダンベルプレス", slot: "A2", part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
+    { ex: "ケーブルフライ",           slot: "A3", part: "chest",    sets: 3, repMin: 10, repMax: 15 },
+    { ex: "サイドレイズ",             slot: "A4", part: "shoulder", sets: 4, repMin: 12, repMax: 20 },
+    { ex: "トライセプスプレスダウン",   slot: "A5", part: "arm",      sets: 3, repMin: 8,  repMax: 15 },
   ]},
   { id: "B", name: "Workout B", focus: "背中・二頭", exercises: [
-    { ex: "ラットプルダウン",         part: "back",     sets: 4, repMin: 6,  repMax: 12 },
-    { ex: "チェストサポーテッドロウ",   part: "back",     sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "ケーブルロウ",             part: "back",     sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "リアレイズ",               part: "shoulder", sets: 3, repMin: 12, repMax: 20 },
-    { ex: "アームカール",             part: "arm",      sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "ハンマーカール",           part: "arm",      sets: 2, repMin: 10, repMax: 15 },
+    { ex: "ラットプルダウン",         slot: "B1", part: "back",     sets: 4, repMin: 6,  repMax: 12 },
+    { ex: "チェストサポーテッドロウ",   slot: "B2", part: "back",     sets: 3, repMin: 8,  repMax: 12 },
+    { ex: "ケーブルロウ",             slot: "B3", part: "back",     sets: 3, repMin: 8,  repMax: 12 },
+    { ex: "リアレイズ",               slot: "B4", part: "shoulder", sets: 3, repMin: 12, repMax: 20 },
+    { ex: "アームカール",             slot: "B5", part: "arm",      sets: 3, repMin: 8,  repMax: 12 },
+    { ex: "ハンマーカール",           slot: "B6", part: "arm",      sets: 2, repMin: 10, repMax: 15 },
   ]},
   { id: "C", name: "Workout C", focus: "脚・腹", exercises: [
-    { ex: "スクワット",               part: "leg",      sets: 4, repMin: 6,  repMax: 10 },
-    { ex: "ルーマニアンデッドリフト",   part: "leg",      sets: 3, repMin: 6,  repMax: 10 },
-    { ex: "ブルガリアンスクワット",     part: "leg",      sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "レッグカール",             part: "leg",      sets: 3, repMin: 10, repMax: 15 },
-    { ex: "カーフレイズ",             part: "leg",      sets: 4, repMin: 10, repMax: 20 },
-    { ex: "ケーブルクランチ",         part: "core",     sets: 3, repMin: 8,  repMax: 15 },
+    { ex: "スクワット",               slot: "C1", part: "leg",      sets: 4, repMin: 6,  repMax: 10 },
+    { ex: "ルーマニアンデッドリフト",   slot: "C2", part: "leg",      sets: 3, repMin: 6,  repMax: 10 },
+    { ex: "ブルガリアンスクワット",     slot: "C3", part: "leg",      sets: 3, repMin: 8,  repMax: 12 },
+    { ex: "レッグカール",             slot: "C4", part: "leg",      sets: 3, repMin: 10, repMax: 15 },
+    { ex: "カーフレイズ",             slot: "C5", part: "leg",      sets: 4, repMin: 10, repMax: 20 },
+    { ex: "ケーブルクランチ",         slot: "C6", part: "core",     sets: 3, repMin: 8,  repMax: 15 },
   ]},
   { id: "D", name: "Workout D", focus: "上胸・肩・腕", exercises: [
-    { ex: "インクラインダンベルプレス", part: "chest",    sets: 3, repMin: 6,  repMax: 10 },
-    { ex: "マシンチェストプレス",       part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "ローハイケーブルフライ",     part: "chest",    sets: 2, repMin: 10, repMax: 15 },
-    { ex: "サイドレイズ",             part: "shoulder", sets: 4, repMin: 12, repMax: 20 },
-    { ex: "リアレイズ",               part: "shoulder", sets: 3, repMin: 12, repMax: 20 },
-    { ex: "オーバーヘッドエクステンション", part: "arm",  sets: 3, repMin: 10, repMax: 15 },
-    { ex: "アームカール",             part: "arm",      sets: 3, repMin: 8,  repMax: 12 },
+    { ex: "インクラインダンベルプレス", slot: "D1", part: "chest",    sets: 3, repMin: 6,  repMax: 10 },
+    { ex: "マシンチェストプレス",       slot: "D2", part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
+    { ex: "ローハイケーブルフライ",     slot: "D3", part: "chest",    sets: 2, repMin: 10, repMax: 15 },
+    { ex: "サイドレイズ",             slot: "D4", part: "shoulder", sets: 4, repMin: 12, repMax: 20 },
+    { ex: "リアレイズ",               slot: "D5", part: "shoulder", sets: 3, repMin: 12, repMax: 20 },
+    { ex: "オーバーヘッドエクステンション", slot: "D6", part: "arm",  sets: 3, repMin: 10, repMax: 15 },
+    { ex: "アームカール",             slot: "D7", part: "arm",      sets: 3, repMin: 8,  repMax: 12 },
   ]},
 ];
 
@@ -88,8 +88,7 @@ export function activeSession() {
   return loadSessions().find(s => s.status === "active") || null;
 }
 export function lastCompletedTemplateId() {
-  const done = loadSessions().filter(s => s.status === "completed");
-  return done.length ? done[done.length - 1].templateId : null;
+  return lastCompletedTemplateIdFrom(loadSessions());
 }
 export function nextWorkoutTemplateId(program) {
   return nextTemplateId(lastCompletedTemplateId(), program.cycle);
@@ -100,10 +99,9 @@ export function startSession(templateId) {
   const act = sessions.find(s => s.status === "active");
   if (act) return act;
   const now = new Date();
-  const pad = n => String(n).padStart(2, "0");
   const s = {
     id: "ws_" + now.getTime(),
-    date: `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`,
+    date: localDayKey(now),
     templateId,
     startedAt: now.toISOString(),
     completedAt: null,

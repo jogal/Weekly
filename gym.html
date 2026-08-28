@@ -363,21 +363,27 @@ function syncQuest(part, dateObj){
 }
 
 // ── 記録・削除 ────────────────────────────────────────────────────────────────
-// meta: Workout mode用のoptional fields {sessionId, workoutTemplate, setNumber}
+// セット保存の唯一の入口。既存きろくタブとWorkout modeの両方がここを通る。
+// meta: Workout mode用のoptional fields {sessionId, workoutTemplate, setNumber, slot}
 // 既存ログにこれらが無くても全機能が正常動作する(後方互換)。
-function addSet(meta){
+function saveSet(ex, part, kgV, repsV, meta){
   const now=new Date();
-  const entry={t:now.toISOString(), ex:sel.ex, part:sel.part, kg, reps};
+  const entry={t:now.toISOString(), ex, part, kg:kgV, reps:repsV};
   if(meta && meta.sessionId){
     entry.sessionId=meta.sessionId;
     entry.workoutTemplate=meta.workoutTemplate;
     entry.setNumber=meta.setNumber;
+    if(meta.slot) entry.slot=meta.slot;
   }
   logs.push(entry);
-  lastEx[sel.ex]={kg,reps};
-  syncQuest(sel.part, now);
+  lastEx[ex]={kg:kgV, reps:repsV};
+  syncQuest(part, now);
   persist();
   flash();
+  return entry;
+}
+function addSet(meta){
+  saveSet(sel.ex, sel.part, kg, reps, meta);
   showToast("⚡ "+sel.ex+" "+fmtKg(kg)+"×"+reps+" 記録!(週クエ反映)");
   render();
 }
@@ -696,16 +702,12 @@ import * as core from "./js/training-core.mjs";
 import * as TD from "./js/training-data.mjs";
 
 let justCompleted = null;  // 完了直後のリワード表示用(遷移すると消える一時状態)
+let staleResumeAck = null; // 前日以前のactive sessionを「再開する」と明示したid
 
-// Workoutセッションからのセット記録。既存gym_logs形式+optional fieldsで書く。
+// Workoutセッションからのセット記録。保存は既存きろくタブと同じsaveSet()一本。
 function logWorkoutSet(exDef, wKg, wReps, sess, setNumber){
-  const now=new Date();
-  logs.push({t:now.toISOString(), ex:exDef.ex, part:exDef.part, kg:wKg, reps:wReps,
-             sessionId:sess.id, workoutTemplate:sess.templateId, setNumber});
-  lastEx[exDef.ex]={kg:wKg, reps:wReps};
-  syncQuest(exDef.part, now);
-  persist();
-  flash();
+  saveSet(exDef.ex, exDef.part, wKg, wReps,
+    {sessionId:sess.id, workoutTemplate:sess.templateId, setNumber, slot:exDef.slot});
 }
 
 function sessionSetsOf(sess, ex){
@@ -714,9 +716,17 @@ function sessionSetsOf(sess, ex){
 function sessionAllSets(sess){
   return logs.filter(l=>l.sessionId===sess.id);
 }
+function fmtW(kgV){ return kgV===0 ? "自重" : kgV+"kg"; }
+// 前回表示: 全セット同重量なら「50kg 8/8/6/5」、重量が動いていたら「16kg×12 14kg×10」
+function fmtPrevShort(p){
+  if(!p) return "初回";
+  const uniform=p.sets.every(s=>s.kg===p.sets[0].kg);
+  if(uniform) return `${fmtW(p.sets[0].kg)}×${p.sets.map(s=>s.reps).join("/")}`;
+  return p.sets.map(s=>`${fmtW(s.kg)}×${s.reps}`).join(" ");
+}
 function fmtPrev(p){
   if(!p) return "初回（前回記録なし）";
-  return `${p.kg===0?"自重":p.kg+"kg"}　${p.reps.join(" / ")}　計${p.totalReps}回`;
+  return `${fmtPrevShort(p)}　計${p.totalReps}回`;
 }
 
 // ── 開始前画面 ────────────────────────────────────────────────────────────────
@@ -740,10 +750,10 @@ function renderIdle(root){
     `<span class="wo-name">${esc(tpl.name)}</span><span class="wo-focus">${esc(tpl.focus)}</span>`));
   const list=el("div","");
   tpl.exercises.forEach(e=>{
-    const prev=core.lastSessionSets(logs, e.ex);
+    const prev=core.lastSessionSets(logs, e.ex, {slot:e.slot});
     list.appendChild(el("div","wo-exrow",
       `<span>${esc(e.ex)} <span class="wo-progress">${e.sets}×${e.repMin}-${e.repMax}</span></span>
-       <span class="prev">${prev? `前回 ${prev.kg===0?"自重":prev.kg+"kg"}×${prev.reps.join("/")}` : "初回"}</span>`));
+       <span class="prev">${prev? "前回 "+esc(fmtPrevShort(prev)) : "初回"}</span>`));
   });
   card.appendChild(list);
   const start=el("button","bolt-btn","⚡ START WORKOUT");
@@ -771,7 +781,7 @@ function renderActive(root, sess){
   const i=Math.min(Math.max(sess.curEx||0,0), n-1);
   const exDef=tpl.exercises[i];
   const part=PART_MAP[exDef.part]||{label:exDef.part,color:"#999"};
-  const prev=core.lastSessionSets(logs, exDef.ex, sess.startedAt);
+  const prev=core.lastSessionSets(logs, exDef.ex, {beforeISO:sess.startedAt, slot:exDef.slot});
   const done=sessionSetsOf(sess, exDef.ex);
   const pre=core.prefillFor(done, prev) || {kg:0, reps:10};
 
@@ -819,13 +829,14 @@ function renderActive(root, sess){
   updR();
   card.appendChild(rRow);
 
-  // ワンタップ: 前回と同じ / 前回+1rep
+  // ワンタップ: 前回と同じ / 前回+1rep（対応する前回セット=同じセット番号を参照）
   if(prev){
+    const ref=prev.sets[Math.min(done.length, prev.sets.length-1)];
     const chips=el("div","wo-chips");
-    const c1=el("button","wo-chip",`前回と同じ（${prev.kg===0?"自重":prev.kg+"kg"}×${prev.reps[Math.min(done.length,prev.reps.length-1)]}）`);
-    c1.onclick=()=>{ wKg=prev.kg; wReps=prev.reps[Math.min(done.length,prev.reps.length-1)]; updK(); updR(); };
+    const c1=el("button","wo-chip",`前回と同じ（${fmtW(ref.kg)}×${ref.reps}）`);
+    c1.onclick=()=>{ wKg=ref.kg; wReps=ref.reps; updK(); updR(); };
     const c2=el("button","wo-chip","前回 +1回");
-    c2.onclick=()=>{ wKg=prev.kg; wReps=(prev.reps[Math.min(done.length,prev.reps.length-1)]||10)+1; updK(); updR(); };
+    c2.onclick=()=>{ wKg=ref.kg; wReps=ref.reps+1; updK(); updR(); };
     chips.appendChild(c1); chips.appendChild(c2);
     card.appendChild(chips);
   }
@@ -868,16 +879,36 @@ function renderActive(root, sess){
 }
 
 // ── 終了フロー(難易度3択のみ・セット毎RIRは要求しない) ────────────────────────
+// 予定セット数に明らかに満たない終了は確認を挟み、誤操作でサイクルが
+// 進まないように「中断(サイクルを進めない)」も選べるようにする。
 function openFinish(sess, tpl){
   const all=sessionAllSets(sess);
+  const planned=tpl.exercises.reduce((a,e)=>a+e.sets,0);
+  const under = all.length>0 && all.length < Math.ceil(planned*0.5);
   const ov=el("div","overlay");
   const box=el("div","modal-box");
   box.appendChild(el("h3","modal-title","今日のワークアウトはどうだった？"));
+  if(under){
+    box.appendChild(el("p","modal-sub",
+      `⚠ まだ ${all.length}/${planned} セット。完了するとサイクルが ${esc(tpl.id)}→次へ進みます。途中でやめる場合は「中断」を選んでください。`))
+      .style.cssText="font-size:12px;color:var(--dim);margin:0 0 12px";
+  }
   [["easy","😎 楽だった"],["good","💪 ちょうど良い"],["hard","🥵 キツかった"]].forEach(([v,label])=>{
     const b=el("button","diff-btn",label);
     b.onclick=()=>{ document.body.removeChild(ov); doFinish(sess, tpl, v, all); };
     box.appendChild(b);
   });
+  if(all.length){
+    const ab=el("button","diff-btn","🛑 中断する（記録は残す・サイクルは進めない）");
+    ab.style.color="var(--dim)";
+    ab.onclick=()=>{
+      document.body.removeChild(ov);
+      TD.abortSession(sess.id);
+      showToast("中断しました（次回も同じWorkoutから）");
+      render();
+    };
+    box.appendChild(ab);
+  }
   const cancel=el("button","ghost-btn", all.length? "まだ続ける" : "セット0のまま破棄");
   cancel.onclick=()=>{
     document.body.removeChild(ov);
@@ -898,12 +929,35 @@ function doFinish(sess, tpl, difficulty, all){
   render();
 }
 
+// ── 前日以前のactive session: 再開 / 中断 を選ばせる ─────────────────────────
+function renderStale(root, sess){
+  const program=TD.loadProgram();
+  const tpl=TD.templateById(program, sess.templateId);
+  const all=sessionAllSets(sess);
+  const card=el("div","card");
+  card.appendChild(el("p","card-title","⚠ 終了されていないワークアウト"));
+  card.appendChild(el("div","done-sub",
+    `${esc(sess.date)}　${esc(tpl.name)}　${all.length}セット記録済み`));
+  const res=el("button","bolt-btn","▶ 再開する");
+  res.onclick=()=>{ staleResumeAck=sess.id; render(); };
+  card.appendChild(res);
+  const ab=el("button","ghost-btn","🛑 中断として記録（記録は残す・サイクルは進めない）");
+  ab.style.marginTop="8px";
+  ab.onclick=()=>{ TD.abortSession(sess.id); render(); };
+  card.appendChild(ab);
+  root.appendChild(card);
+}
+
 // ── エントリポイント ──────────────────────────────────────────────────────────
 window.TrainingUI={
   render(root){
     const sess=TD.activeSession();
-    if(sess) renderActive(root, sess);
-    else renderIdle(root);
+    if(!sess){ renderIdle(root); return; }
+    const today=core.localDayKey(new Date());
+    if(core.isStaleSession(sess, today) && staleResumeAck!==sess.id){
+      renderStale(root, sess); return;
+    }
+    renderActive(root, sess);
   },
   exportV2: TD.exportV2,
   importV2: TD.importV2,
