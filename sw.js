@@ -2,6 +2,8 @@ const CACHE = "weekly-quest-v25";
 const ASSETS = [
   "./tracker.html",
   "./gym.html",
+  "./js/training-core.mjs",
+  "./js/training-data.mjs",
   "./music.html",
   "./spots.html",
   "./manifest.json",

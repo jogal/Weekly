@@ -157,6 +157,46 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 @keyframes zappop { 0%{transform:scale(.3) rotate(-15deg);opacity:1}
   60%{transform:scale(1.25) rotate(5deg)} 100%{transform:scale(1);opacity:0} }
 
+/* Workout mode (TODAY) */
+.bolt-btn { width:100%; min-height:58px; font-size:16px; font-weight:700; cursor:pointer;
+  background:var(--bolt); color:#0c0c0e; border:none; letter-spacing:.3em;
+  font-family:var(--cond); }
+.bolt-btn:active { opacity:.6; }
+.ghost-btn { width:100%; min-height:48px; font-size:13px; cursor:pointer;
+  background:none; color:var(--dim); border:1px solid var(--line);
+  font-family:var(--cond); letter-spacing:.2em; }
+.wo-head { display:flex; justify-content:space-between; align-items:baseline; }
+.wo-name { font-size:20px; font-weight:700; font-family:var(--cond); letter-spacing:.1em; }
+.wo-focus { font-size:11px; color:var(--dim); letter-spacing:.08em; }
+.wo-exrow { display:flex; justify-content:space-between; align-items:baseline;
+  padding:8px 2px; border-bottom:1px solid var(--line); font-size:13px; gap:8px; }
+.wo-exrow:last-child { border-bottom:none; }
+.wo-exrow .prev { color:var(--faint); font-size:11px; font-family:var(--cond);
+  letter-spacing:.06em; flex-shrink:0; }
+.wo-target { font-size:12px; color:var(--dim); font-family:var(--cond);
+  letter-spacing:.12em; margin:2px 0 10px; }
+.wo-prev-line { font-size:13px; color:var(--dim); font-family:var(--cond);
+  letter-spacing:.08em; margin-bottom:10px; }
+.wo-prev-line b { color:var(--txt); font-size:15px; }
+.wo-num { width:100%; background:none; border:none; color:var(--txt);
+  font-family:var(--cond); font-size:34px; font-weight:600; text-align:center;
+  padding:0; line-height:1.05; }
+.wo-num:focus { outline:none; }
+.wo-chips { display:flex; gap:8px; margin-bottom:12px; }
+.wo-chip { flex:1; min-height:44px; font-size:12px; cursor:pointer; background:none;
+  color:var(--dim); border:1px solid var(--line); letter-spacing:.04em; }
+.wo-chip:active { background:var(--panel2); }
+.wo-nav { display:flex; gap:8px; margin-top:10px; }
+.wo-nav button { flex:1; }
+.wo-progress { font-size:10px; color:var(--faint); font-family:var(--cond);
+  letter-spacing:.2em; }
+.diff-btn { display:block; width:100%; min-height:50px; font-size:14px; cursor:pointer;
+  background:var(--panel2); border:1px solid var(--line); color:var(--txt);
+  margin-bottom:10px; }
+.done-big { text-align:center; font-family:var(--cond); font-size:24px; font-weight:700;
+  letter-spacing:.3em; color:var(--bolt); margin:18px 0 6px; }
+.done-sub { text-align:center; font-size:12px; color:var(--dim); margin-bottom:14px; }
+
 /* Modal */
 .overlay { position:fixed; inset:0; background:rgba(8,8,10,.78); z-index:30;
   display:flex; align-items:center; justify-content:center; padding:20px; }
@@ -190,7 +230,8 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   </div>
   <div id="content"></div>
   <div id="tabbar">
-    <button class="tab-btn active" data-tab="today"><span class="tab-ico">⚡</span>きろく</button>
+    <button class="tab-btn active" data-tab="workout"><span class="tab-ico">🏋</span>TODAY</button>
+    <button class="tab-btn" data-tab="today"><span class="tab-ico">⚡</span>きろく</button>
     <button class="tab-btn" data-tab="history"><span class="tab-ico">📜</span>履歴</button>
   </div>
 </div>
@@ -254,7 +295,7 @@ let custom = JSON.parse(localStorage.getItem("gym_custom")||"{}"); // 部位id �
 let sel    = JSON.parse(localStorage.getItem("gym_sel")||"null") || {part:"chest", ex:"ベンチプレス"};
 let marks  = JSON.parse(localStorage.getItem("gym_marks")||"{}");  // 週クエに自動記入したキー
 let stepPref=JSON.parse(localStorage.getItem("gym_stepkg")||"{}"); // 種目名 → 重量の刻み(kg)
-let tab    = "today";
+let tab    = "workout";
 let kg=0, reps=10;
 
 function persist(){
@@ -322,9 +363,17 @@ function syncQuest(part, dateObj){
 }
 
 // ── 記録・削除 ────────────────────────────────────────────────────────────────
-function addSet(){
+// meta: Workout mode用のoptional fields {sessionId, workoutTemplate, setNumber}
+// 既存ログにこれらが無くても全機能が正常動作する(後方互換)。
+function addSet(meta){
   const now=new Date();
-  logs.push({t:now.toISOString(), ex:sel.ex, part:sel.part, kg, reps});
+  const entry={t:now.toISOString(), ex:sel.ex, part:sel.part, kg, reps};
+  if(meta && meta.sessionId){
+    entry.sessionId=meta.sessionId;
+    entry.workoutTemplate=meta.workoutTemplate;
+    entry.setNumber=meta.setNumber;
+  }
+  logs.push(entry);
   lastEx[sel.ex]={kg,reps};
   syncQuest(sel.part, now);
   persist();
@@ -558,8 +607,16 @@ function renderHistory(root){
 function render(){
   const root=document.getElementById("content");
   root.innerHTML="";
-  if(tab==="today") renderToday(root);
+  if(tab==="workout") renderWorkout(root);
+  else if(tab==="today") renderToday(root);
   else renderHistory(root);
+}
+// TODAY(Workout mode)のDOMはmoduleスクリプト側で組む。読み込み前はプレースホルダ。
+function renderWorkout(root){
+  if(window.TrainingUI){ window.TrainingUI.render(root); return; }
+  const c=el("div","card");
+  c.appendChild(el("div","empty-note","読み込み中…（オフライン初回はきろくタブを使ってね）"));
+  root.appendChild(c);
 }
 document.getElementById("tabbar").addEventListener("click",e=>{
   const b=e.target.closest(".tab-btn");
@@ -576,7 +633,10 @@ document.getElementById("menu-modal").addEventListener("click",e=>{
   if(e.target===e.currentTarget) e.currentTarget.style.display="none";
 });
 document.getElementById("export-btn").onclick=()=>{
-  const data={gym_logs:logs, gym_last:lastEx, gym_custom:custom, gym_marks:marks};
+  const data={gym_logs:logs, gym_last:lastEx, gym_custom:custom, gym_marks:marks,
+              gym_sel:sel, gym_stepkg:stepPref};
+  // v2キー(profile/sessions/program/daily/plan/overrides)もadditiveに含める
+  if(window.TrainingUI) Object.assign(data, window.TrainingUI.exportV2());
   const blob=new Blob([JSON.stringify(data,null,2)],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
@@ -597,6 +657,10 @@ document.getElementById("import-btn").onclick=()=>{
         const d=JSON.parse(r.result);
         if(!Array.isArray(d.gym_logs)) throw new Error("bad");
         logs=d.gym_logs; lastEx=d.gym_last||{}; custom=d.gym_custom||{}; marks=d.gym_marks||{};
+        if(d.gym_sel) sel=d.gym_sel;
+        if(d.gym_stepkg) stepPref=d.gym_stepkg;
+        // 旧backup(v2キーなし)もそのまま受理。v2キーがあれば復元。
+        if(window.TrainingUI) window.TrainingUI.importV2(d);
         persist(); render();
         showToast("✅ 復元しました");
       }catch(e){ showToast("❌ 読み込めなかった…"); }
@@ -621,6 +685,230 @@ document.addEventListener("visibilitychange",()=>{
 });
 
 render();
+</script>
+
+<script type="module">
+// ── Workout mode (TODAY) ──────────────────────────────────────────────────────
+// DOM組み立てはこのファイル内、アルゴリズム/データ層は js/*.mjs 側。
+// 既存のグローバル(logs, lastEx, syncQuest, persist, flash, showToast, el, esc,
+// PART_MAP, stepOf, delSet, render)を利用する。既存きろくタブとは独立に動く。
+import * as core from "./js/training-core.mjs";
+import * as TD from "./js/training-data.mjs";
+
+let justCompleted = null;  // 完了直後のリワード表示用(遷移すると消える一時状態)
+
+// Workoutセッションからのセット記録。既存gym_logs形式+optional fieldsで書く。
+function logWorkoutSet(exDef, wKg, wReps, sess, setNumber){
+  const now=new Date();
+  logs.push({t:now.toISOString(), ex:exDef.ex, part:exDef.part, kg:wKg, reps:wReps,
+             sessionId:sess.id, workoutTemplate:sess.templateId, setNumber});
+  lastEx[exDef.ex]={kg:wKg, reps:wReps};
+  syncQuest(exDef.part, now);
+  persist();
+  flash();
+}
+
+function sessionSetsOf(sess, ex){
+  return logs.filter(l=>l.sessionId===sess.id && l.ex===ex);
+}
+function sessionAllSets(sess){
+  return logs.filter(l=>l.sessionId===sess.id);
+}
+function fmtPrev(p){
+  if(!p) return "初回（前回記録なし）";
+  return `${p.kg===0?"自重":p.kg+"kg"}　${p.reps.join(" / ")}　計${p.totalReps}回`;
+}
+
+// ── 開始前画面 ────────────────────────────────────────────────────────────────
+function renderIdle(root){
+  const now=new Date();
+  const wd=["日","月","火","水","木","金","土"][now.getDay()];
+  const program=TD.loadProgram();
+  const nextId=TD.nextWorkoutTemplateId(program);
+  const tpl=TD.templateById(program, nextId);
+
+  const head=el("div","card");
+  head.appendChild(el("div","",`<div id="today-line">
+    <span id="today-date">TODAY　${now.getMonth()+1}/${now.getDate()}(${wd})</span>
+    <span id="today-sub">次は ${esc(tpl.name)}</span></div>`));
+  root.appendChild(head);
+
+  if(justCompleted){ renderCompleteCard(root); }
+
+  const card=el("div","card");
+  card.appendChild(el("div","wo-head",
+    `<span class="wo-name">${esc(tpl.name)}</span><span class="wo-focus">${esc(tpl.focus)}</span>`));
+  const list=el("div","");
+  tpl.exercises.forEach(e=>{
+    const prev=core.lastSessionSets(logs, e.ex);
+    list.appendChild(el("div","wo-exrow",
+      `<span>${esc(e.ex)} <span class="wo-progress">${e.sets}×${e.repMin}-${e.repMax}</span></span>
+       <span class="prev">${prev? `前回 ${prev.kg===0?"自重":prev.kg+"kg"}×${prev.reps.join("/")}` : "初回"}</span>`));
+  });
+  card.appendChild(list);
+  const start=el("button","bolt-btn","⚡ START WORKOUT");
+  start.style.marginTop="12px";
+  start.onclick=()=>{ justCompleted=null; TD.startSession(tpl.id); render(); };
+  card.appendChild(start);
+  root.appendChild(card);
+}
+
+// 完了リワードカード(spec#20: RPGは前面に出しすぎず、完了時だけ)
+function renderCompleteCard(root){
+  const c=justCompleted;
+  const card=el("div","card");
+  card.appendChild(el("div","done-big","WORKOUT COMPLETE"));
+  card.appendChild(el("div","done-sub",
+    `${esc(c.name)}　${c.sets}セット / ${c.volume}kg挙上　→ 週クエ反映済み<br>Next: ${esc(c.nextName)}`));
+  root.appendChild(card);
+}
+
+// ── セッション中画面 ──────────────────────────────────────────────────────────
+function renderActive(root, sess){
+  const program=TD.loadProgram();
+  const tpl=TD.templateById(program, sess.templateId);
+  const n=tpl.exercises.length;
+  const i=Math.min(Math.max(sess.curEx||0,0), n-1);
+  const exDef=tpl.exercises[i];
+  const part=PART_MAP[exDef.part]||{label:exDef.part,color:"#999"};
+  const prev=core.lastSessionSets(logs, exDef.ex, sess.startedAt);
+  const done=sessionSetsOf(sess, exDef.ex);
+  const pre=core.prefillFor(done, prev) || {kg:0, reps:10};
+
+  const head=el("div","card");
+  head.appendChild(el("div","wo-head",
+    `<span class="wo-name">${esc(tpl.name)}</span>
+     <span class="wo-progress">${i+1} / ${n} 種目</span>`));
+  root.appendChild(head);
+
+  const card=el("div","card"); card.id="input-card";
+  card.appendChild(el("div","wo-head",
+    `<span style="font-size:16px;font-weight:600">${esc(exDef.ex)}</span>
+     <span style="font-size:10px;color:${part.color};border:1px solid currentColor;padding:2px 9px;letter-spacing:.14em">${part.label}</span>`));
+  card.appendChild(el("div","wo-target",`TARGET　${exDef.sets}セット × ${exDef.repMin}–${exDef.repMax}回`));
+  card.appendChild(el("div","wo-prev-line",`前回　<b>${fmtPrev(prev)}</b>`));
+
+  // 入力: kg / reps (numeric keyboard・44px+タップ・長押し連打)
+  let wKg=pre.kg, wReps=pre.reps;
+  const step=stepOf(exDef.ex);
+  const kgRow=el("div","stepper-row");
+  const kgIn=el("input","wo-num"); kgIn.type="text"; kgIn.inputMode="decimal";
+  const updK=()=>{ kgIn.value=(wKg===0?"自重":wKg); };
+  kgIn.onfocus=()=>{ if(wKg===0)kgIn.value=""; };
+  kgIn.onblur=()=>{ const v=parseFloat(kgIn.value); wKg=(!isNaN(v)&&v>=0)?Math.round(v*10)/10:wKg; updK(); };
+  const kgWrap=el("div",""); kgWrap.style.flex="1";
+  kgWrap.appendChild(kgIn);
+  kgWrap.appendChild(el("div","wo-progress","KG"));
+  kgWrap.style.textAlign="center";
+  kgRow.appendChild(stepBtn("-"+step,"",()=>{wKg=Math.max(0,Math.round((wKg-step)*10)/10);updK();}));
+  kgRow.appendChild(kgWrap);
+  kgRow.appendChild(stepBtn("+"+step,"",()=>{wKg=Math.round((wKg+step)*10)/10;updK();}));
+  updK();
+  card.appendChild(kgRow);
+
+  const rRow=el("div","stepper-row");
+  const rIn=el("input","wo-num"); rIn.type="text"; rIn.inputMode="numeric";
+  const updR=()=>{ rIn.value=wReps; };
+  rIn.onblur=()=>{ const v=parseInt(rIn.value); wReps=(!isNaN(v)&&v>=1)?v:wReps; updR(); };
+  const rWrap=el("div",""); rWrap.style.flex="1"; rWrap.style.textAlign="center";
+  rWrap.appendChild(rIn);
+  rWrap.appendChild(el("div","wo-progress","REPS"));
+  rRow.appendChild(stepBtn("-1","",()=>{wReps=Math.max(1,wReps-1);updR();}));
+  rRow.appendChild(rWrap);
+  rRow.appendChild(stepBtn("+1","",()=>{wReps++;updR();}));
+  updR();
+  card.appendChild(rRow);
+
+  // ワンタップ: 前回と同じ / 前回+1rep
+  if(prev){
+    const chips=el("div","wo-chips");
+    const c1=el("button","wo-chip",`前回と同じ（${prev.kg===0?"自重":prev.kg+"kg"}×${prev.reps[Math.min(done.length,prev.reps.length-1)]}）`);
+    c1.onclick=()=>{ wKg=prev.kg; wReps=prev.reps[Math.min(done.length,prev.reps.length-1)]; updK(); updR(); };
+    const c2=el("button","wo-chip","前回 +1回");
+    c2.onclick=()=>{ wKg=prev.kg; wReps=(prev.reps[Math.min(done.length,prev.reps.length-1)]||10)+1; updK(); updR(); };
+    chips.appendChild(c1); chips.appendChild(c2);
+    card.appendChild(chips);
+  }
+
+  const logB=el("button","bolt-btn",`⚡ セット記録（${done.length+1}セット目）`);
+  logB.onclick=()=>{ logWorkoutSet(exDef, wKg, wReps, sess, done.length+1); render(); };
+  card.appendChild(logB);
+
+  // このセッションで記録済みのセット
+  if(done.length){
+    const dl=el("div",""); dl.style.marginTop="10px";
+    done.forEach(l=>{
+      const row=el("div","set-row");
+      row.appendChild(el("span","set-time",fmtTime(l.t)));
+      row.appendChild(el("span","set-main",`<span class="set-kg">${fmtKg(l.kg)}×${l.reps}</span>`));
+      const del=el("button","set-del","✕");
+      del.onclick=()=>{ if(confirm("このセットを消す?")) delSet(l.t); };
+      row.appendChild(del);
+      dl.appendChild(row);
+    });
+    card.appendChild(dl);
+  }
+  root.appendChild(card);
+
+  // 種目ナビ + 終了
+  const nav=el("div","wo-nav");
+  const prevB=el("button","ghost-btn","← 前の種目");
+  prevB.disabled=(i===0); if(i===0)prevB.style.opacity=".35";
+  prevB.onclick=()=>{ TD.updateSession(sess.id,{curEx:i-1}); render(); };
+  const nextB=el("button","ghost-btn", i<n-1 ? "次の種目 →" : "最後の種目");
+  nextB.disabled=(i===n-1); if(i===n-1)nextB.style.opacity=".35";
+  nextB.onclick=()=>{ TD.updateSession(sess.id,{curEx:i+1}); render(); };
+  nav.appendChild(prevB); nav.appendChild(nextB);
+  root.appendChild(nav);
+
+  const fin=el("button","bolt-btn","ワークアウト終了");
+  fin.style.marginTop="10px";
+  fin.onclick=()=>openFinish(sess, tpl);
+  root.appendChild(fin);
+}
+
+// ── 終了フロー(難易度3択のみ・セット毎RIRは要求しない) ────────────────────────
+function openFinish(sess, tpl){
+  const all=sessionAllSets(sess);
+  const ov=el("div","overlay");
+  const box=el("div","modal-box");
+  box.appendChild(el("h3","modal-title","今日のワークアウトはどうだった？"));
+  [["easy","😎 楽だった"],["good","💪 ちょうど良い"],["hard","🥵 キツかった"]].forEach(([v,label])=>{
+    const b=el("button","diff-btn",label);
+    b.onclick=()=>{ document.body.removeChild(ov); doFinish(sess, tpl, v, all); };
+    box.appendChild(b);
+  });
+  const cancel=el("button","ghost-btn", all.length? "まだ続ける" : "セット0のまま破棄");
+  cancel.onclick=()=>{
+    document.body.removeChild(ov);
+    if(!all.length){ TD.abortSession(sess.id); render(); }
+  };
+  box.appendChild(cancel);
+  ov.appendChild(box);
+  ov.addEventListener("click",e=>{ if(e.target===ov) document.body.removeChild(ov); });
+  document.body.appendChild(ov);
+}
+function doFinish(sess, tpl, difficulty, all){
+  TD.finishSession(sess.id, difficulty);
+  const program=TD.loadProgram();
+  const nextName=TD.templateById(program, TD.nextWorkoutTemplateId(program)).name;
+  justCompleted={ name:tpl.name, sets:all.length,
+    volume:all.reduce((a,l)=>a+(l.kg||0)*l.reps,0), nextName };
+  showToast("🏆 "+tpl.name+" 完了!(週クエ反映済み)");
+  render();
+}
+
+// ── エントリポイント ──────────────────────────────────────────────────────────
+window.TrainingUI={
+  render(root){
+    const sess=TD.activeSession();
+    if(sess) renderActive(root, sess);
+    else renderIdle(root);
+  },
+  exportV2: TD.exportV2,
+  importV2: TD.importV2,
+};
+if(tab==="workout") render();
 </script>
 </body>
 </html>
