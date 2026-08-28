@@ -139,3 +139,87 @@ test("prefill: セッション中は直前セット優先/最初は前回1セッ
   assert.deepEqual(prefillFor([], prev), { kg: 50, reps: 8 });
   assert.equal(prefillFor([], null), null);
 });
+
+// ── Progressive overload engine ───────────────────────────────────────────────
+import { getNextExerciseTarget, sessionHistory } from "../js/training-core.mjs";
+
+const sess = (kg, reps, extra = {}) => ({
+  day: "2026-08-24", sessionId: null,
+  sets: reps.map(r => ({ kg, reps: r })),
+  firstWorkingWeight: kg, maxWeight: kg,
+  totalReps: reps.reduce((a, b) => a + b, 0),
+  volume: reps.reduce((a, b) => a + b, 0) * kg, ...extra,
+});
+const ARGS = { targetSets: 4, repMin: 6, repMax: 10, increment: 2.5 };
+
+test("overload: 50kg 8/8/6/5 → 重量維持・計29回目標", () => {
+  const t = getNextExerciseTarget({ ...ARGS, history: [sess(50, [8, 8, 6, 5])] });
+  assert.equal(t.status, "progress_reps");
+  assert.equal(t.weight, 50);
+  assert.equal(t.targetTotalReps, 29);
+  assert.equal(t.suggestedSetTargets.reduce((a, b) => a + b, 0), 29);
+  assert.ok(t.suggestedSetTargets.every(r => r <= 10));
+});
+
+test("overload: 50kg 10/10/10/10 → 52.5kgへ増量・repMinから再構築", () => {
+  const t = getNextExerciseTarget({ ...ARGS, history: [sess(50, [10, 10, 10, 10])] });
+  assert.equal(t.status, "increase_weight");
+  assert.equal(t.weight, 52.5);
+  assert.equal(t.targetTotalReps, 24);
+  assert.deepEqual(t.suggestedSetTargets, [6, 6, 6, 6]);
+});
+
+test("overload: 1回のperformance低下では重量を下げない", () => {
+  const t = getNextExerciseTarget({ ...ARGS,
+    history: [sess(50, [8, 8, 8, 8]), sess(50, [7, 7, 6, 6])] });
+  assert.equal(t.weight, 50);                    // 下げない
+  assert.equal(t.status, "progress_reps");       // plateau扱いにもしない
+});
+
+test("overload: 同一重量で2回連続低下 → plateau(重量維持・volume増やさない)", () => {
+  const t = getNextExerciseTarget({ ...ARGS,
+    history: [sess(50, [8, 8, 8, 8]), sess(50, [7, 7, 6, 6]), sess(50, [6, 6, 6, 5])] });
+  assert.equal(t.status, "plateau");
+  assert.equal(t.weight, 50);
+  assert.equal(t.targetTotalReps, 23);           // 前回維持。増やさない
+});
+
+test("overload: pain=true では全セット上限到達でも増量しない", () => {
+  const t = getNextExerciseTarget({ ...ARGS, pain: true,
+    history: [sess(50, [10, 10, 10, 10])] });
+  assert.equal(t.status, "hold_pain");
+  assert.equal(t.weight, 50);
+});
+
+test("overload: 履歴なし → first_time(数値目標を出さない)", () => {
+  const t = getNextExerciseTarget({ ...ARGS, history: [] });
+  assert.equal(t.status, "first_time");
+  assert.equal(t.weight, null);
+});
+
+test("overload: ドロップセット(重量不均一)は増量条件を満たさない", () => {
+  const h = [{ ...sess(16, [12, 10, 10]), sets: [
+    { kg: 16, reps: 12 }, { kg: 16, reps: 10 }, { kg: 14, reps: 10 }] }];
+  const t = getNextExerciseTarget({ targetSets: 3, repMin: 8, repMax: 12, increment: 1, history: h });
+  assert.equal(t.status, "progress_reps");
+  assert.equal(t.weight, 16);                    // firstWorkingWeight基準
+});
+
+test("overload: 上限到達済みの合計はcapで頭打ち", () => {
+  const t = getNextExerciseTarget({ ...ARGS, history: [sess(50, [10, 10, 10, 9])] });
+  assert.equal(t.targetTotalReps, 40);           // min(39+2, 4×10)
+});
+
+test("sessionHistory: limitで直近n回・時系列昇順", () => {
+  const logs = [];
+  [[47.5, "2026-08-10"], [50, "2026-08-17"], [50, "2026-08-24"]].forEach(([kg, day], si) => {
+    for (let i = 0; i < 2; i++) {
+      logs.push({ t: new Date(day + "T10:0" + i + ":00").toISOString(),
+        ex: "ベンチプレス", part: "chest", kg, reps: 8, sessionId: "h" + si });
+    }
+  });
+  const h = sessionHistory(logs, "ベンチプレス", { limit: 2 });
+  assert.equal(h.length, 2);
+  assert.equal(h[0].day, "2026-08-17");
+  assert.equal(h[1].day, "2026-08-24");
+});

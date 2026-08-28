@@ -761,6 +761,26 @@ function renderIdle(root){
   start.onclick=()=>{ justCompleted=null; TD.startSession(tpl.id); render(); };
   card.appendChild(start);
   root.appendChild(card);
+
+  // NEXT EXERCISE: 最初の種目の前回実績と今日の目標(spec#8)
+  const first=tpl.exercises[0];
+  if(first){
+    const hist=core.sessionHistory(logs, first.ex, {slot:first.slot});
+    const prev=hist.length? hist[hist.length-1] : null;
+    const tgt=core.getNextExerciseTarget({history:hist, targetSets:first.sets,
+      repMin:first.repMin, repMax:first.repMax, increment:stepOf(first.ex)});
+    const nx=el("div","card");
+    nx.appendChild(el("p","card-title","NEXT EXERCISE"));
+    nx.appendChild(el("div","wo-head",`<span style="font-size:16px;font-weight:600">${esc(first.ex)}</span>`));
+    nx.appendChild(el("div","wo-prev-line",`前回　<b>${fmtPrev(prev)}</b>`));
+    if(tgt.status!=="first_time"){
+      const tl=el("div","wo-prev-line");
+      tl.innerHTML=`今日　<b>${fmtW(tgt.weight)}　計${tgt.targetTotalReps}回以上</b>`;
+      if(tgt.status==="increase_weight") tl.style.color="var(--bolt)";
+      nx.appendChild(tl);
+    }
+    root.appendChild(nx);
+  }
 }
 
 // 完了リワードカード(spec#20: RPGは前面に出しすぎず、完了時だけ)
@@ -781,9 +801,18 @@ function renderActive(root, sess){
   const i=Math.min(Math.max(sess.curEx||0,0), n-1);
   const exDef=tpl.exercises[i];
   const part=PART_MAP[exDef.part]||{label:exDef.part,color:"#999"};
-  const prev=core.lastSessionSets(logs, exDef.ex, {beforeISO:sess.startedAt, slot:exDef.slot});
+  const hist=core.sessionHistory(logs, exDef.ex, {beforeISO:sess.startedAt, slot:exDef.slot});
+  const prev=hist.length? hist[hist.length-1] : null;
+  const tgt=core.getNextExerciseTarget({history:hist, targetSets:exDef.sets,
+    repMin:exDef.repMin, repMax:exDef.repMax, increment:stepOf(exDef.ex)});
   const done=sessionSetsOf(sess, exDef.ex);
-  const pre=core.prefillFor(done, prev) || {kg:0, reps:10};
+  // プリフィル: エンジンの提案(増量時は新重量+目標rep) > 直前セット > 前回
+  let pre=core.prefillFor(done, prev) || {kg:0, reps:10};
+  if(!done.length && tgt.weight!=null){
+    pre={kg:tgt.weight, reps:(tgt.suggestedSetTargets&&tgt.suggestedSetTargets[0])||pre.reps};
+  }else if(done.length && tgt.suggestedSetTargets && tgt.suggestedSetTargets[done.length]!=null){
+    pre={kg:pre.kg, reps:tgt.suggestedSetTargets[done.length]};
+  }
 
   const head=el("div","card");
   head.appendChild(el("div","wo-head",
@@ -797,6 +826,18 @@ function renderActive(root, sess){
      <span style="font-size:10px;color:${part.color};border:1px solid currentColor;padding:2px 9px;letter-spacing:.14em">${part.label}</span>`));
   card.appendChild(el("div","wo-target",`TARGET　${exDef.sets}セット × ${exDef.repMin}–${exDef.repMax}回`));
   card.appendChild(el("div","wo-prev-line",`前回　<b>${fmtPrev(prev)}</b>`));
+  // 今日の目標(progressive overload engineの決定 + 短い理由)
+  if(tgt.status!=="first_time"){
+    const tl=el("div","wo-prev-line");
+    tl.innerHTML=`今日　<b>${fmtW(tgt.weight)}　計${tgt.targetTotalReps}回以上（${tgt.suggestedSetTargets.join("/")}）</b>`;
+    if(tgt.status==="increase_weight") tl.style.color="var(--bolt)";
+    card.appendChild(tl);
+    const rs=el("div","wo-progress",esc(tgt.reason));
+    rs.style.marginBottom="10px";
+    card.appendChild(rs);
+  }else{
+    card.appendChild(el("div","wo-prev-line",`今日　<b>${esc(tgt.reason)}</b>`));
+  }
 
   // 入力: kg / reps (numeric keyboard・44px+タップ・長押し連打)
   let wKg=pre.kg, wReps=pre.reps;
