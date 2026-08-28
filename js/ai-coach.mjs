@@ -31,7 +31,9 @@ export function buildCoachPayload({
   };
 }
 
-// サーバ応答のschema検証(サーバ側と二重にチェックする)
+// サーバ応答のschema検証。サーバ側validateCoachJsonと完全に同一条件
+// (nutritionAdvice/cautionはrequired: string|nullで、undefinedは不可)。
+// parityはtests/ai-coach.test.mjsの共通fixtureで担保する
 export function validateCoachResponse(o) {
   if (!o || typeof o !== "object" || Array.isArray(o)) return false;
   if (typeof o.headline !== "string" || typeof o.workoutAdvice !== "string") return false;
@@ -39,10 +41,8 @@ export function validateCoachResponse(o) {
   for (const e of o.exerciseAdvice) {
     if (!e || typeof e.exercise !== "string" || typeof e.advice !== "string") return false;
   }
-  if (o.nutritionAdvice !== null && o.nutritionAdvice !== undefined &&
-      typeof o.nutritionAdvice !== "string") return false;
-  if (o.caution !== null && o.caution !== undefined &&
-      typeof o.caution !== "string") return false;
+  if (o.nutritionAdvice !== null && typeof o.nutritionAdvice !== "string") return false;
+  if (o.caution !== null && typeof o.caution !== "string") return false;
   return true;
 }
 

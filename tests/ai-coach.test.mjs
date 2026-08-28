@@ -96,6 +96,7 @@ test("api: COACH_TOKEN設定時はBearer必須(不一致は401)", async () => {
 
 test("api: 正常系はvalidateして{advice}を返す", async () => {
   process.env.OPENAI_API_KEY = "sk-test";
+  process.env.COACH_TOKEN = "secret";
   const origFetch = global.fetch;
   global.fetch = async (url, opts) => {
     // Structured Outputsのschema指定が入っていること
@@ -105,20 +106,26 @@ test("api: 正常系はvalidateして{advice}を返す", async () => {
     return { ok: true, json: async () => ({ output_text: JSON.stringify(VALID_ADVICE) }) };
   };
   const r = mockRes();
-  await handler({ method: "POST", headers: {}, body: { goal: {} } }, r);
+  await handler({ method: "POST", headers: { authorization: "Bearer secret" },
+    body: { goal: {} } }, r);
   global.fetch = origFetch;
+  delete process.env.COACH_TOKEN;
   assert.equal(r.statusCode, 200);
   assert.deepEqual(r.body.advice, VALID_ADVICE);
+  assert.equal(r.headers["Cache-Control"], "no-store");
 });
 
 test("api: モデル出力がschema不一致なら502(そのまま返さない)", async () => {
   process.env.OPENAI_API_KEY = "sk-test";
+  process.env.COACH_TOKEN = "secret";
   const origFetch = global.fetch;
   global.fetch = async () => ({ ok: true,
     json: async () => ({ output_text: JSON.stringify({ headline: "だけ" }) }) });
   const r = mockRes();
-  await handler({ method: "POST", headers: {}, body: { goal: {} } }, r);
+  await handler({ method: "POST", headers: { authorization: "Bearer secret" },
+    body: { goal: {} } }, r);
   global.fetch = origFetch;
+  delete process.env.COACH_TOKEN;
   assert.equal(r.statusCode, 502);
 });
 
@@ -138,4 +145,78 @@ test("client: requestCoachは不正応答をthrowする", async () => {
   global.fetch = async () => ({ ok: false, status: 401 });
   await assert.rejects(() => requestCoach("https://x/api/coach", {}, null), /401/);
   global.fetch = origFetch;
+});
+
+// ── Phase 7 hardening ────────────────────────────────────────────────────────
+test("api: COACH_TOKEN未設定はfail closed(503)", async () => {
+  process.env.OPENAI_API_KEY = "sk-test";
+  delete process.env.COACH_TOKEN;
+  delete process.env.ALLOW_UNAUTHENTICATED_COACH;
+  const r = mockRes();
+  await handler({ method: "POST", headers: {}, body: { goal: {} } }, r);
+  assert.equal(r.statusCode, 503);
+});
+
+test("api: ALLOW_UNAUTHENTICATED_COACH=1のときだけtokenなしを許可(ローカル開発用)", async () => {
+  process.env.OPENAI_API_KEY = "sk-test";
+  delete process.env.COACH_TOKEN;
+  process.env.ALLOW_UNAUTHENTICATED_COACH = "1";
+  const origFetch = global.fetch;
+  global.fetch = async () => ({ ok: true,
+    json: async () => ({ output_text: JSON.stringify(VALID_ADVICE) }) });
+  const r = mockRes();
+  await handler({ method: "POST", headers: {}, body: { goal: {} } }, r);
+  global.fetch = origFetch;
+  delete process.env.ALLOW_UNAUTHENTICATED_COACH;
+  assert.equal(r.statusCode, 200);
+});
+
+test("api: payload shape validation(サイズ・件数・文字列長・数値レンジ)", () => {
+  const v = handler.validatePayloadShape;
+  assert.equal(v({ goal: {} }), null);
+  assert.notEqual(v(null), null);
+  assert.notEqual(v([]), null);
+  assert.notEqual(v({ recentSessions: [1, 2, 3, 4] }), null);            // >3
+  assert.notEqual(v({ nextTargets: Array(11).fill({}) }), null);         // >10
+  assert.notEqual(v({ weeklyPlan: { recommendedDays: Array(8).fill({}) } }), null); // >7
+  assert.notEqual(v({ goal: { note: "x".repeat(400) } }), null);         // 長すぎる文字列
+  assert.notEqual(v({ goal: { n: 1e9 } }), null);                        // 数値レンジ外
+  assert.notEqual(v({ goal: { n: NaN } }), null);
+  assert.notEqual(v({ big: "y".repeat(200).split("").map(() => ({ s: "z".repeat(299) })) }), null); // 50KB超 or array長
+});
+
+test("api: OpenAI timeoutは504", async () => {
+  process.env.OPENAI_API_KEY = "sk-test";
+  process.env.COACH_TOKEN = "secret";
+  const origFetch = global.fetch;
+  global.fetch = async () => { const e = new Error("aborted"); e.name = "AbortError"; throw e; };
+  const r = mockRes();
+  await handler({ method: "POST", headers: { authorization: "Bearer secret" },
+    body: { goal: {} } }, r);
+  global.fetch = origFetch;
+  delete process.env.COACH_TOKEN;
+  assert.equal(r.statusCode, 504);
+});
+
+test("api: OpenAI requestにstore:false(one-shot・server側保存なし)", () => {
+  const body = handler.buildOpenAIRequest({ goal: {} }, "m");
+  assert.equal(body.store, false);
+});
+
+test("parity: client/server validatorが共通fixtureで同一判定", () => {
+  const cases = [
+    VALID_ADVICE,
+    { ...VALID_ADVICE, nutritionAdvice: "OK" },
+    { ...VALID_ADVICE, caution: "注意" },
+    (() => { const { nutritionAdvice, ...rest } = VALID_ADVICE; return rest; })(),  // 欠落
+    (() => { const { caution, ...rest } = VALID_ADVICE; return rest; })(),          // 欠落
+    { ...VALID_ADVICE, nutritionAdvice: 5 },
+    { ...VALID_ADVICE, headline: null },
+    { ...VALID_ADVICE, exerciseAdvice: [{ exercise: 1, advice: "a" }] },
+    null, {}, [], "str",
+  ];
+  cases.forEach((c, i) => {
+    assert.equal(validateCoachResponse(c), handler.validateCoachJson(c),
+      "parity broken at case " + i);
+  });
 });

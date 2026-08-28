@@ -344,6 +344,14 @@ export function monkStateFromRecords(records, todayKey) {
   return { rawXP: raw, xp, lvl, tier: questTierOf(lvl), lastDone };
 }
 
+// 同一templateの直近completed sessionでのexercise pain flag。
+// Workout UIとAI Coach payloadの両方がこれを使い、pain判定を統一する
+export function lastSessionPainFlag(sessions, templateId, key) {
+  const done = (sessions || []).filter(s => s.status === "completed" && s.templateId === templateId);
+  const last = done[done.length - 1];
+  return !!(last && last.pain && last.pain[key]);
+}
+
 // 完了リワードのdelta計算。baselineはWorkout開始時のsnapshot
 // {rawXP, displayXP, lvl}(sessionのoptional metadata)。
 // - earnedXPはraw XPの差分のみ: decay解除で表示XPが戻った分は「獲得」に含めない

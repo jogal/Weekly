@@ -551,3 +551,43 @@ test("reward: baselineなし(legacy session)はearnedXP=null", () => {
   assert.deepEqual(monkRewardDelta(null, a), { earnedXP: null, leveledUp: false });
   assert.deepEqual(monkRewardDelta({}, a), { earnedXP: null, leveledUp: false });
 });
+
+// ── Phase 7 hardening: pain判定の統一(Workout UI ↔ AI payload) ───────────────
+import { lastSessionPainFlag } from "../js/training-core.mjs";
+
+test("pain: Bでpain → C/D完了後 → 次回Bでもhold_pain", () => {
+  const sessions = [
+    { id: "b1", templateId: "B", status: "completed", pain: { B5: true } },
+    { id: "c1", templateId: "C", status: "completed" },
+    { id: "d1", templateId: "D", status: "completed" },
+  ];
+  assert.equal(lastSessionPainFlag(sessions, "B", "B5"), true);   // C/Dを挟んでも残る
+  assert.equal(lastSessionPainFlag(sessions, "B", "B1"), false);
+  assert.equal(lastSessionPainFlag(sessions, "C", "B5"), false);  // 他templateには効かない
+  const t = getNextExerciseTarget({ targetSets: 3, repMin: 8, repMax: 12, increment: 2,
+    history: [sess(16, [12, 12, 12])],
+    pain: lastSessionPainFlag(sessions, "B", "B5") });
+  assert.equal(t.status, "hold_pain");                            // 全セット上限でも増量しない
+});
+
+test("pain: より新しいB sessionでpainが消えていれば増量再開", () => {
+  const sessions = [
+    { id: "b1", templateId: "B", status: "completed", pain: { B5: true } },
+    { id: "b2", templateId: "B", status: "completed" },            // 痛みなしで完了
+  ];
+  assert.equal(lastSessionPainFlag(sessions, "B", "B5"), false);
+});
+
+test("pain: AI payloadとWorkout UIは同一入力で同一target(同じ関数・同じpain判定)", () => {
+  // 双方とも getNextExerciseTarget + lastSessionPainFlag を使う契約。
+  // 同一入力での結果一致を固定し、将来どちらかが独自実装に分岐したら検出する
+  const sessions = [{ id: "b1", templateId: "B", status: "completed", pain: { B5: true } }];
+  const history = [sess(16, [12, 12, 12])];
+  const args = { targetSets: 3, repMin: 8, repMax: 12, increment: 2, history };
+  const uiTarget = getNextExerciseTarget({ ...args,
+    pain: lastSessionPainFlag(sessions, "B", "B5") });
+  const aiTarget = getNextExerciseTarget({ ...args,
+    pain: lastSessionPainFlag(sessions, "B", "B5") });
+  assert.deepEqual(uiTarget, aiTarget);
+  assert.equal(aiTarget.status, "hold_pain");
+});

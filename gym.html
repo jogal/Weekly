@@ -935,18 +935,24 @@ function gatherCoachPayload(){
   });
   const nextId=TD.nextWorkoutTemplateId(program);
   const tpl=TD.templateById(program,nextId);
+  // pain判定はWorkout UIと同一(同template直近completedのslot pain)。
+  // pain時はAIへ渡すrule-based target自体がhold_painになる
+  const painExercises=[];
   const nextTargets=tpl.exercises.map(e=>{
+    const key=e.slot||e.ex;
+    const pain=core.lastSessionPainFlag(sessions, nextId, key);
+    if(pain) painExercises.push(e.ex);
     const hist=core.sessionHistory(logs,e.ex,{slot:e.slot,sessions});
     const t=core.getNextExerciseTarget({history:hist,targetSets:e.sets,
-      repMin:e.repMin,repMax:e.repMax,increment:stepOf(e.ex)});
+      repMin:e.repMin,repMax:e.repMax,increment:stepOf(e.ex),pain});
     return {exercise:e.ex, status:t.status, weightKg:t.weight, targetTotalReps:t.targetTotalReps};
   });
   const {plan}=getCurrentPlan();
   const dayConstraints=Object.values(plan.dayInfo)
     .filter(i=>i.status==="blocked")
     .map(i=>`${i.date}: blocked(${i.notes[0]||""})`);
-  const lastDone=done[done.length-1];
-  const painFlags=lastDone&&lastDone.pain? Object.keys(lastDone.pain):[];
+  // painFlagsは「次回workoutに関連するexercise」のみ送る
+  const painFlags=painExercises;
   return AIC.buildCoachPayload({
     profile,
     latestWeight:core.latestWeightKg(daily, profile.currentWeightKg),
@@ -979,9 +985,16 @@ function buildCoachCard(){
   const todayK=core.localDayKey(new Date());
   const cache=TD.loadAiCache();
   const body=el("div","");
-  const hasCache=cache&&cache.dayKey===todayK&&cache.advice;
-  if(hasCache) renderAdvice(body, cache.advice);
-  const btn=el("button","ghost-btn", hasCache? "🤖 更新":"🤖 アドバイスを見る");
+  // cacheは「同日」かつ「現在のpayload fingerprintと一致」のときだけfresh。
+  // 状況が変わった後の古いadviceはそのまま表示せず、更新を促すだけ(自動呼び出しはしない)
+  let currentFp=null;
+  try{ currentFp=AIC.coachFingerprint(gatherCoachPayload()); }catch(e){}
+  const fresh=cache&&cache.dayKey===todayK&&cache.advice&&cache.fp===currentFp;
+  const staleCache=cache&&cache.advice&&!fresh;
+  if(fresh) renderAdvice(body, cache.advice);
+  else if(staleCache) body.appendChild(el("div","empty-note","状況が更新されています（記録・プランが変化）"));
+  const btn=el("button","ghost-btn",
+    fresh? "🤖 更新" : staleCache? "🤖 AIアドバイスを更新" : "🤖 アドバイスを見る");
   btn.style.marginTop="8px";
   btn.onclick=async()=>{
     btn.disabled=true; const old=btn.textContent; btn.textContent="考え中…";
@@ -1047,8 +1060,8 @@ function renderActive(root, sess){
   const painKey=exDef.slot||exDef.ex;
   const painNow=!!(sess.pain&&sess.pain[painKey]);
   // 前回完了セッション(同template)で痛みが付いていた場合も増量を止める
-  const doneSess=allSessions.filter(s=>s.status==="completed"&&s.templateId===sess.templateId);
-  const prevPain=!!(doneSess.length&&doneSess[doneSess.length-1].pain&&doneSess[doneSess.length-1].pain[painKey]);
+  // (AI Coach payloadと同じcore.lastSessionPainFlagで判定を統一)
+  const prevPain=core.lastSessionPainFlag(allSessions, sess.templateId, painKey);
   const tgt=core.getNextExerciseTarget({history:hist, targetSets:exDef.sets,
     repMin:exDef.repMin, repMax:exDef.repMax, increment:stepOf(exDef.ex),
     pain: painNow||prevPain});

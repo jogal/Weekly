@@ -178,13 +178,30 @@ export function saveAiCache(c) { wr(K.aiCache, c); }
 export function exportV2() {
   const out = {};
   Object.values(K).forEach(k => {
+    if (k === K.aiCache) return;                 // AI応答キャッシュはbackup対象外
     const v = localStorage.getItem(k);
     if (v !== null) { try { out[k] = JSON.parse(v); } catch { /* skip broken */ } }
   });
+  // credentialはbackupへ出さない(aiEndpointは残す)
+  if (out[K.profile] && typeof out[K.profile] === "object") {
+    out[K.profile] = { ...out[K.profile] };
+    delete out[K.profile].aiToken;
+  }
   return out;
 }
 export function importV2(data) {
   Object.values(K).forEach(k => {
-    if (data && data[k] !== undefined) wr(k, data[k]);
+    if (!data || data[k] === undefined) return;
+    if (k === K.aiCache) return;                 // キャッシュは復元しない
+    if (k === K.profile && data[k] && typeof data[k] === "object") {
+      // 旧backupにaiTokenが含まれていても自動的にcredentialを復元しない。
+      // 現在の端末のaiTokenは維持する
+      const incoming = { ...data[k] };
+      delete incoming.aiToken;
+      const current = rd(K.profile, {});
+      wr(k, { ...incoming, ...(current.aiToken ? { aiToken: current.aiToken } : {}) });
+      return;
+    }
+    wr(k, data[k]);
   });
 }
