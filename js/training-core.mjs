@@ -195,6 +195,54 @@ function setTargetsFrom(prevSets, targetSets, repMin, repMax, targetTotal) {
   return base;
 }
 
+// ── Body condition(体重7日移動平均・増量ペース判定) ──────────────────────────
+// daily: gym_daily_v2形式 {dateKey: {weightKg?, proteinG?}}
+// endKeyを含む過去windowDays日のうち、記録がある日だけの平均
+export function movingAvgWeight(daily, endKey, windowDays = 7) {
+  const end = new Date(endKey + "T12:00:00");
+  const ws = [];
+  for (let i = 0; i < windowDays; i++) {
+    const d = new Date(end); d.setDate(end.getDate() - i);
+    const w = daily[localDayKey(d)]?.weightKg;
+    if (typeof w === "number") ws.push(w);
+  }
+  if (!ws.length) return null;
+  return Math.round(ws.reduce((a, b) => a + b, 0) / ws.length * 100) / 100;
+}
+
+// 増量ペース判定(カロリー記録は要求しない)。目安0.1〜0.25%BW/週。
+// - 14(なければ21)日前の7日平均と比較し、+0.1kg未満なら停滞、>0.3%/週なら速め
+export function weightTrend(daily, todayKey) {
+  const avg7 = movingAvgWeight(daily, todayKey);
+  if (avg7 == null) {
+    return { status: "no_data", avg7: null, perWeek: null,
+      message: "体重を記録すると7日平均とペース判定が出ます" };
+  }
+  const back = n => {
+    const d = new Date(todayKey + "T12:00:00"); d.setDate(d.getDate() - n);
+    return movingAvgWeight(daily, localDayKey(d));
+  };
+  const avg14 = back(14), avg21 = back(21);
+  const ref = avg14 ?? avg21;
+  const refDays = avg14 != null ? 14 : (avg21 != null ? 21 : null);
+  if (refDays == null) {
+    return { status: "insufficient", avg7, perWeek: null,
+      message: "記録を2週間続けるとペース判定が出ます" };
+  }
+  const perWeek = Math.round((avg7 - ref) / (refDays / 7) * 100) / 100;
+  const pctPerWeek = perWeek / avg7 * 100;
+  if (avg7 - ref < 0.1) {
+    return { status: "stalled", avg7, perWeek,
+      message: "増量が止まっています。食事を約100〜150kcal/日増やすことを検討" };
+  }
+  if (pctPerWeek > 0.3) {
+    return { status: "fast", avg7, perWeek,
+      message: `増量速度が速め(+${perWeek.toFixed(2)}kg/週)。目安は0.1〜0.25%/週` };
+  }
+  return { status: "ok", avg7, perWeek,
+    message: `良いペース(+${perWeek.toFixed(2)}kg/週)` };
+}
+
 // セッション中の入力プリフィル: 直前セット > 前回実績の1セット目 > null
 export function prefillFor(sessionSets, previous) {
   if (sessionSets && sessionSets.length) {

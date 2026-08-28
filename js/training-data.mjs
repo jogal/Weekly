@@ -129,6 +129,15 @@ export function abortSession(id) {
   return updateSession(id, { status: "aborted", completedAt: new Date().toISOString() });
 }
 
+// ── Daily check-in(体重・タンパク質のみ) ─────────────────────────────────────
+export function loadDaily() { return rd(K.daily, {}); }
+export function saveDailyEntry(dateKey, patch) {
+  const d = rd(K.daily, {});
+  d[dateKey] = { ...(d[dateKey] || {}), ...patch };
+  wr(K.daily, d);
+  return d;
+}
+
 // ── Weekly plan / manual overrides ───────────────────────────────────────────
 // overrides: {dateKey: "available"|"maybe"|"blocked"}。保存時に2週間より古いkeyを整理
 export function loadOverrides() { return rd(K.overrides, {}); }

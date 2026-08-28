@@ -211,6 +211,16 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 .plan-ov { font-size:10px; padding:2px 7px; border:1px solid var(--line);
   color:var(--dim); letter-spacing:.06em; flex-shrink:0; }
 .plan-reasons { font-size:11px; color:var(--dim); line-height:1.7; margin-top:10px; }
+/* Body check-in (TODAY下部・小さく) */
+.bc-row { display:flex; align-items:center; gap:10px; padding:6px 0; }
+.bc-lbl { width:86px; font-size:12px; color:var(--dim); flex-shrink:0; }
+.bc-in { width:76px; min-height:44px; background:var(--panel2); border:1px solid var(--line);
+  color:var(--txt); font-family:var(--cond); font-size:18px; font-weight:600;
+  text-align:center; padding:0 6px; }
+.bc-in:focus { outline:none; border-color:var(--bolt); }
+.bc-unit { font-size:11px; color:var(--faint); }
+.bc-trend { font-size:11px; color:var(--dim); margin-top:6px; line-height:1.6; }
+.bc-trend.warn { color:var(--bolt); }
 .done-big { text-align:center; font-family:var(--cond); font-size:24px; font-weight:700;
   letter-spacing:.3em; color:var(--bolt); margin:18px 0 6px; }
 .done-sub { text-align:center; font-size:12px; color:var(--dim); margin-bottom:14px; }
@@ -803,6 +813,9 @@ function renderIdle(root){
   card.appendChild(start);
   root.appendChild(card);
 
+  // BODY CHECK-IN(体重・タンパク質のみ・小さく。カロリーは記録しない)
+  root.appendChild(buildBodyCard(todayKey));
+
   // NEXT EXERCISE: 最初の種目の前回実績と今日の目標(spec#8)
   const first=tpl.exercises[0];
   if(first){
@@ -822,6 +835,48 @@ function renderIdle(root){
     }
     root.appendChild(nx);
   }
+}
+
+// BODY CHECK-IN: Weight/Proteinの2入力だけ。7日平均とペース判定を小さく表示
+function buildBodyCard(todayKey){
+  const profile=TD.loadProfile();
+  const daily=TD.loadDaily();
+  const todayE=daily[todayKey]||{};
+  const card=el("div","card");
+  card.appendChild(el("p","card-title","BODY CHECK-IN"));
+
+  const wRow=el("div","bc-row");
+  wRow.appendChild(el("span","bc-lbl","体重"));
+  const wIn=el("input","bc-in"); wIn.type="text"; wIn.inputMode="decimal";
+  wIn.value=todayE.weightKg??""; wIn.placeholder=String(profile.currentWeightKg);
+  wIn.onblur=()=>{
+    const v=parseFloat(wIn.value);
+    if(!isNaN(v)&&v>20&&v<200){ TD.saveDailyEntry(todayKey,{weightKg:Math.round(v*10)/10}); render(); }
+    else if(wIn.value==="") wIn.value=todayE.weightKg??"";
+  };
+  wRow.appendChild(wIn);
+  wRow.appendChild(el("span","bc-unit","kg"));
+  card.appendChild(wRow);
+
+  const pRow=el("div","bc-row");
+  pRow.appendChild(el("span","bc-lbl","たんぱく質"));
+  const pIn=el("input","bc-in"); pIn.type="text"; pIn.inputMode="numeric";
+  pIn.value=todayE.proteinG??"";
+  pIn.onblur=()=>{
+    const v=parseInt(pIn.value);
+    if(!isNaN(v)&&v>=0&&v<400){ TD.saveDailyEntry(todayKey,{proteinG:v}); render(); }
+    else if(pIn.value==="") pIn.value=todayE.proteinG??"";
+  };
+  pRow.appendChild(pIn);
+  pRow.appendChild(el("span","bc-unit",`/ ${profile.proteinTargetG} g`));
+  card.appendChild(pRow);
+
+  const trend=core.weightTrend(daily, todayKey);
+  const tl=el("div","bc-trend"+((trend.status==="stalled"||trend.status==="fast")?" warn":""));
+  tl.innerHTML=(trend.avg7!=null? `7日平均 <b>${trend.avg7}kg</b>（目標${profile.targetWeightKg}kg）・`:"")
+    + esc(trend.message);
+  card.appendChild(tl);
+  return card;
 }
 
 // 完了リワードカード(spec#20: RPGは前面に出しすぎず、完了時だけ)

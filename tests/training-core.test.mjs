@@ -310,3 +310,55 @@ test("sessionHistory: limitで直近n回・時系列昇順", () => {
   assert.equal(h[0].day, "2026-08-17");
   assert.equal(h[1].day, "2026-08-24");
 });
+
+// ── Body condition(体重トレンド) ─────────────────────────────────────────────
+import { movingAvgWeight, weightTrend } from "../js/training-core.mjs";
+
+const dkey = (y, m, d) => `${y}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
+// startWeightから1日deltaずつdays日分の記録を作る(skipDaysは欠測)
+function makeDaily(days, startWeight, deltaPerDay, skip = []) {
+  const daily = {};
+  for (let i = 0; i < days; i++) {
+    if (skip.includes(i)) continue;
+    const d = new Date(2026, 7, 1 + i);
+    daily[dkey(d.getFullYear(), d.getMonth() + 1, d.getDate())] =
+      { weightKg: Math.round((startWeight + deltaPerDay * i) * 100) / 100 };
+  }
+  return daily;
+}
+
+test("movingAvg: 欠測日があっても記録がある日だけで平均する", () => {
+  const daily = { "2026-08-26": { weightKg: 54.0 }, "2026-08-28": { weightKg: 54.4 } };
+  assert.equal(movingAvgWeight(daily, "2026-08-28"), 54.2);
+  assert.equal(movingAvgWeight({}, "2026-08-28"), null);
+});
+
+test("weightTrend: 3週間フラット → stalled(食事+100〜150kcal提案)", () => {
+  const daily = makeDaily(22, 54.0, 0);
+  const t = weightTrend(daily, "2026-08-22");
+  assert.equal(t.status, "stalled");
+  assert.ok(t.message.includes("100〜150"));
+});
+
+test("weightTrend: +0.14kg/週 → ok", () => {
+  const daily = makeDaily(22, 54.0, 0.02);
+  const t = weightTrend(daily, "2026-08-22");
+  assert.equal(t.status, "ok");
+});
+
+test("weightTrend: +0.42kg/週 → fast(速すぎ警告)", () => {
+  const daily = makeDaily(22, 54.0, 0.06);
+  const t = weightTrend(daily, "2026-08-22");
+  assert.equal(t.status, "fast");
+});
+
+test("weightTrend: 記録5日ぶんでは判定しない(insufficient)", () => {
+  const daily = makeDaily(5, 54.0, 0.02);
+  const t = weightTrend(daily, "2026-08-05");
+  assert.equal(t.status, "insufficient");
+  assert.ok(t.avg7 != null);
+});
+
+test("weightTrend: 記録ゼロ → no_data", () => {
+  assert.equal(weightTrend({}, "2026-08-22").status, "no_data");
+});
