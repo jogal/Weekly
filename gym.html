@@ -732,7 +732,7 @@ render();
 // PART_MAP, stepOf, delSet, render)を利用する。既存きろくタブとは独立に動く。
 import * as core from "./js/training-core.mjs";
 import * as TD from "./js/training-data.mjs";
-import { generateWeeklyTrainingPlan, mapGcalEvents } from "./js/training-plan.mjs";
+import { generateWeeklyTrainingPlan, mapGcalEvents, gcalCacheStale } from "./js/training-plan.mjs";
 
 let justCompleted = null;  // 完了直後のリワード表示用(遷移すると消える一時状態)
 let staleResumeAck = null; // 前日以前のactive sessionを「再開する」と明示したid
@@ -1044,11 +1044,19 @@ function weekDatesOf(wk){
 // タイトルは分類にだけ使い、派生情報(cls/startMin/durMin)のみメモリ保持。
 // 永続保存もAI送信もしない(プライバシー優先)。専用カレンダー「週間クエスト」は
 // primary以外の別カレンダーなので読み取り対象(primaryのみ)から自然に外れる。
-let gcalDerived=null;      // {dateKey:[{cls,startMin,durMin}]} 今週ぶん
+let gcalDerived=null;      // {dateKey:[{cls,startMin,durMin}]} 今週ぶん(メモリのみ)
 let gcalState="idle";      // idle|loading|ok|off|error
+let gcalFetchedAt=0, gcalFetchedWeek=null, gcalInFlight=false;
 let gcalToken2=null, gcalTokenExp2=0, gcalTokenClient2=null;
+// 読み取りはclient IDがあれば可能(wt_gcal_autoは書き込み自動同期の設定であり
+// readの前提にしない)。後方互換: 既存のauto=1環境でも当然readされる
 function gcalConfigured(){
-  return localStorage.getItem("wt_gcal_auto")==="1" && !!localStorage.getItem("wt_gcal_client_id");
+  return !!localStorage.getItem("wt_gcal_client_id");
+}
+function gcalNeedsRefresh(){
+  if(!gcalConfigured()||gcalInFlight) return false;
+  return gcalCacheStale({fetchedAt:gcalFetchedAt, fetchedWeek:gcalFetchedWeek,
+    nowMs:Date.now(), currentWeek:getWeekKey(new Date())});
 }
 function loadGis(){
   return new Promise((res,rej)=>{
@@ -1076,9 +1084,29 @@ function gcalGetToken2(){
     gcalTokenClient2.requestAccessToken({prompt:""});  // tracker側で同意済みなら無言
   });
 }
-async function fetchGcalWeek(){
+async function gcalApi2(token, url){
+  const res=await fetch(url,{headers:{Authorization:"Bearer "+token}});
+  if(!res.ok) throw new Error("GCal "+res.status);
+  return res.json();
+}
+// Weekly自身がGCalへ作成した既存イベントのID集合(wt_schedulesのgcalId)。
+// 専用カレンダー作成に失敗してprimaryへfallbackした過去イベントの除外に使う
+function collectOwnGcalIds(){
+  const ids=new Set();
+  try{
+    const sched=JSON.parse(localStorage.getItem("wt_schedules")||"{}");
+    Object.values(sched).forEach(week=>Object.values(week).forEach(day=>
+      (day||[]).forEach(e=>{ if(e.gcalId) ids.add(e.gcalId); })));
+  }catch(e){}
+  return ids;
+}
+// force=true(再計算ボタン)以外は鮮度チェック(週替わり or TTL超過)を通ったときだけ。
+// in-flight中は重複fetchしない。失敗してもwt_schedulesのみでplannerは動く
+async function fetchGcalWeek(force){
   if(!gcalConfigured()){ gcalState="off"; return; }
-  gcalState="loading";
+  if(gcalInFlight) return;
+  if(!force && gcalState==="ok" && !gcalNeedsRefresh()) return;
+  gcalInFlight=true; gcalState="loading";
   try{
     await loadGis();
     const token=await gcalGetToken2();
@@ -1086,19 +1114,43 @@ async function fetchGcalWeek(){
     const dates=weekDatesOf(wk);
     const tmin=new Date(dates[0]+"T00:00:00").toISOString();
     const tmaxD=new Date(dates[6]+"T00:00:00"); tmaxD.setDate(tmaxD.getDate()+1);
-    const q=new URLSearchParams({timeMin:tmin, timeMax:tmaxD.toISOString(),
-      singleEvents:"true", maxResults:"100"});
-    const res=await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events?"+q,
-      {headers:{Authorization:"Bearer "+token}});
-    if(!res.ok) throw new Error("GCal "+res.status);
-    const data=await res.json();
-    gcalDerived=mapGcalEvents(data.items, dates);   // タイトルはここで捨てる
+    // 実際に使っているカレンダー(primary+selected)を対象に。
+    // 専用「週間クエスト」はID(wt_gcal_cal_id)とsummaryの両方で必ず除外
+    const exclId=localStorage.getItem("wt_gcal_cal_id");
+    let cals=["primary"];
+    try{
+      const list=await gcalApi2(token,
+        "https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader");
+      const usable=(list.items||[])
+        .filter(c=>c.primary||c.selected)
+        .filter(c=>c.id!==exclId && c.summary!=="週間クエスト")
+        .map(c=>c.id);
+      if(usable.length) cals=usable;
+    }catch(e){ /* calendarList不可ならprimaryのみ */ }
+    let items=[];
+    for(const cal of cals){
+      let pageToken=null;
+      do{
+        const q=new URLSearchParams({timeMin:tmin, timeMax:tmaxD.toISOString(),
+          singleEvents:"true", maxResults:"250"});
+        if(pageToken) q.set("pageToken", pageToken);
+        const data=await gcalApi2(token,
+          `https://www.googleapis.com/calendar/v3/calendars/${encodeURIComponent(cal)}/events?`+q);
+        items=items.concat(data.items||[]);
+        pageToken=data.nextPageToken||null;
+      }while(pageToken);
+    }
+    // タイトルはここで捨てる(派生cls/startMin/durMinのみ保持・永続化しない)
+    gcalDerived=mapGcalEvents(items, dates, {ownEventIds:collectOwnGcalIds()});
+    gcalFetchedAt=Date.now(); gcalFetchedWeek=wk;
     gcalState="ok";
   }catch(e){
     console.warn("GCal読み取り不可:", e.message);
     gcalState="error";
   }
-  render();
+  gcalInFlight=false;
+  // セッション中の入力を消さないよう、アイドルなTODAYとPLANだけ再描画
+  if(tab==="plan" || (tab==="workout" && !TD.activeSession())) render();
 }
 
 // 今週のプラン入力をtracker(wt_schedules)・sessions・overridesから組み立てる
@@ -1200,7 +1252,7 @@ function renderPlan(root){
   rcard.appendChild(el("div","plan-reasons",plan.reasons.map(esc).join("<br>")));
   const re=el("button","ghost-btn","🔄 再計算");
   re.style.marginTop="10px";
-  re.onclick=()=>{ render(); showToast("プランを再計算しました"); };
+  re.onclick=()=>{ fetchGcalWeek(true); render(); showToast("プランを再計算しました"); };
   rcard.appendChild(re);
   // GCal状態(タイトルは保持しない旨も明示)
   const gline=el("div","wo-progress");
@@ -1217,8 +1269,7 @@ function renderPlan(root){
   rcard.appendChild(gline);
   rcard.appendChild(el("div","wo-progress","日をタップ: 可→△→不可→自動。手動指定は自動判定より優先"));
   root.appendChild(rcard);
-  // 初回表示時に自動取得(未取得のときだけ)
-  if(gcalState==="idle") fetchGcalWeek();
+  if(gcalNeedsRefresh()) fetchGcalWeek();
 }
 
 // ── 前日以前のactive session: 再開 / 中断 を選ばせる ─────────────────────────
@@ -1258,6 +1309,7 @@ window.TrainingUI={
 // アプリ復帰・他タブ(tracker等)でのデータ変更時にプラン表示を最新化。
 // セッション中の入力を消さないよう、TODAYはアイドル時のみ自動再描画する
 function refreshIfStale(){
+  if(gcalNeedsRefresh()) fetchGcalWeek();   // foreground復帰・週替わり・TTL超過で再取得
   if(tab==="plan"){ render(); return; }
   if(tab==="workout" && !TD.activeSession()) render();
 }
@@ -1268,6 +1320,9 @@ window.addEventListener("storage",e=>{
 });
 
 if(tab==="workout") render();
+// 起動時: GCal設定済みならタブに関係なくバックグラウンドで取得を開始。
+// 取得前はwt_schedulesのみで即表示され、取得完了後にTODAY/PLANが再計算される
+if(gcalConfigured()) fetchGcalWeek();
 </script>
 </body>
 </html>

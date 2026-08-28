@@ -240,3 +240,53 @@ test("classOf: clsがあればタイトル分類より優先", () => {
   assert.equal(classOf({ cls: "hard", title: "会食" }), "hard");
   assert.equal(classOf({ title: "会食" }), "soft");
 });
+
+// ── Phase 4 hardening: cache鮮度・Weekly自作イベント除外 ─────────────────────
+import { gcalCacheStale } from "../js/training-plan.mjs";
+
+test("gcalCacheStale: TTL内・同一週はfresh", () => {
+  const now = Date.now();
+  assert.equal(gcalCacheStale({ fetchedAt: now - 5 * 60 * 1000, fetchedWeek: "2026-08-24",
+    nowMs: now, currentWeek: "2026-08-24" }), false);
+});
+
+test("gcalCacheStale: TTL(10分)超過でstale", () => {
+  const now = Date.now();
+  assert.equal(gcalCacheStale({ fetchedAt: now - 11 * 60 * 1000, fetchedWeek: "2026-08-24",
+    nowMs: now, currentWeek: "2026-08-24" }), true);
+});
+
+test("gcalCacheStale: weekKeyが変わったら必ずstale(TTL内でも)", () => {
+  const now = Date.now();
+  assert.equal(gcalCacheStale({ fetchedAt: now - 1000, fetchedWeek: "2026-08-24",
+    nowMs: now, currentWeek: "2026-08-31" }), true);
+});
+
+test("gcalCacheStale: 未取得(fetchedWeek=null)はstale", () => {
+  assert.equal(gcalCacheStale({ nowMs: Date.now(), currentWeek: "2026-08-24" }), true);
+});
+
+test("mapGcalEvents: source marker(weekly-quest)のイベントを除外", () => {
+  const out = mapGcalEvents([
+    { id: "e1", summary: "🏋 筋トレ", start: { dateTime: new Date(2026, 7, 27, 19, 0).toISOString() },
+      end: { dateTime: new Date(2026, 7, 27, 20, 0).toISOString() },
+      extendedProperties: { private: { source: "weekly-quest" } } },
+    { id: "e2", summary: "会食", start: { dateTime: new Date(2026, 7, 27, 19, 0).toISOString() },
+      end: { dateTime: new Date(2026, 7, 27, 21, 0).toISOString() } },
+  ], DATES);
+  assert.equal(out[THU].length, 1);
+  assert.equal(out[THU][0].cls, "soft");
+});
+
+test("mapGcalEvents: ownEventIds(wt_schedulesのgcalId)のイベントを除外", () => {
+  const out = mapGcalEvents([
+    { id: "own_abc", summary: "💪 筋トレ(胸)",
+      start: { dateTime: new Date(2026, 7, 27, 19, 0).toISOString() },
+      end: { dateTime: new Date(2026, 7, 27, 20, 0).toISOString() } },
+    { id: "other", summary: "当直",
+      start: { dateTime: new Date(2026, 7, 29, 17, 0).toISOString() },
+      end: { dateTime: new Date(2026, 7, 30, 9, 0).toISOString() } },
+  ], DATES, { ownEventIds: new Set(["own_abc"]) });
+  assert.equal(out[THU], undefined);            // 自作イベントはbusyに数えない
+  assert.equal(out[SAT][0].cls, "hard");        // 他人由来のhardは残る
+});

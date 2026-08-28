@@ -51,10 +51,23 @@ export function classOf(e) {
 // タイトルは分類にだけ使い、返り値には残さない)。
 // - 全日イベント: 時刻情報なし(clsのみ)。長時間減点はかけない
 // - overnight: 開始日に割り当て、durationは実時間
-export function mapGcalEvents(items, dates) {
+// GCalキャッシュの鮮度判定(メモリ保持のfetchedAt/fetchedWeekに対して)。
+// 週が変わったら必ずstale、同一週ならTTL(既定10分)超過でstale。
+export function gcalCacheStale({ fetchedAt = 0, fetchedWeek = null, nowMs, currentWeek, ttlMs = 10 * 60 * 1000 }) {
+  if (fetchedWeek !== currentWeek) return true;
+  return (nowMs - fetchedAt) > ttlMs;
+}
+
+// opts.ownEventIds: Weekly自身が作成したイベントID(wt_schedulesのgcalId)のSet。
+//   専用カレンダー作成に失敗してprimaryへfallbackした既存イベントもこれで除外。
+// extendedProperties.private.source==="weekly-quest" のsource markerも除外。
+export function mapGcalEvents(items, dates, opts = {}) {
+  const own = opts.ownEventIds || null;
   const out = {};
   (items || []).forEach(it => {
     if (it.status === "cancelled") return;
+    if (own && it.id && own.has(it.id)) return;                       // Weekly自作(既存)
+    if (it.extendedProperties?.private?.source === "weekly-quest") return;  // source marker
     const allDay = !it.start?.dateTime;
     const startRaw = it.start?.dateTime || it.start?.date;
     if (!startRaw) return;

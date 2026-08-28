@@ -732,6 +732,8 @@ function gcalEventBody(entry,dateObj){
     start:{dateTime:`${dstr}T${entry.time}:00`,timeZone:"Asia/Tokyo"},
     end:{dateTime:`${dstr}T${entry.endTime||entry.time}:00`,timeZone:"Asia/Tokyo"},
     visibility:"private",
+    // gym.htmlのbusy判定がWeekly自作イベントを除外できるようsource markerを付ける
+    extendedProperties:{private:{source:"weekly-quest"}},
   };
 }
 async function gcalApi(path,method,body){
