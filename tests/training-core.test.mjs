@@ -643,3 +643,25 @@ test("compare: active → 進行中表示・deltaなし", () => {
   assert.equal(c.lastLabel, "進行中");
   assert.equal(c.delta, null);
 });
+
+// ── 自由記録モード ───────────────────────────────────────────────────────────
+import { templateExerciseDef, freeLogMatchesTemplate, FREE_DEFAULT_DEF } from "../js/training-core.mjs";
+
+const PROG = { templates: [
+  { id: "A", exercises: [{ ex: "ベンチプレス", part: "chest", sets: 4, repMin: 6, repMax: 10 }] },
+  { id: "C", exercises: [{ ex: "スクワット", part: "leg", sets: 4, repMin: 6, repMax: 10 }] },
+]};
+
+test("free: 種目名からテンプレ定義を引く/無ければ汎用デフォルト", () => {
+  const d = templateExerciseDef(PROG, "ベンチプレス");
+  assert.equal(d.sets, 4); assert.equal(d.templateId, "A"); assert.equal(d.part, "chest");
+  assert.equal(templateExerciseDef(PROG, "腕立て伏せ"), null);
+  assert.deepEqual(FREE_DEFAULT_DEF, { sets: 3, repMin: 8, repMax: 12 });
+});
+
+test("free: 提案テンプレの部位が1つでも記録されていれば達成扱い", () => {
+  const A = PROG.templates[0];
+  assert.equal(freeLogMatchesTemplate(A, ["chest"]), true);
+  assert.equal(freeLogMatchesTemplate(A, ["leg", "core"]), false);
+  assert.equal(freeLogMatchesTemplate(A, []), false);
+});

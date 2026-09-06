@@ -344,6 +344,25 @@ export function monkStateFromRecords(records, todayKey) {
   return { rawXP: raw, xp, lvl, tier: questTierOf(lvl), lastDone };
 }
 
+// ── 自由記録モード(pure) ─────────────────────────────────────────────────────
+// 種目名からテンプレート上の定義(sets/rep範囲)を引く。どのテンプレにも無ければ
+// 汎用デフォルト(3セット×8-12)。自由記録でも強度提案を出すために使う
+export const FREE_DEFAULT_DEF = { sets: 3, repMin: 8, repMax: 12 };
+export function templateExerciseDef(program, exName) {
+  for (const t of (program?.templates || [])) {
+    const e = (t.exercises || []).find(x => x.ex === exName);
+    if (e) return { sets: e.sets, repMin: e.repMin, repMax: e.repMax, part: e.part, templateId: t.id };
+  }
+  return null;
+}
+
+// 自由記録した部位が提案テンプレの部位と1つでも重なれば「そのWorkoutを達成」扱い。
+// 順番・種目数は問わない(自由度優先)
+export function freeLogMatchesTemplate(tpl, loggedParts) {
+  const tplParts = new Set((tpl?.exercises || []).map(e => e.part));
+  return (loggedParts || []).some(p => tplParts.has(p));
+}
+
 // ── Template編集の不変条件(pure) ─────────────────────────────────────────────
 // slot IDは過去ログ(workoutTemplate+slot)を含めて絶対に再利用しない。
 // 再利用すると旧種目のgym_logsを新種目がprogression履歴として誤継承するため。
