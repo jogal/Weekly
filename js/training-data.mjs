@@ -146,6 +146,20 @@ export function finishSession(id, difficulty) {
 export function abortSession(id) {
   return updateSession(id, { status: "aborted", completedAt: new Date().toISOString() });
 }
+// 自由記録からの達成: その日に完了sessionがまだ無ければ、source:"free" の
+// completed sessionを1つだけ作る(サイクル・プランはこれで進む)。1日1回まで
+export function ensureFreeSession(templateId, dateKey) {
+  const sessions = loadSessions();
+  if (sessions.some(s => s.date === dateKey && s.status === "completed")) return false;
+  const now = new Date();
+  sessions.push({
+    id: "free_" + now.getTime(), date: dateKey, templateId,
+    startedAt: now.toISOString(), completedAt: now.toISOString(),
+    status: "completed", difficulty: null, curEx: 0, source: "free",
+  });
+  saveSessions(sessions);
+  return true;
+}
 
 // ── Daily check-in(体重・タンパク質のみ) ─────────────────────────────────────
 export function loadDaily() { return rd(K.daily, {}); }

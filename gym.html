@@ -268,9 +268,9 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   </div>
   <div id="content"></div>
   <div id="tabbar">
-    <button class="tab-btn active" data-tab="workout"><span class="tab-ico">🏋</span>TODAY</button>
+    <button class="tab-btn active" data-tab="today"><span class="tab-ico">⚡</span>きろく</button>
+    <button class="tab-btn" data-tab="workout"><span class="tab-ico">🏋</span>WORKOUT</button>
     <button class="tab-btn" data-tab="plan"><span class="tab-ico">🗓</span>PLAN</button>
-    <button class="tab-btn" data-tab="today"><span class="tab-ico">⚡</span>きろく</button>
     <button class="tab-btn" data-tab="history"><span class="tab-ico">📜</span>履歴</button>
   </div>
 </div>
@@ -336,7 +336,7 @@ let custom = JSON.parse(localStorage.getItem("gym_custom")||"{}"); // 部位id �
 let sel    = JSON.parse(localStorage.getItem("gym_sel")||"null") || {part:"chest", ex:"ベンチプレス"};
 let marks  = JSON.parse(localStorage.getItem("gym_marks")||"{}");  // 週クエに自動記入したキー
 let stepPref=JSON.parse(localStorage.getItem("gym_stepkg")||"{}"); // 種目名 → 重量の刻み(kg)
-let tab    = "workout";
+let tab    = "today";
 let kg=0, reps=10;
 
 function persist(){
@@ -363,6 +363,14 @@ function stepOf(ex){
 
 // 選択種目の前回値を kg/reps に反映(ズボラ: 前回のままなら⚡を押すだけ)
 function loadDefaults(){
+  // 自由記録でも強度提案を効かせる: エンジンの目標(kg×目標rep)を優先プリフィル
+  const q=window.TrainingUI? window.TrainingUI.quickTarget(sel.ex) : null;
+  if(q && q.target && q.target.weight!=null){
+    kg=q.target.weight;
+    const arr=q.target.suggestedSetTargets||[];
+    reps=arr[Math.min(q.doneToday, Math.max(arr.length-1,0))] ?? (arr[0]||10);
+    return;
+  }
   const d=lastEx[sel.ex];
   kg   = d? d.kg   : 0;
   reps = d? d.reps : 10;
@@ -432,6 +440,9 @@ function saveSet(ex, part, kgV, repsV, meta){
 function addSet(meta){
   saveSet(sel.ex, sel.part, kg, reps, meta);
   showToast("⚡ "+sel.ex+" "+fmtKg(kg)+"×"+reps+" 記録!(週クエ反映)");
+  // 自由記録から提案Workoutの達成判定(サイクル・プランを進める)
+  if(window.TrainingUI) window.TrainingUI.onQuickLog();
+  loadDefaults();
   render();
 }
 function delSet(iso){
@@ -479,6 +490,8 @@ function stepBtn(label, cls, fn){
 function renderToday(root){
   const now=new Date();
   const tl=todayLogs();
+  // 今日の提案(参考): 提案テンプレと種目チップ。moduleが描く
+  if(window.TrainingUI) window.TrainingUI.renderQuickSuggestion(root);
 
   // 今日カード: 日付は自動、今週やった部位がチップで光る
   const head=el("div","card");
@@ -554,6 +567,23 @@ function renderToday(root){
   };
   title.insertBefore(stepTgl, title.querySelector("#sel-ex-part"));
   card.appendChild(title);
+  // 前回 / 今日の目標(progressive overload engine)。自由記録でも提案を出す
+  if(window.TrainingUI){
+    const q=window.TrainingUI.quickTarget(sel.ex);
+    if(q){
+      card.appendChild(el("div","wo-prev-line",`前回　<b>${q.prevText}</b>`));
+      if(q.target.status!=="first_time"){
+        const tl2=el("div","wo-prev-line");
+        tl2.innerHTML=`今日　<b>${q.targetText}</b>`;
+        if(q.target.status==="increase_weight") tl2.style.color="var(--bolt)";
+        card.appendChild(tl2);
+        const rs=el("div","wo-progress",esc(q.target.reason)); rs.style.marginBottom="10px";
+        card.appendChild(rs);
+      }else{
+        card.appendChild(el("div","wo-prev-line",`今日　<b>${esc(q.target.reason)}</b>`));
+      }
+    }
+  }
 
   // 重量: −10 / −刻み / 値 / +刻み / +10 (0で自重)
   const wRow=el("div","stepper-row");
@@ -1587,6 +1617,79 @@ function renderStale(root, sess){
   root.appendChild(card);
 }
 
+// ── 自由記録モード(きろくタブ) ────────────────────────────────────────────────
+// 種目名ベースで前回/今日の目標を出す(構造モードと自由記録のログを統合して評価)。
+// 今日のぶんは除外して目標を計算し、今日既に記録したセット数で目標repの位置を進める
+function quickTarget(ex){
+  if(!ex) return null;
+  const program=TD.loadProgram();
+  const def=core.templateExerciseDef(program, ex)||core.FREE_DEFAULT_DEF;
+  const sessions=TD.loadSessions();
+  const startOfToday=new Date(); startOfToday.setHours(0,0,0,0);
+  const hist=core.sessionHistory(logs, ex, {sessions, beforeISO:startOfToday.toISOString()});
+  const prev=hist.length? hist[hist.length-1]:null;
+  const key=(core.templateExerciseDef(program, ex)||{});
+  const pain=key.templateId? core.lastSessionPainFlag(sessions, key.templateId, ex):false;
+  const target=core.getNextExerciseTarget({history:hist, targetSets:def.sets,
+    repMin:def.repMin, repMax:def.repMax, increment:stepOf(ex), pain});
+  const doneToday=logs.filter(l=>l.ex===ex && core.localDayKey(l.t)===core.localDayKey(new Date())).length;
+  return {
+    prev, target, def, doneToday,
+    prevText: fmtPrev(prev),
+    targetText: target.status==="first_time" ? esc(target.reason)
+      : `${fmtW(target.weight)}　計${target.targetTotalReps}回以上（${target.suggestedSetTargets.join("/")}）`,
+  };
+}
+// きろくタブ先頭の「今日の提案」ストリップ。提案は参考。種目タップで記録欄にセット
+function renderQuickSuggestion(root){
+  const program=TD.loadProgram();
+  const nextId=TD.nextWorkoutTemplateId(program);
+  const tpl=TD.templateById(program, nextId);
+  const todayKey=core.localDayKey(new Date());
+  const doneToday=TD.loadSessions().find(s=>s.date===todayKey&&s.status==="completed");
+  const todayParts=new Set(logs.filter(l=>core.localDayKey(l.t)===todayKey).map(l=>l.part));
+  const card=el("div","card");
+  card.style.borderTop="3px solid var(--bolt)";
+  const head=el("div","wo-head",
+    doneToday
+      ? `<span class="wo-name">✅ 今日は ${esc(TD.templateById(program, doneToday.templateId).name)} 達成</span>
+         <span class="wo-focus">次は ${esc(tpl.name)}</span>`
+      : `<span class="wo-name">今日の提案　${esc(tpl.name)}</span><span class="wo-focus">${esc(tpl.focus)}</span>`);
+  card.appendChild(head);
+  if(!doneToday){
+    const chips=el("div","wo-chips"); chips.style.flexWrap="wrap"; chips.style.marginTop="8px";
+    tpl.exercises.forEach(e=>{
+      const hit=todayParts.has(e.part);
+      const c=el("button","wo-chip",(hit?"✓ ":"")+esc(e.ex));
+      c.style.flex="0 0 auto";
+      if(e.ex===sel.ex){ c.style.borderColor="var(--bolt)"; c.style.color="var(--bolt)"; }
+      c.onclick=()=>{
+        if(!exListOf(e.part).includes(e.ex)) (custom[e.part]=custom[e.part]||[]).push(e.ex);
+        sel.part=e.part; sel.ex=e.ex; loadDefaults(); persist(); render();
+      };
+      chips.appendChild(c);
+    });
+    card.appendChild(chips);
+    card.appendChild(el("div","wo-progress",
+      "参考メニュー。順番・種目数は自由。提案の部位を1セットでも記録すれば達成扱い(サイクルが進む)"));
+  }
+  root.appendChild(card);
+}
+// 自由記録の達成判定: 提案テンプレの部位が今日記録されていればfree sessionを作る
+function onQuickLog(){
+  if(TD.activeSession()) return;                    // 構造モード中は何もしない
+  const program=TD.loadProgram();
+  const nextId=TD.nextWorkoutTemplateId(program);
+  const tpl=TD.templateById(program, nextId);
+  const todayKey=core.localDayKey(new Date());
+  const parts=logs.filter(l=>core.localDayKey(l.t)===todayKey).map(l=>l.part);
+  if(!core.freeLogMatchesTemplate(tpl, parts)) return;
+  if(TD.ensureFreeSession(nextId, todayKey)){
+    const nextName=TD.templateById(program, TD.nextWorkoutTemplateId(program)).name;
+    showToast(`🏆 ${tpl.name} 達成扱い → 次は ${nextName}`);
+  }
+}
+
 // ── テンプレート編集(Settings) ────────────────────────────────────────────────
 // タップ+promptの軽量エディタ。gym_program_v2へ保存(デフォルトへの復元も可能)
 const PART_IDS=["chest","back","shoulder","arm","leg","core"];
@@ -1717,6 +1820,9 @@ window.TrainingUI={
   },
   renderPlan,
   renderExerciseHistory,
+  quickTarget,
+  renderQuickSuggestion,
+  onQuickLog,
   exportV2: TD.exportV2,
   importV2: TD.importV2,
 };
@@ -1754,7 +1860,7 @@ document.getElementById("ai-config-btn").onclick=()=>{
   if(tab==="workout"&&!TD.activeSession()) render();
 };
 
-if(tab==="workout") render();
+if(tab==="workout"||tab==="today") render();
 // 起動時: GCal設定済みならタブに関係なくバックグラウンドで取得を開始。
 // 取得前はwt_schedulesのみで即表示され、取得完了後にTODAY/PLANが再計算される
 if(gcalConfigured()) fetchGcalWeek();
