@@ -70,3 +70,16 @@ test("backup: exportはaiTokenをredactしaiCacheを含めない/importはtoken�
   assert.equal(prof.heightCm, 160);
   assert.equal(prof.aiToken, "LOCAL");              // 既存credential維持・EVILは無視
 });
+
+test("free: ensureFreeSessionは1日1回だけcompleted sessionを作る", () => {
+  localStorage.clear();
+  assert.equal(TD.ensureFreeSession("A", "2026-08-28"), true);
+  assert.equal(TD.ensureFreeSession("A", "2026-08-28"), false);   // 同日2回目は作らない
+  assert.equal(TD.ensureFreeSession("B", "2026-08-28"), false);   // 別templateでも同日は不可
+  const s = TD.loadSessions();
+  assert.equal(s.length, 1);
+  assert.equal(s[0].status, "completed");
+  assert.equal(s[0].source, "free");
+  assert.equal(TD.lastCompletedTemplateId(), "A");                 // サイクルが進む
+  assert.equal(TD.ensureFreeSession("B", "2026-08-29"), true);     // 翌日はOK
+});
