@@ -1160,7 +1160,8 @@ function renderActive(root, sess){
     `<span style="font-size:10px;color:${part.color};border:1px solid currentColor;padding:2px 9px;letter-spacing:.14em;margin-left:8px">${part.label}</span>`));
   headRow.appendChild(headR);
   card.appendChild(headRow);
-  card.appendChild(el("div","wo-target",`TARGET　${exDef.sets}セット × ${exDef.repMin}–${exDef.repMax}回`));
+  card.appendChild(el("div","wo-target",
+    `${exDef.optional?"OPTIONAL　":"TARGET　"}${exDef.sets}セット × ${exDef.repMin}–${exDef.repMax}回`));
   card.appendChild(el("div","wo-prev-line",`前回　<b>${fmtPrev(prev)}</b>`));
   // 今日の目標(progressive overload engineの決定 + 短い理由)
   if(tgt.status!=="first_time"){
@@ -1261,14 +1262,17 @@ function renderActive(root, sess){
 function openFinish(sess, tpl){
   const all=sessionAllSets(sess);
   // Optional種目は完了判定の必要セット数に含めない。
-  const planned=tpl.exercises.filter(e=>!e.optional).reduce((a,e)=>a+e.sets,0);
-  const under = all.length>0 && all.length < Math.ceil(planned*0.5);
+  const coreExercises=tpl.exercises.filter(e=>!e.optional);
+  const coreNames=new Set(coreExercises.map(e=>e.ex));
+  const planned=coreExercises.reduce((a,e)=>a+e.sets,0);
+  const coreDone=all.filter(l=>coreNames.has(l.ex)).length;
+  const under = coreDone>0 && coreDone < Math.ceil(planned*0.5);
   const ov=el("div","overlay");
   const box=el("div","modal-box");
   box.appendChild(el("h3","modal-title","今日のワークアウトはどうだった？"));
   if(under){
     box.appendChild(el("p","modal-sub",
-      `⚠ Main Questはまだ ${all.length}/${planned} セット。今日はここまでなら「中断」、十分やれたならそのまま完了でOKです。`))
+      `⚠ Main Questはまだ ${coreDone}/${planned} セット。今日はここまでなら「中断」、十分やれたならそのまま完了でOKです。`))
       .style.cssText="font-size:12px;color:var(--dim);margin:0 0 12px";
   }
   [["easy","😎 楽だった"],["good","💪 ちょうど良い"],["hard","🥵 キツかった"]].forEach(([v,label])=>{
@@ -1656,14 +1660,14 @@ function renderQuickSuggestion(root){
   const head=el("div","wo-head",
     doneToday
       ? `<span class="wo-name">✅ 今日は ${esc(TD.templateById(program, doneToday.templateId).name)} 達成</span>
-         <span class="wo-focus">次は ${esc(tpl.name)}</span>`
+         <span class="wo-focus">次回は1日休んでから</span>`
       : `<span class="wo-name">今日の提案　${esc(tpl.name)}</span><span class="wo-focus">${esc(tpl.focus)}</span>`);
   card.appendChild(head);
   if(!doneToday){
     const chips=el("div","wo-chips"); chips.style.flexWrap="wrap"; chips.style.marginTop="8px";
     tpl.exercises.forEach(e=>{
       const hit=todayParts.has(e.part);
-      const c=el("button","wo-chip",(hit?"✓ ":"")+esc(e.ex));
+      const c=el("button","wo-chip",(hit?"✓ ":"")+(e.optional?"＋ ":"")+esc(e.ex));
       c.style.flex="0 0 auto";
       if(e.ex===sel.ex){ c.style.borderColor="var(--bolt)"; c.style.color="var(--bolt)"; }
       c.onclick=()=>{
@@ -1674,11 +1678,11 @@ function renderQuickSuggestion(root){
     });
     card.appendChild(chips);
     card.appendChild(el("div","wo-progress",
-      "参考メニュー。順番・種目数は自由。提案の部位を1セットでも記録すれば達成扱い(サイクルが進む)"));
+      "順番・種目数は自由。胸と背中を両方記録したらMain Quest達成。＋は余力がある日のOptional。"));
   }
   root.appendChild(card);
 }
-// 自由記録の達成判定: 提案テンプレの部位が今日記録されていればfree sessionを作る
+// 自由記録の達成判定: requiredParts(標準は胸＋背中)を満たしたらfree sessionを作る
 function onQuickLog(){
   if(TD.activeSession()) return;                    // 構造モード中は何もしない
   const program=TD.loadProgram();
@@ -1688,8 +1692,7 @@ function onQuickLog(){
   const parts=logs.filter(l=>core.localDayKey(l.t)===todayKey).map(l=>l.part);
   if(!core.freeLogMatchesTemplate(tpl, parts)) return;
   if(TD.ensureFreeSession(nextId, todayKey)){
-    const nextName=TD.templateById(program, TD.nextWorkoutTemplateId(program)).name;
-    showToast(`🏆 ${tpl.name} 達成扱い → 次は ${nextName}`);
+    showToast(`🏆 ${tpl.name} 達成。次回は1日休んでから`);
   }
 }
 
