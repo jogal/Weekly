@@ -42,7 +42,7 @@ export function saveProfile(p) { wr(K.profile, p); }
 // optional=true は余力がある日の追加クエスト。未実施でもWorkout完了を妨げない。
 // 既存のユーザー編集済みprogramは勝手に上書きしない。
 // 旧デフォルトA/B/C/Dのままの端末だけ、初回load時に新標準へ移行する。
-export const PROGRAM_VERSION = 3;
+export const PROGRAM_VERSION = 4;
 
 const LEGACY_DEFAULT_SIGNATURE = [
   "A|ベンチプレス:4:6:10|インクラインダンベルプレス:3:8:12|ケーブルフライ:3:10:15|サイドレイズ:4:12:20|トライセプスプレスダウン:3:8:15",
@@ -62,17 +62,32 @@ function isUntouchedLegacyDefault(p) {
     JSON.stringify(programSignature(p)) === JSON.stringify(LEGACY_DEFAULT_SIGNATURE);
 }
 
+function isV3RepeatDefault(p) {
+  if (p?.programVersion !== 3 || p?.mode !== "repeat" || !Array.isArray(p.templates) || p.templates.length !== 1) return false;
+  const t = p.templates[0];
+  const names = (t.exercises || []).map(e => e.ex);
+  return t.id === "MAIN" &&
+    JSON.stringify(names) === JSON.stringify([
+      "ベンチプレス", "懸垂", "インクラインダンベルプレス", "チェストサポーテッドロウ",
+      "ケーブルフライ", "サイドレイズ", "レッグプレス"
+    ]);
+}
+
 export const DEFAULT_TEMPLATES = [
-  { id: "MAIN", name: "Main Quest", focus: "胸＋背中 / 余力で追加", requiredParts: ["chest", "back"], exercises: [
-    // 旧ABCDの同一種目はslotを引き継ぎ、既存ログをそのままprogressionに使う。
-    { ex: "ベンチプレス",               slot: "A1",    part: "chest",    sets: 4, repMin: 6,  repMax: 10 },
-    { ex: "懸垂",                       slot: "MAIN2", part: "back",     sets: 3, repMin: 5,  repMax: 10 },
-    { ex: "インクラインダンベルプレス", slot: "A2",    part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "チェストサポーテッドロウ",   slot: "B2",    part: "back",     sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "ケーブルフライ",             slot: "A3",    part: "chest",    sets: 2, repMin: 10, repMax: 15, optional: true },
-    { ex: "サイドレイズ",               slot: "A4",    part: "shoulder", sets: 2, repMin: 12, repMax: 20, optional: true },
-    { ex: "レッグプレス",               slot: "MAIN7", part: "leg",      sets: 2, repMin: 8,  repMax: 12, optional: true },
-  ]},
+  {
+    id: "MAIN",
+    name: "Main Quest",
+    focus: "胸＋背中 / 3 of 5",
+    minExercises: 3,
+    exercises: [
+      // 実際に続いている順番をそのまま標準化。5種目すべて必須にはしない。
+      { ex: "懸垂",                       slot: "MAIN2", part: "back",     sets: 3, repMin: 5,  repMax: 10 },
+      { ex: "ベンチプレス",               slot: "A1",    part: "chest",    sets: 4, repMin: 6,  repMax: 10 },
+      { ex: "リアデルト",                 slot: "MAIN3", part: "shoulder", sets: 3, repMin: 10, repMax: 15 },
+      { ex: "インクラインダンベルプレス", slot: "A2",    part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
+      { ex: "ラットプルダウン",           slot: "B1",    part: "back",     sets: 3, repMin: 8,  repMax: 12 },
+    ],
+  },
 ];
 
 // DEFAULT_TEMPLATESは絶対にmutateさせない: fallback/resetは必ずdeep cloneを返す
@@ -91,7 +106,7 @@ export function defaultProgram() {
 export function loadProgram() {
   const p = rd(K.program, null);
   if (p && Array.isArray(p.templates) && p.templates.length) {
-    if (!p.programVersion && isUntouchedLegacyDefault(p)) {
+    if ((!p.programVersion && isUntouchedLegacyDefault(p)) || isV3RepeatDefault(p)) {
       const migrated = defaultProgram();
       wr(K.program, migrated);
       return migrated;
