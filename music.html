@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="音楽🎵">
-<meta name="theme-color" content="#0c0c0e">
+<meta name="theme-color" content="#08090b">
 <title>🎵音楽練習記録</title>
 <link rel="manifest" href="music-manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -171,8 +171,9 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 .h-item-name { font-weight:700; letter-spacing:.04em; }
 .h-item-sets { color:var(--dim); margin-top:2px; font-family:var(--cond); letter-spacing:.06em; }
 </style>
+<link rel="stylesheet" href="css/weekly-theme.css">
 </head>
-<body>
+<body data-app="music">
 <div id="app">
   <div id="note-bg"><svg viewBox="0 0 120 160" fill="#8a97ff">
     <ellipse cx="30" cy="130" rx="22" ry="16"/>
@@ -183,7 +184,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   </svg></div>
   <div id="header">
     <p id="app-title">
-      <span>MUSIC <span class="t-red">LOG</span><span class="t-jp">音楽練習</span></span>
+      <span>Music <span class="t-red">Room</span><span class="t-jp">音楽練習</span></span>
       <span>
         <a class="mini-btn" href="tracker.html">QUEST</a>
         <a class="mini-btn" href="gym.html">GYM</a>
@@ -194,8 +195,8 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   </div>
   <div id="content"></div>
   <div id="tabbar">
-    <button class="tab-btn active" data-tab="today"><span class="tab-ico">🎵</span>きろく</button>
-    <button class="tab-btn" data-tab="history"><span class="tab-ico">📜</span>履歴</button>
+    <button class="tab-btn active" data-tab="today"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18V5l11-2v13M9 9l11-2"/><ellipse cx="6" cy="18" rx="3" ry="3"/><ellipse cx="17" cy="16" rx="3" ry="3"/></svg></span>きろく</button>
+    <button class="tab-btn" data-tab="history"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2 7M3 4v7h7m2-4v6l4 2"/></svg></span>履歴</button>
   </div>
 </div>
 
@@ -380,7 +381,8 @@ function renderToday(root){
   const tl=todayLogs();
 
   // 今日カード: 日付は自動、今週練習した曜日がチップで光る
-  const head=el("div","card");
+  const head=el("div","card today-overview");
+  head.appendChild(el("div","",'<p class="eyebrow">PRACTICE ROOM</p><h1>今日の音を、少しずつ。</h1><p class="intro-note">短い練習も、積み重ねに。</p>'));
   const wd=["日","月","火","水","木","金","土"][now.getDay()];
   head.appendChild(el("div","", `<div id="today-line">
     <span id="today-date">${now.getMonth()+1}/${now.getDate()}(${wd})</span>
