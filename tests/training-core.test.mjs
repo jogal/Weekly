@@ -676,3 +676,21 @@ test("free: requiredPartsは全て記録して初めて達成", () => {
   assert.equal(freeLogMatchesTemplate(main, ["chest", "back"]), true);
   assert.equal(freeLogMatchesTemplate(main, ["chest", "back", "shoulder"]), true);
 });
+
+test("free: 新Main Questは候補5種目のうち異なる3種目で達成", async () => {
+  const { questExerciseProgress } = await import("../js/training-core.mjs");
+  const main = {
+    minExercises: 3,
+    exercises: ["懸垂","ベンチプレス","リアデルト","インクラインダンベルプレス","ラットプルダウン"]
+      .map(ex=>({ex,part:"x"})),
+  };
+  const two=["懸垂","ベンチプレス"];
+  const three=[...two,"リアデルト"];
+  const five=[...three,"インクラインダンベルプレス","ラットプルダウン"];
+  assert.equal(freeLogMatchesTemplate(main, ["back","chest"], two), false);
+  assert.equal(freeLogMatchesTemplate(main, ["back","chest","shoulder"], three), true);
+  assert.deepEqual(questExerciseProgress(main, three),
+    {done:3,total:5,target:3,complete:true,bonus:0});
+  assert.deepEqual(questExerciseProgress(main, five),
+    {done:5,total:5,target:3,complete:true,bonus:2});
+});

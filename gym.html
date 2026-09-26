@@ -861,7 +861,7 @@ function renderIdle(root){
   tpl.exercises.forEach(e=>{
     const prev=core.lastSessionSets(logs, e.ex, {slot:e.slot});
     list.appendChild(el("div","wo-exrow",
-      `<span>${e.optional?'<span class="wo-progress">OPTIONAL</span> ':''}${esc(e.ex)} <span class="wo-progress">${e.sets}×${e.repMin}-${e.repMax}</span></span>
+      `<span>${esc(e.ex)} <span class="wo-progress">${e.sets}×${e.repMin}-${e.repMax}</span></span>
        <span class="prev">${prev? "前回 "+esc(fmtPrevShort(prev)) : "初回"}</span>`));
   });
   card.appendChild(list);
@@ -1137,9 +1137,11 @@ function renderActive(root, sess){
   }
 
   const head=el("div","card");
+  const sessionExercises=new Set(sessionAllSets(sess).map(l=>l.ex));
+  const questProgress=core.questExerciseProgress(tpl,[...sessionExercises]);
   head.appendChild(el("div","wo-head",
     `<span class="wo-name">${esc(tpl.name)}</span>
-     <span class="wo-progress">${i+1} / ${n} 種目</span>`));
+     <span class="wo-progress">${questProgress.done}/${questProgress.target||n} CLEAR ・ ${i+1}/${n}</span>`));
   root.appendChild(head);
 
   const card=el("div","card"); card.id="input-card";
@@ -1261,36 +1263,40 @@ function renderActive(root, sess){
 // 進まないように「中断(サイクルを進めない)」も選べるようにする。
 function openFinish(sess, tpl){
   const all=sessionAllSets(sess);
-  // Optional種目は完了判定の必要セット数に含めない。
-  const coreExercises=tpl.exercises.filter(e=>!e.optional);
-  const coreNames=new Set(coreExercises.map(e=>e.ex));
-  const planned=coreExercises.reduce((a,e)=>a+e.sets,0);
-  const coreDone=all.filter(l=>coreNames.has(l.ex)).length;
-  const under = all.length>0 && coreDone < Math.ceil(planned*0.5);
+  const exerciseNames=[...new Set(all.map(l=>l.ex))];
+  const progress=core.questExerciseProgress(tpl,exerciseNames);
   const ov=el("div","overlay");
   const box=el("div","modal-box");
   box.appendChild(el("h3","modal-title","今日のワークアウトはどうだった？"));
-  if(under){
-    box.appendChild(el("p","modal-sub",
-      `⚠ Main Questはまだ ${coreDone}/${planned} セット。今日はここまでなら「中断」、十分やれたならそのまま完了でOKです。`))
-      .style.cssText="font-size:12px;color:var(--dim);margin:0 0 12px";
+  if(progress.target!=null){
+    const label=progress.complete
+      ? (progress.done>=progress.total ? `🏆 FULL CLEAR　${progress.done}/${progress.total}種目`
+        : progress.done>progress.target ? `✨ BONUS CLEAR　${progress.done}/${progress.total}種目`
+        : `⚡ MAIN QUEST CLEAR　${progress.done}/${progress.total}種目`)
+      : `あと${progress.target-progress.done}種目でMain Quest達成（${progress.done}/${progress.total}）`;
+    const p=el("p","modal-sub",label);
+    p.style.cssText="font-size:13px;color:var(--dim);margin:0 0 12px";
+    box.appendChild(p);
+  }
+  if(progress.target!=null && !progress.complete && all.length){
+    const keep=el("button","diff-btn",`▶ あと${progress.target-progress.done}種目やる`);
+    keep.onclick=()=>document.body.removeChild(ov);
+    box.appendChild(keep);
   }
   [["easy","😎 楽だった"],["good","💪 ちょうど良い"],["hard","🥵 キツかった"]].forEach(([v,label])=>{
-    const b=el("button","diff-btn",label);
-    b.onclick=()=>{ document.body.removeChild(ov); doFinish(sess, tpl, v, all); };
+    const b=el("button","diff-btn", progress.complete ? label : "途中終了として保存・"+label);
+    b.onclick=()=>{
+      document.body.removeChild(ov);
+      if(progress.target!=null && !progress.complete){
+        TD.abortSession(sess.id);
+        showToast(`今日は${progress.done}/${progress.total}種目。記録は残しました`);
+        render();
+      }else{
+        doFinish(sess, tpl, v, all);
+      }
+    };
     box.appendChild(b);
   });
-  if(all.length){
-    const ab=el("button","diff-btn","🛑 中断する（記録は残す・サイクルは進めない）");
-    ab.style.color="var(--dim)";
-    ab.onclick=()=>{
-      document.body.removeChild(ov);
-      TD.abortSession(sess.id);
-      showToast("中断しました（次回も同じWorkoutから）");
-      render();
-    };
-    box.appendChild(ab);
-  }
   const cancel=el("button","ghost-btn", all.length? "まだ続ける" : "セット0のまま破棄");
   cancel.onclick=()=>{
     document.body.removeChild(ov);
@@ -1653,46 +1659,58 @@ function renderQuickSuggestion(root){
   const nextId=TD.nextWorkoutTemplateId(program);
   const tpl=TD.templateById(program, nextId);
   const todayKey=core.localDayKey(new Date());
+  const todayLogs=logs.filter(l=>core.localDayKey(l.t)===todayKey);
+  const todayExercises=[...new Set(todayLogs.map(l=>l.ex))];
+  const progress=core.questExerciseProgress(tpl,todayExercises);
   const doneToday=TD.loadSessions().find(s=>s.date===todayKey&&s.status==="completed");
-  const todayParts=new Set(logs.filter(l=>core.localDayKey(l.t)===todayKey).map(l=>l.part));
   const card=el("div","card");
   card.style.borderTop="3px solid var(--bolt)";
+  const status=doneToday
+    ? (progress.done>=progress.total ? "FULL CLEAR" : progress.done>progress.target ? "BONUS CLEAR" : "MAIN CLEAR")
+    : `${progress.done}/${progress.target||tpl.exercises.length} CLEAR`;
   const head=el("div","wo-head",
     doneToday
-      ? `<span class="wo-name">✅ 今日は ${esc(TD.templateById(program, doneToday.templateId).name)} 達成</span>
-         <span class="wo-focus">次回は1日休んでから</span>`
-      : `<span class="wo-name">今日の提案　${esc(tpl.name)}</span><span class="wo-focus">${esc(tpl.focus)}</span>`);
+      ? `<span class="wo-name">✅ ${status}</span><span class="wo-focus">次回は1日休んでから</span>`
+      : `<span class="wo-name">今日のMain Quest</span><span class="wo-focus">${esc(tpl.focus)}</span>`);
   card.appendChild(head);
+
+  const chips=el("div","wo-chips"); chips.style.flexWrap="wrap"; chips.style.marginTop="8px";
+  tpl.exercises.forEach((e,idx)=>{
+    const hit=todayExercises.includes(e.ex);
+    const c=el("button","wo-chip",`${hit?"✓ ":""}${idx+1}. ${esc(e.ex)}`);
+    c.style.flex="0 0 auto";
+    if(hit){ c.style.borderColor="var(--green)"; c.style.color="var(--green)"; }
+    else if(e.ex===sel.ex){ c.style.borderColor="var(--bolt)"; c.style.color="var(--bolt)"; }
+    c.onclick=()=>{
+      if(!exListOf(e.part).includes(e.ex)) (custom[e.part]=custom[e.part]||[]).push(e.ex);
+      sel.part=e.part; sel.ex=e.ex; loadDefaults(); persist(); render();
+    };
+    chips.appendChild(c);
+  });
+  card.appendChild(chips);
   if(!doneToday){
-    const chips=el("div","wo-chips"); chips.style.flexWrap="wrap"; chips.style.marginTop="8px";
-    tpl.exercises.forEach(e=>{
-      const hit=todayParts.has(e.part);
-      const c=el("button","wo-chip",(hit?"✓ ":"")+(e.optional?"＋ ":"")+esc(e.ex));
-      c.style.flex="0 0 auto";
-      if(e.ex===sel.ex){ c.style.borderColor="var(--bolt)"; c.style.color="var(--bolt)"; }
-      c.onclick=()=>{
-        if(!exListOf(e.part).includes(e.ex)) (custom[e.part]=custom[e.part]||[]).push(e.ex);
-        sel.part=e.part; sel.ex=e.ex; loadDefaults(); persist(); render();
-      };
-      chips.appendChild(c);
-    });
-    card.appendChild(chips);
+    const remain=Math.max(0,(progress.target||3)-progress.done);
     card.appendChild(el("div","wo-progress",
-      "順番・種目数は自由。胸と背中を両方記録したらMain Quest達成。＋は余力がある日のOptional。"));
+      progress.complete
+        ? `${progress.done}/${progress.total}種目。Main Quest達成済み。あと${progress.total-progress.done}種目はBonus。`
+        : `5種目のうち3種目でクリア。あと${remain}種目。どれをサボってもOK。`));
   }
   root.appendChild(card);
 }
-// 自由記録の達成判定: requiredParts(標準は胸＋背中)を満たしたらfree sessionを作る
+
 function onQuickLog(){
-  if(TD.activeSession()) return;                    // 構造モード中は何もしない
+  if(TD.activeSession()) return;
   const program=TD.loadProgram();
   const nextId=TD.nextWorkoutTemplateId(program);
   const tpl=TD.templateById(program, nextId);
   const todayKey=core.localDayKey(new Date());
-  const parts=logs.filter(l=>core.localDayKey(l.t)===todayKey).map(l=>l.part);
-  if(!core.freeLogMatchesTemplate(tpl, parts)) return;
+  const today=logs.filter(l=>core.localDayKey(l.t)===todayKey);
+  const parts=today.map(l=>l.part);
+  const exercises=[...new Set(today.map(l=>l.ex))];
+  if(!core.freeLogMatchesTemplate(tpl, parts, exercises)) return;
   if(TD.ensureFreeSession(nextId, todayKey)){
-    showToast(`🏆 ${tpl.name} 達成。次回は1日休んでから`);
+    const p=core.questExerciseProgress(tpl,exercises);
+    showToast(`🏆 Main Quest ${p.done}/${p.total} CLEAR`);
   }
 }
 

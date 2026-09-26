@@ -357,9 +357,24 @@ export function templateExerciseDef(program, exName) {
 }
 
 // 自由記録モードのWorkout達成判定。
-// requiredPartsがあるテンプレートは、その部位をすべて記録したら達成。
-// 旧テンプレートは従来どおり「提案部位のどれか1つ」で後方互換。
-export function freeLogMatchesTemplate(tpl, loggedParts) {
+// minExercisesがある新Main Questは、候補5種目のうち異なる3種目を記録したら達成。
+// loggedExercisesを渡せない旧呼び出しはrequiredParts/part判定へフォールバック。
+export function questExerciseProgress(tpl, loggedExercises) {
+  const candidates = new Set((tpl?.exercises || []).map(e => e.ex));
+  const done = new Set((loggedExercises || []).filter(ex => candidates.has(ex)));
+  const target = Number.isInteger(tpl?.minExercises) ? tpl.minExercises : null;
+  return {
+    done: done.size,
+    total: candidates.size,
+    target,
+    complete: target != null ? done.size >= target : false,
+    bonus: target != null ? Math.max(0, done.size - target) : 0,
+  };
+}
+export function freeLogMatchesTemplate(tpl, loggedParts, loggedExercises = null) {
+  if (Number.isInteger(tpl?.minExercises) && Array.isArray(loggedExercises)) {
+    return questExerciseProgress(tpl, loggedExercises).complete;
+  }
   const logged = new Set(loggedParts || []);
   const required = Array.isArray(tpl?.requiredParts) ? tpl.requiredParts.filter(Boolean) : [];
   if (required.length) return required.every(p => logged.has(p));
