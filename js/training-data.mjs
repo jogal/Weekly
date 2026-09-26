@@ -63,13 +63,14 @@ function isUntouchedLegacyDefault(p) {
 }
 
 export const DEFAULT_TEMPLATES = [
-  { id: "MAIN", name: "Main Quest", focus: "胸＋背中 / 余力で追加", exercises: [
-    { ex: "ベンチプレス",               slot: "MAIN1", part: "chest",    sets: 4, repMin: 6,  repMax: 10 },
+  { id: "MAIN", name: "Main Quest", focus: "胸＋背中 / 余力で追加", requiredParts: ["chest", "back"], exercises: [
+    // 旧ABCDの同一種目はslotを引き継ぎ、既存ログをそのままprogressionに使う。
+    { ex: "ベンチプレス",               slot: "A1",    part: "chest",    sets: 4, repMin: 6,  repMax: 10 },
     { ex: "懸垂",                       slot: "MAIN2", part: "back",     sets: 3, repMin: 5,  repMax: 10 },
-    { ex: "インクラインダンベルプレス", slot: "MAIN3", part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "チェストサポーテッドロウ",   slot: "MAIN4", part: "back",     sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "ケーブルフライ",             slot: "MAIN5", part: "chest",    sets: 2, repMin: 10, repMax: 15, optional: true },
-    { ex: "サイドレイズ",               slot: "MAIN6", part: "shoulder", sets: 2, repMin: 12, repMax: 20, optional: true },
+    { ex: "インクラインダンベルプレス", slot: "A2",    part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
+    { ex: "チェストサポーテッドロウ",   slot: "B2",    part: "back",     sets: 3, repMin: 8,  repMax: 12 },
+    { ex: "ケーブルフライ",             slot: "A3",    part: "chest",    sets: 2, repMin: 10, repMax: 15, optional: true },
+    { ex: "サイドレイズ",               slot: "A4",    part: "shoulder", sets: 2, repMin: 12, repMax: 20, optional: true },
     { ex: "レッグプレス",               slot: "MAIN7", part: "leg",      sets: 2, repMin: 8,  repMax: 12, optional: true },
   ]},
 ];
