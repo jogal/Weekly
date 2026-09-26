@@ -843,9 +843,9 @@ function renderIdle(root){
   const {plan:curPlan}=getCurrentPlan();
   const todayKey=core.localDayKey(now);
   const rec=curPlan.recommendedDays.find(r=>r.date===todayKey);
-  const sub = rec ? `今日は ${esc("Workout "+rec.templateId)} の日`
-            : curPlan.remaining===0 ? `今週の目標は達成済み（次は ${esc(tpl.name)}）`
-            : `今日はREST DAY予定（次は ${esc(tpl.name)}）`;
+  const sub = rec ? `今日は ${esc(tpl.name)} の日`
+            : curPlan.remaining===0 ? `今週の目標は達成済み`
+            : `今日は回復日予定（次は ${esc(tpl.name)}）`;
   const head=el("div","card");
   head.appendChild(el("div","",`<div id="today-line">
     <span id="today-date">TODAY　${now.getMonth()+1}/${now.getDate()}(${wd})</span>
@@ -861,7 +861,7 @@ function renderIdle(root){
   tpl.exercises.forEach(e=>{
     const prev=core.lastSessionSets(logs, e.ex, {slot:e.slot});
     list.appendChild(el("div","wo-exrow",
-      `<span>${esc(e.ex)} <span class="wo-progress">${e.sets}×${e.repMin}-${e.repMax}</span></span>
+      `<span>${e.optional?'<span class="wo-progress">OPTIONAL</span> ':''}${esc(e.ex)} <span class="wo-progress">${e.sets}×${e.repMin}-${e.repMax}</span></span>
        <span class="prev">${prev? "前回 "+esc(fmtPrevShort(prev)) : "初回"}</span>`));
   });
   card.appendChild(list);
@@ -1260,14 +1260,15 @@ function renderActive(root, sess){
 // 進まないように「中断(サイクルを進めない)」も選べるようにする。
 function openFinish(sess, tpl){
   const all=sessionAllSets(sess);
-  const planned=tpl.exercises.reduce((a,e)=>a+e.sets,0);
+  // Optional種目は完了判定の必要セット数に含めない。
+  const planned=tpl.exercises.filter(e=>!e.optional).reduce((a,e)=>a+e.sets,0);
   const under = all.length>0 && all.length < Math.ceil(planned*0.5);
   const ov=el("div","overlay");
   const box=el("div","modal-box");
   box.appendChild(el("h3","modal-title","今日のワークアウトはどうだった？"));
   if(under){
     box.appendChild(el("p","modal-sub",
-      `⚠ まだ ${all.length}/${planned} セット。完了するとサイクルが ${esc(tpl.id)}→次へ進みます。途中でやめる場合は「中断」を選んでください。`))
+      `⚠ Main Questはまだ ${all.length}/${planned} セット。今日はここまでなら「中断」、十分やれたならそのまま完了でOKです。`))
       .style.cssText="font-size:12px;color:var(--dim);margin:0 0 12px";
   }
   [["easy","😎 楽だった"],["good","💪 ちょうど良い"],["hard","🥵 キツかった"]].forEach(([v,label])=>{
@@ -1468,7 +1469,9 @@ function currentPlanInput(){
       .filter(s=>s.status==="completed"&&dates.includes(s.date))
       .map(s=>({date:s.date,templateId:s.templateId})),
     nextWorkout:TD.nextWorkoutTemplateId(program),
-    targetSessions:profile.weeklyWorkoutTarget,
+    // repeat modeでは「週4を埋める」より1日休むリズムを優先。
+    // 週の切れ目で3〜4回になるが、週間表示は3回を基本にして詰め込みを防ぐ。
+    targetSessions:program.mode==="repeat" ? Math.min(profile.weeklyWorkoutTarget,3) : profile.weeklyWorkoutTarget,
     todayKey:core.localDayKey(new Date()),
     defaultWednesdayBlocked:profile.defaultWednesdayBlocked,
     cycle:program.cycle,
@@ -1747,8 +1750,8 @@ function openTemplateEditor(){
       });
       const reset=el("button","ghost-btn","デフォルトに戻す(全テンプレート)");
       reset.onclick=()=>{
-        if(!confirm("A〜D全テンプレートをデフォルトに戻す?(記録は消えない)")) return;
-        TD.saveProgram({templates:TD.cloneDefaultTemplates(), cycle:["A","B","C","D"]});
+        if(!confirm("Main Questを標準メニューに戻す?(過去の記録は消えない)")) return;
+        TD.saveProgram(TD.defaultProgram());
         showToast("デフォルトに戻しました"); draw();
       };
       box.appendChild(reset);
