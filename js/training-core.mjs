@@ -351,7 +351,7 @@ export const FREE_DEFAULT_DEF = { sets: 3, repMin: 8, repMax: 12 };
 export function templateExerciseDef(program, exName) {
   for (const t of (program?.templates || [])) {
     const e = (t.exercises || []).find(x => x.ex === exName);
-    if (e) return { sets: e.sets, repMin: e.repMin, repMax: e.repMax, part: e.part, templateId: t.id };
+    if (e) return { sets: e.sets, repMin: e.repMin, repMax: e.repMax, part: e.part, slot: e.slot, templateId: t.id };
   }
   return null;
 }

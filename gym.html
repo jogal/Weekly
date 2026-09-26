@@ -7,7 +7,7 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="ジム⚡">
 <meta name="theme-color" content="#0c0c0e">
-<title>⚡筋トレ記録</title>
+<title>GYM QUEST — 筋トレ記録</title>
 <link rel="manifest" href="gym-manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -147,16 +147,6 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   border:1px solid var(--bolt); padding:10px 18px; font-size:13px; z-index:50;
   white-space:nowrap; }
 
-/* Lightning flash on record */
-#flash { display:none; position:fixed; inset:0; z-index:40; pointer-events:none;
-  align-items:center; justify-content:center; }
-#flash.on { display:flex; animation:flashbg .45s ease-out; }
-#flash .zap { font-size:90px; animation:zappop .45s ease-out;
-  filter:grayscale(1) brightness(2); text-shadow:0 0 40px var(--bolt); }
-@keyframes flashbg { 0%{background:rgba(255,179,0,.18)} 100%{background:transparent} }
-@keyframes zappop { 0%{transform:scale(.3) rotate(-15deg);opacity:1}
-  60%{transform:scale(1.25) rotate(5deg)} 100%{transform:scale(1);opacity:0} }
-
 /* Workout mode (TODAY) */
 .bolt-btn { width:100%; min-height:58px; font-size:16px; font-weight:700; cursor:pointer;
   background:var(--bolt); color:#0c0c0e; border:none; letter-spacing:.3em;
@@ -249,6 +239,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 .btn { padding:10px 16px; font-size:13px; cursor:pointer; border:1px solid var(--line);
   background:none; color:var(--txt); }
 </style>
+<link rel="stylesheet" href="css/gym-quest.css">
 </head>
 <body>
 <div id="app">
@@ -257,7 +248,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   </svg></div>
   <div id="header">
     <p id="app-title">
-      <span>GYM <span class="t-red">LOG</span><span class="t-jp">筋トレ記録</span></span>
+      <span>Gym <span class="t-red">Quest</span><span class="t-jp">WEEKLY / TRAINING</span></span>
       <span>
         <a class="mini-btn" href="tracker.html">QUEST</a>
         <a class="mini-btn" href="music.html">MUSIC</a>
@@ -268,15 +259,15 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   </div>
   <div id="content"></div>
   <div id="tabbar">
-    <button class="tab-btn active" data-tab="today"><span class="tab-ico">⚡</span>きろく</button>
-    <button class="tab-btn" data-tab="workout"><span class="tab-ico">🏋</span>WORKOUT</button>
-    <button class="tab-btn" data-tab="plan"><span class="tab-ico">🗓</span>PLAN</button>
-    <button class="tab-btn" data-tab="history"><span class="tab-ico">📜</span>履歴</button>
+    <button class="tab-btn active" data-tab="today"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m13 2-8 11h6l-1 9 9-12h-6z"/></svg></span>きろく</button>
+    <button class="tab-btn" data-tab="workout"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 12h8M6 6v12M3 9v6M18 6v12M21 9v6"/></svg></span>WORKOUT</button>
+    <button class="tab-btn" data-tab="plan"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="18" r="2"/><path d="M8 6h7a4 4 0 0 1 0 8H9a4 4 0 0 0 0 8h7"/></svg></span>PLAN</button>
+    <button class="tab-btn" data-tab="history"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg></span>履歴</button>
   </div>
 </div>
 
-<div id="toast"></div>
-<div id="flash"><span class="zap">⚡</span></div>
+<div id="toast" role="status"></div>
+<div id="quest-announcement" class="quest-status-live" role="status" aria-live="polite" aria-atomic="true"></div>
 
 <!-- Settings menu -->
 <div class="overlay" id="menu-modal" style="display:none">
@@ -338,6 +329,7 @@ let marks  = JSON.parse(localStorage.getItem("gym_marks")||"{}");  // 週クエ�
 let stepPref=JSON.parse(localStorage.getItem("gym_stepkg")||"{}"); // 種目名 → 重量の刻み(kg)
 let tab    = "today";
 let kg=0, reps=10;
+let extrasOpen=false;
 
 function persist(){
   localStorage.setItem("gym_logs",   JSON.stringify(logs));
@@ -434,7 +426,7 @@ function saveSet(ex, part, kgV, repsV, meta){
   lastEx[ex]={kg:kgV, reps:repsV};
   syncQuest(part, now);
   persist();
-  flash();
+  if(window.TrainingUI) window.TrainingUI.onSetSaved();
   return entry;
 }
 function addSet(meta){
@@ -451,6 +443,7 @@ function delSet(iso){
   const [removed]=logs.splice(i,1);
   syncQuest(removed.part, new Date(removed.t));
   persist();
+  if(window.TrainingUI) window.TrainingUI.reconcileDay(dateKeyOf(new Date(removed.t)));
   render();
 }
 
@@ -468,13 +461,6 @@ function showToast(msg){
   clearTimeout(showToast._tm);
   showToast._tm=setTimeout(()=>t.style.display="none",2000);
 }
-function flash(){
-  const f=document.getElementById("flash");
-  f.classList.remove("on"); void f.offsetWidth; f.classList.add("on");
-  setTimeout(()=>f.classList.remove("on"),500);
-  if(navigator.vibrate) navigator.vibrate(30);
-}
-
 // 長押しで連打できるステッパーボタン
 function stepBtn(label, cls, fn){
   const b=el("button","step-btn"+(cls?" "+cls:""),label);
@@ -488,28 +474,14 @@ function stepBtn(label, cls, fn){
 
 // ── 画面: きろく ──────────────────────────────────────────────────────────────
 function renderToday(root){
-  const now=new Date();
   const tl=todayLogs();
   // 今日の提案(参考): 提案テンプレと種目チップ。moduleが描く
   if(window.TrainingUI) window.TrainingUI.renderQuickSuggestion(root);
 
-  // 今日カード: 日付は自動、今週やった部位がチップで光る
-  const head=el("div","card");
-  const wd=["日","月","火","水","木","金","土"][now.getDay()];
-  head.appendChild(el("div","", `<div id="today-line">
-    <span id="today-date">${now.getMonth()+1}/${now.getDate()}(${wd})</span>
-    <span id="today-sub">今日 ${tl.length}セット / ${volume(tl)}kg挙上</span>
-  </div>`));
-  const wk=getWeekKey(now);
-  const weekSet=new Set(logs.filter(l=>getWeekKey(new Date(l.t))===wk).map(l=>l.part));
-  const chips=el("div","");
-  chips.id="week-parts";
-  PARTS.forEach(p=>{
-    chips.appendChild(el("span","wp-chip"+(weekSet.has(p.id)?" on":""),
-      (weekSet.has(p.id)?"⚡":"")+p.label));
-  });
-  head.appendChild(chips);
-  root.appendChild(head);
+  const extras=el("details","extra-exercises");
+  extras.open=extrasOpen;
+  extras.ontoggle=()=>{ extrasOpen=extras.open; };
+  extras.appendChild(el("summary","","ほかの種目を選ぶ・追加する"));
 
   // 部位タブ
   const tabs=el("div"); tabs.id="part-tabs";
@@ -528,7 +500,7 @@ function renderToday(root){
     };
     tabs.appendChild(b);
   });
-  root.appendChild(tabs);
+  extras.appendChild(tabs);
 
   // 種目グリッド(前回値を小さく表示)
   const grid=el("div"); grid.id="ex-grid";
@@ -549,7 +521,7 @@ function renderToday(root){
     sel.ex=n; loadDefaults(); persist(); render();
   };
   grid.appendChild(addB);
-  root.appendChild(grid);
+  extras.appendChild(grid);
 
   // 入力パネル
   const part=PART_MAP[sel.part];
@@ -571,6 +543,10 @@ function renderToday(root){
   if(window.TrainingUI){
     const q=window.TrainingUI.quickTarget(sel.ex);
     if(q){
+      const pain=el("button","mini-btn quest-pain","痛みあり");
+      pain.setAttribute("aria-pressed",String(q.painToday));
+      pain.onclick=()=>{ window.TrainingUI.toggleQuickPain(sel.ex); loadDefaults(); render(); };
+      card.appendChild(pain);
       card.appendChild(el("div","wo-prev-line",`前回　<b>${q.prevText}</b>`));
       if(q.target.status!=="first_time"){
         const tl2=el("div","wo-prev-line");
@@ -587,7 +563,8 @@ function renderToday(root){
 
   // 重量: −10 / −刻み / 値 / +刻み / +10 (0で自重)
   const wRow=el("div","stepper-row");
-  const wVal=el("div","step-val");
+  const wVal=el("button","step-val");
+  wVal.setAttribute("aria-label","重量を入力");
   const updW=()=>{ wVal.innerHTML=(kg===0?"自重":kg)+" <small>kg</small>"; };
   wRow.appendChild(stepBtn("-10","small",()=>{kg=Math.max(0,kg-10);updW();}));
   wRow.appendChild(stepBtn("-"+step,"",()=>{kg=Math.max(0,Math.round((kg-step)*10)/10);updW();}));
@@ -605,7 +582,8 @@ function renderToday(root){
 
   // 回数: −1 / 値 / +1
   const rRow=el("div","stepper-row");
-  const rVal=el("div","step-val");
+  const rVal=el("button","step-val");
+  rVal.setAttribute("aria-label","回数を入力");
   const updR=()=>{ rVal.innerHTML=reps+" <small>回</small>"; };
   rRow.appendChild(stepBtn("-1","",()=>{reps=Math.max(1,reps-1);updR();}));
   rRow.appendChild(rVal);
@@ -619,11 +597,15 @@ function renderToday(root){
   updR();
   card.appendChild(rRow);
 
+  if(window.TrainingUI) window.TrainingUI.renderInputProgress(card);
   const logB=el("button","", "⚡ 記録する");
   logB.id="log-btn";
   logB.onclick=addSet;
   card.appendChild(logB);
   root.appendChild(card);
+
+  root.appendChild(extras);
+  if(window.TrainingUI) window.TrainingUI.renderRoute(root);
 
   // 今日のセット一覧
   const list=el("div","card");
@@ -646,6 +628,11 @@ function renderToday(root){
     });
   }
   root.appendChild(list);
+  if(tl.length){
+    const finish=el("button","ghost-btn","今日はここまで・記録を確認");
+    finish.onclick=()=>window.TrainingUI?.finishQuick();
+    root.appendChild(finish);
+  }
 }
 
 // ── 画面: 履歴 ────────────────────────────────────────────────────────────────
@@ -795,12 +782,13 @@ render();
 <script type="module">
 // ── Workout mode (TODAY) ──────────────────────────────────────────────────────
 // DOM組み立てはこのファイル内、アルゴリズム/データ層は js/*.mjs 側。
-// 既存のグローバル(logs, lastEx, syncQuest, persist, flash, showToast, el, esc,
+// 既存のグローバル(logs, lastEx, syncQuest, persist, showToast, el, esc,
 // PART_MAP, stepOf, delSet, render)を利用する。既存きろくタブとは独立に動く。
 import * as core from "./js/training-core.mjs";
 import * as TD from "./js/training-data.mjs";
 import { generateWeeklyTrainingPlan, mapGcalEvents, gcalCacheStale } from "./js/training-plan.mjs";
 import * as AIC from "./js/ai-coach.mjs";
+import { questView, trainingDays, routeDay, monkSpriteCandidates, creditedSessions } from "./js/gym-quest.mjs";
 
 let justCompleted = null;  // 完了直後のリワード表示用(遷移すると消える一時状態)
 let staleResumeAck = null; // 前日以前のactive sessionを「再開する」と明示したid
@@ -833,47 +821,24 @@ function fmtPrev(p){
 // ── 開始前画面 ────────────────────────────────────────────────────────────────
 function renderIdle(root){
   const now=new Date();
-  const wd=["日","月","火","水","木","金","土"][now.getDay()];
   const program=TD.loadProgram();
   const nextId=TD.nextWorkoutTemplateId(program);
   const tpl=TD.templateById(program, nextId);
 
-  // 週間プランに基づく今日の位置づけ。保存値を盲信せず、常に最新入力で
-  // 再計算した結果を使う(完了直後・override変更後もnextWorkoutと矛盾しない)
-  const {plan:curPlan}=getCurrentPlan();
   const todayKey=core.localDayKey(now);
-  const rec=curPlan.recommendedDays.find(r=>r.date===todayKey);
-  const sub = rec ? `今日は ${esc(tpl.name)} の日`
-            : curPlan.remaining===0 ? `今週の目標は達成済み`
-            : `今日は回復日予定（次は ${esc(tpl.name)}）`;
-  const head=el("div","card");
-  head.appendChild(el("div","",`<div id="today-line">
-    <span id="today-date">TODAY　${now.getMonth()+1}/${now.getDate()}(${wd})</span>
-    <span id="today-sub">${sub}</span></div>`));
-  root.appendChild(head);
-
-  if(justCompleted){ renderCompleteCard(root); }
-
+  renderQuestDashboard(root, tpl);
+  if(justCompleted) renderCompleteCard(root);
   const card=el("div","card");
-  card.appendChild(el("div","wo-head",
-    `<span class="wo-name">${esc(tpl.name)}</span><span class="wo-focus">${esc(tpl.focus)}</span>`));
-  const list=el("div","");
-  tpl.exercises.forEach(e=>{
-    const prev=core.lastSessionSets(logs, e.ex, {slot:e.slot});
-    list.appendChild(el("div","wo-exrow",
-      `<span>${esc(e.ex)} <span class="wo-progress">${e.sets}×${e.repMin}-${e.repMax}</span></span>
-       <span class="prev">${prev? "前回 "+esc(fmtPrevShort(prev)) : "初回"}</span>`));
-  });
-  card.appendChild(list);
+  card.appendChild(el("p","card-title","WORKOUT MODE"));
+  card.appendChild(el("p","quest-note","セット数・痛み・前回との比較を見ながら記録。種目は自由に切り替えられます。"));
   if(tpl.exercises.length){
-    const start=el("button","bolt-btn","⚡ START WORKOUT");
+    const start=el("button","bolt-btn","ワークアウトを始める");
     start.style.marginTop="12px";
     start.onclick=()=>{ justCompleted=null; TD.startSession(tpl.id); render(); };
     card.appendChild(start);
-  }else{
-    card.appendChild(el("div","empty-note","このテンプレートに種目がありません(設定→📋テンプレート編集)"));
   }
   root.appendChild(card);
+  renderRoute(root);
 
   // NEXT EXERCISE: 最初の種目の前回実績と今日の目標(spec#8)
   const first=tpl.exercises[0];
@@ -1071,7 +1036,7 @@ function buildCoachCard(){
 function renderCompleteCard(root){
   const c=justCompleted;
   const card=el("div","card");
-  card.appendChild(el("div","done-big","WORKOUT COMPLETE"));
+  card.appendChild(el("div","done-big",esc(c.label||"WORKOUT COMPLETE")));
   if(c.monk){
     if(c.monk.leveledUp){
       const lu=el("div","done-big","★ LEVEL UP ★");
@@ -1120,7 +1085,7 @@ function renderActive(root, sess){
     {beforeISO:sess.startedAt, slot:exDef.slot, sessions:allSessions});
   const prev=hist.length? hist[hist.length-1] : null;
   const painKey=exDef.slot||exDef.ex;
-  const painNow=!!(sess.pain&&sess.pain[painKey]);
+  const painNow=!!(sess.pain&&sess.pain[painKey]) || !!TD.loadDaily()[core.localDayKey(new Date())]?.pain?.[exDef.ex];
   // 前回完了セッション(同template)で痛みが付いていた場合も増量を止める
   // (AI Coach payloadと同じcore.lastSessionPainFlagで判定を統一)
   const prevPain=core.lastSessionPainFlag(allSessions, sess.templateId, painKey);
@@ -1136,25 +1101,23 @@ function renderActive(root, sess){
     pre={kg:pre.kg, reps:tgt.suggestedSetTargets[done.length]};
   }
 
-  const head=el("div","card");
-  const sessionExercises=new Set(sessionAllSets(sess).map(l=>l.ex));
-  const questProgress=core.questExerciseProgress(tpl,[...sessionExercises]);
-  head.appendChild(el("div","wo-head",
-    `<span class="wo-name">${esc(tpl.name)}</span>
-     <span class="wo-progress">${questProgress.done}/${questProgress.target||n} CLEAR ・ ${i+1}/${n}</span>`));
-  root.appendChild(head);
+  renderQuestDashboard(root, tpl, sess);
 
   const card=el("div","card"); card.id="input-card";
-  const headRow=el("div","wo-head",
-    `<span style="font-size:16px;font-weight:600">${esc(exDef.ex)}</span>`);
+  const headRow=el("div","input-heading",
+    `<h2>${esc(exDef.ex)}</h2>`);
   const headR=el("span","");
   // 痛みトグル(任意入力・診断はしない)。ONでこの種目の増量提案を停止
-  const painBtn=el("button","mini-btn","⚠ 痛み");
+  const painBtn=el("button","mini-btn quest-pain","痛みあり");
+  painBtn.setAttribute("aria-pressed",String(painNow));
   if(painNow){ painBtn.style.color="#EF5350"; painBtn.style.borderColor="#EF5350"; }
   painBtn.onclick=()=>{
     const p={...(sess.pain||{})};
     if(painNow) delete p[painKey]; else p[painKey]=true;
     TD.updateSession(sess.id,{pain:p});
+    const day=core.localDayKey(new Date()), dailyPain={...(TD.loadDaily()[day]?.pain||{})};
+    if(painNow)delete dailyPain[exDef.ex]; else dailyPain[exDef.ex]=true;
+    TD.saveDailyEntry(day,{pain:Object.keys(dailyPain).length?dailyPain:null});
     render();
   };
   headR.appendChild(painBtn);
@@ -1184,6 +1147,7 @@ function renderActive(root, sess){
   const kgRow=el("div","stepper-row");
   const kgIn=el("input","wo-num"); kgIn.type="text"; kgIn.inputMode="decimal";
   const updK=()=>{ kgIn.value=(wKg===0?"自重":wKg); };
+  kgIn.setAttribute("aria-label","重量 kg");
   kgIn.onfocus=()=>{ if(wKg===0)kgIn.value=""; };
   kgIn.onblur=()=>{ const v=parseFloat(kgIn.value); wKg=(!isNaN(v)&&v>=0)?Math.round(v*10)/10:wKg; updK(); };
   const kgWrap=el("div",""); kgWrap.style.flex="1";
@@ -1199,6 +1163,7 @@ function renderActive(root, sess){
   const rRow=el("div","stepper-row");
   const rIn=el("input","wo-num"); rIn.type="text"; rIn.inputMode="numeric";
   const updR=()=>{ rIn.value=wReps; };
+  rIn.setAttribute("aria-label","回数");
   rIn.onblur=()=>{ const v=parseInt(rIn.value); wReps=(!isNaN(v)&&v>=1)?v:wReps; updR(); };
   const rWrap=el("div",""); rWrap.style.flex="1"; rWrap.style.textAlign="center";
   rWrap.appendChild(rIn);
@@ -1221,6 +1186,7 @@ function renderActive(root, sess){
     card.appendChild(chips);
   }
 
+  renderInputProgress(card);
   const logB=el("button","bolt-btn",`⚡ セット記録（${done.length+1}セット目）`);
   logB.onclick=()=>{ logWorkoutSet(exDef, wKg, wReps, sess, done.length+1); render(); };
   card.appendChild(logB);
@@ -1256,6 +1222,7 @@ function renderActive(root, sess){
   fin.style.marginTop="10px";
   fin.onclick=()=>openFinish(sess, tpl);
   root.appendChild(fin);
+  renderRoute(root);
 }
 
 // ── 終了フロー(難易度3択のみ・セット毎RIRは要求しない) ────────────────────────
@@ -1263,49 +1230,41 @@ function renderActive(root, sess){
 // 進まないように「中断(サイクルを進めない)」も選べるようにする。
 function openFinish(sess, tpl){
   const all=sessionAllSets(sess);
-  const exerciseNames=[...new Set(all.map(l=>l.ex))];
-  const progress=core.questExerciseProgress(tpl,exerciseNames);
+  const progress=questView(tpl, questSets(tpl, sess));
+  const complete=all.length>0 && (Number.isInteger(tpl.minExercises) ? progress.complete : true);
   const ov=el("div","overlay");
   const box=el("div","modal-box");
-  box.appendChild(el("h3","modal-title","今日のワークアウトはどうだった？"));
-  if(progress.target!=null){
-    const label=progress.complete
-      ? (progress.done>=progress.total ? `🏆 FULL CLEAR　${progress.done}/${progress.total}種目`
-        : progress.done>progress.target ? `✨ BONUS CLEAR　${progress.done}/${progress.total}種目`
-        : `⚡ MAIN QUEST CLEAR　${progress.done}/${progress.total}種目`)
-      : `あと${progress.target-progress.done}種目でMain Quest達成（${progress.done}/${progress.total}）`;
-    const p=el("p","modal-sub",label);
-    p.style.cssText="font-size:13px;color:var(--dim);margin:0 0 12px";
-    box.appendChild(p);
-  }
-  if(progress.target!=null && !progress.complete && all.length){
-    const keep=el("button","diff-btn",`▶ あと${progress.target-progress.done}種目やる`);
-    keep.onclick=()=>document.body.removeChild(ov);
-    box.appendChild(keep);
-  }
-  [["easy","😎 楽だった"],["good","💪 ちょうど良い"],["hard","🥵 キツかった"]].forEach(([v,label])=>{
-    const b=el("button","diff-btn", progress.complete ? label : "途中終了として保存・"+label);
-    b.onclick=()=>{
-      document.body.removeChild(ov);
-      if(progress.target!=null && !progress.complete){
-        TD.abortSession(sess.id);
-        showToast(`今日は${progress.done}/${progress.total}種目。記録は残しました`);
-        render();
-      }else{
-        doFinish(sess, tpl, v, all);
-      }
-    };
-    box.appendChild(b);
+  box.setAttribute("role","dialog"); box.setAttribute("aria-modal","true");
+  box.setAttribute("aria-label","ワークアウトを終了");
+  box.appendChild(el("h3","modal-title",complete ? progress.label : "今日はここまで"));
+  box.appendChild(el("p","quest-note",`今日は${progress.done}/${progress.total}。記録は残っています。`));
+  let difficulty=null;
+  box.appendChild(el("p","quest-note","今日の手応え（任意）"));
+  const choices=el("div","wo-chips");
+  [["easy","楽だった"],["good","ちょうど良い"],["hard","きつかった"]].forEach(([v,label])=>{
+    const b=el("button","wo-chip",label);
+    b.setAttribute("aria-pressed","false");
+    b.onclick=()=>{ difficulty=difficulty===v?null:v;
+      [...choices.children].forEach(c=>{const on=c===b&&difficulty===v;
+        c.setAttribute("aria-pressed",String(on)); c.style.borderColor=on?"var(--gold)":"";}); };
+    choices.appendChild(b);
   });
-  const cancel=el("button","ghost-btn", all.length? "まだ続ける" : "セット0のまま破棄");
-  cancel.onclick=()=>{
-    document.body.removeChild(ov);
-    if(!all.length){ TD.abortSession(sess.id); render(); }
+  box.appendChild(choices);
+  const save=el("button","bolt-btn","記録を残して終了");
+  const close=()=>{ ov.remove(); document.removeEventListener("keydown",escape); };
+  const escape=e=>{ if(e.key==="Escape")close(); };
+  save.onclick=()=>{
+    close();
+    if(complete) doFinish(sess,tpl,difficulty,all);
+    else { TD.updateSession(sess.id,{status:"aborted",difficulty,completedAt:new Date().toISOString()});
+      showToast(`今日は${progress.done}/${progress.total}。記録は残っています。`); render(); }
   };
-  box.appendChild(cancel);
-  ov.appendChild(box);
-  ov.addEventListener("click",e=>{ if(e.target===ov) document.body.removeChild(ov); });
-  document.body.appendChild(ov);
+  box.appendChild(save);
+  const back=el("button","ghost-btn","記録に戻る"); back.style.marginTop="8px";
+  back.onclick=close; box.appendChild(back);
+  ov.appendChild(box); ov.onclick=e=>{ if(e.target===ov)close(); };
+  document.addEventListener("keydown",escape);
+  document.body.appendChild(ov); save.focus();
 }
 function doFinish(sess, tpl, difficulty, all){
   TD.finishSession(sess.id, difficulty);
@@ -1322,7 +1281,7 @@ function doFinish(sess, tpl, difficulty, all){
     const delta=core.monkRewardDelta(sess.rewardBaseline, after);
     monk={ gained:delta.earnedXP, lvl:after.lvl, tier:after.tier, leveledUp:delta.leveledUp };
   }catch(e){ /* 表示のみの機能なので失敗しても完了処理は続行 */ }
-  justCompleted={ name:tpl.name, sets:all.length,
+  justCompleted={ name:tpl.name, label:questView(tpl,questSets(tpl,sess)).label, sets:all.length,
     volume:all.reduce((a,l)=>a+(l.kg||0)*l.reps,0), nextName, monk };
   showToast("🏆 "+tpl.name+" 完了!(週クエ反映済み)");
   render();
@@ -1446,6 +1405,7 @@ async function fetchGcalWeek(force){
   gcalInFlight=false;
   // セッション中の入力を消さないよう、アイドルなTODAYとPLANだけ再描画
   if(tab==="plan" || (tab==="workout" && !TD.activeSession())) render();
+  else refreshQuestPanels();
 }
 
 // 今週のプラン入力をtracker(wt_schedules)・sessions・overridesから組み立てる
@@ -1475,8 +1435,8 @@ function currentPlanInput(){
   return { wk, dates, input:{
     dates, events,
     manualOverrides:TD.loadOverrides(),
-    completedSessions:sessions
-      .filter(s=>s.status==="completed"&&dates.includes(s.date))
+    completedSessions:creditedSessions(sessions,logs,program,core.localDayKey(new Date()))
+      .filter(s=>dates.includes(s.date))
       .map(s=>({date:s.date,templateId:s.templateId})),
     nextWorkout:TD.nextWorkoutTemplateId(program),
     // repeat modeでは「週4を埋める」より1日休むリズムを優先。
@@ -1508,6 +1468,7 @@ function getCurrentPlan(){
   return {wk,dates,plan};
 }
 function renderPlan(root){
+  renderRoute(root, false);
   const {dates,plan}=getCurrentPlan();
   const today=core.localDayKey(new Date());
   const overrides=TD.loadOverrides();
@@ -1523,8 +1484,8 @@ function renderPlan(root){
     let chip, cls="";
     if(info.status==="done"){ chip="済 "+(info.templateId||""); cls="done"; }
     else if(info.recommended){ chip=info.templateId; cls="rec"; }
-    else if(info.status==="blocked"){ chip="✕"; cls="blocked"; }
-    else if(info.status==="past"){ chip="－"; }
+    else if(info.status==="blocked"){ chip="予定あり"; cls="blocked"; }
+    else if(info.status==="past"){ chip="REST"; }
     else chip="REST";
     row.appendChild(el("span","plan-chip"+(cls?" "+cls:""),chip));
     row.appendChild(el("span","plan-note",esc(info.notes[0]||"")));
@@ -1642,63 +1603,186 @@ function quickTarget(ex){
   const hist=core.sessionHistory(logs, ex, {sessions, beforeISO:startOfToday.toISOString()});
   const prev=hist.length? hist[hist.length-1]:null;
   const key=(core.templateExerciseDef(program, ex)||{});
-  const pain=key.templateId? core.lastSessionPainFlag(sessions, key.templateId, ex):false;
+  const active=TD.activeSession();
+  const painToday=!!TD.loadDaily()[core.localDayKey(new Date())]?.pain?.[ex] || !!active?.pain?.[key.slot||ex];
+  const pain=painToday || (key.templateId? core.lastSessionPainFlag(sessions, key.templateId, key.slot||ex):false);
   const target=core.getNextExerciseTarget({history:hist, targetSets:def.sets,
     repMin:def.repMin, repMax:def.repMax, increment:stepOf(ex), pain});
   const doneToday=logs.filter(l=>l.ex===ex && core.localDayKey(l.t)===core.localDayKey(new Date())).length;
   return {
-    prev, target, def, doneToday,
+    prev, target, def, doneToday, painToday,
     prevText: fmtPrev(prev),
     targetText: target.status==="first_time" ? esc(target.reason)
       : `${fmtW(target.weight)}　計${target.targetTotalReps}回以上（${target.suggestedSetTargets.join("/")}）`,
   };
 }
-// きろくタブ先頭の「今日の提案」ストリップ。提案は参考。種目タップで記録欄にセット
-function renderQuickSuggestion(root){
-  const program=TD.loadProgram();
-  const nextId=TD.nextWorkoutTemplateId(program);
-  const tpl=TD.templateById(program, nextId);
-  const todayKey=core.localDayKey(new Date());
-  const todayLogs=logs.filter(l=>core.localDayKey(l.t)===todayKey);
-  const todayExercises=[...new Set(todayLogs.map(l=>l.ex))];
-  const progress=core.questExerciseProgress(tpl,todayExercises);
-  const doneToday=TD.loadSessions().find(s=>s.date===todayKey&&s.status==="completed");
-  const card=el("div","card");
-  card.style.borderTop="3px solid var(--bolt)";
-  const status=doneToday
-    ? (progress.done>=progress.total ? "FULL CLEAR" : progress.done>progress.target ? "BONUS CLEAR" : "MAIN CLEAR")
-    : `${progress.done}/${progress.target||tpl.exercises.length} CLEAR`;
-  const head=el("div","wo-head",
-    doneToday
-      ? `<span class="wo-name">✅ ${status}</span><span class="wo-focus">次回は1日休んでから</span>`
-      : `<span class="wo-name">今日のMain Quest</span><span class="wo-focus">${esc(tpl.focus)}</span>`);
-  card.appendChild(head);
-
-  const chips=el("div","wo-chips"); chips.style.flexWrap="wrap"; chips.style.marginTop="8px";
-  tpl.exercises.forEach((e,idx)=>{
-    const hit=todayExercises.includes(e.ex);
-    const c=el("button","wo-chip",`${hit?"✓ ":""}${idx+1}. ${esc(e.ex)}`);
-    c.style.flex="0 0 auto";
-    if(hit){ c.style.borderColor="var(--green)"; c.style.color="var(--green)"; }
-    else if(e.ex===sel.ex){ c.style.borderColor="var(--bolt)"; c.style.color="var(--bolt)"; }
-    c.onclick=()=>{
-      if(!exListOf(e.part).includes(e.ex)) (custom[e.part]=custom[e.part]||[]).push(e.ex);
-      sel.part=e.part; sel.ex=e.ex; loadDefaults(); persist(); render();
-    };
-    chips.appendChild(c);
-  });
-  card.appendChild(chips);
-  if(!doneToday){
-    const remain=Math.max(0,(progress.target||3)-progress.done);
-    card.appendChild(el("div","wo-progress",
-      progress.complete
-        ? `${progress.done}/${progress.total}種目。Main Quest達成済み。あと${progress.total-progress.done}種目はBonus。`
-        : `5種目のうち3種目でクリア。あと${remain}種目。どれをサボってもOK。`));
+// A single read-only dashboard for quick logging and Workout mode.
+let questEvent = false;
+let lastQuestCount = null;
+function dashboardTemplate(){
+  const program=TD.loadProgram(), active=TD.activeSession();
+  return TD.templateById(program,active?.templateId||TD.nextWorkoutTemplateId(program));
+}
+function questSets(tpl, sess=null){
+  // Today's quest can span free logs and more than one workout. Legacy custom
+  // templates keep their session-based completion behavior.
+  return sess && !Number.isInteger(tpl.minExercises) ? sessionAllSets(sess) : todayLogs();
+}
+function switchGymTab(next){
+  tab=next;
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.tab===next));
+  render();
+}
+function scrollToInput(){
+  document.getElementById('input-card')?.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
+}
+function selectQuestExercise(e,idx,sess){
+  if(sess){ TD.updateSession(sess.id,{curEx:idx}); render(); }
+  else {
+    if(!exListOf(e.part).includes(e.ex)) (custom[e.part]=custom[e.part]||[]).push(e.ex);
+    sel={part:e.part,ex:e.ex}; loadDefaults(); persist(); switchGymTab('today');
   }
+  scrollToInput();
+}
+function setMonkSprite(clip,tier){
+  const img=el('img','monk-sprite'); img.alt='主人公モンク';
+  const candidates=monkSpriteCandidates(tier); let index=0;
+  img.onload=()=>{
+    const two=img.getAttribute('src').includes('x2.png');
+    img.classList.toggle('anim2',two);
+    clip.style.width=(166*img.naturalWidth/img.naturalHeight/(two?2:1))+'px';
+  };
+  img.onerror=()=>{ if(++index<candidates.length)img.src=candidates[index];
+    else { clip.textContent='MONK'; clip.setAttribute('aria-label','モンクの画像を読み込めませんでした'); } };
+  clip.appendChild(img); img.src=candidates[0];
+}
+function renderQuestDashboard(root,tpl,sess=null){
+  const sets=questSets(tpl,sess), view=questView(tpl,sets);
+  const today=core.localDayKey(new Date());
+  let records={}; try { records=JSON.parse(localStorage.getItem('wt_records')||'{}'); } catch(e){}
+  const monk=core.monkStateFromRecords(records,today);
+  const xpStart=core.questXpToReach(monk.lvl), xpNext=core.questXpToReach(monk.lvl+1);
+  const pct=Math.min(100,Math.max(0,(monk.xp-xpStart)/(xpNext-xpStart)*100));
+  const dates=weekDatesOf(getWeekKey(new Date()));
+  const trained=trainingDays(logs,dates).size;
+  const hero=el('section','quest-hero'+(questEvent?' quest-event':''));
+  hero.id='quest-hero'; hero.dataset.count=String(view.done); hero.dataset.stage=view.stage;
+  hero.setAttribute('aria-label','モンクのステータス');
+  hero.innerHTML=`<div class="hero-topline"><span><i class="room-signal" aria-hidden="true"></i> TRAINING ROOM</span><span>${today.replaceAll('-',' / ')}</span></div>
+    <div class="hero-body"><div class="hero-info">
+      <h1 class="hero-title">Monk <small>Lv.${monk.lvl}</small></h1><p class="hero-caption">今日も、自分のペースで。</p>
+      <div class="hero-xp-line"><b>${monk.xp} XP</b><span>次のLvまで ${xpNext-monk.xp}</span></div>
+      <div class="hero-xp" role="progressbar" aria-label="次のレベルまでのXP" aria-valuemin="0" aria-valuemax="${xpNext-xpStart}" aria-valuenow="${monk.xp-xpStart}"><span style="width:${pct}%"></span></div>
+      <p class="hero-stat"><span>THIS WEEK</span><b>${trained}<small>回</small></b><span>トレーニング</span></p>
+    </div><div class="hero-stage"><span class="monk-clip"></span></div></div>
+    <div class="hero-status"><span>${esc(view.label)}</span><span>TODAY ${view.done} / ${view.total}</span></div>`;
+  setMonkSprite(hero.querySelector('.monk-clip'),monk.tier);
+  root.appendChild(hero);
+  const card=el('section','card quest-card'); card.id='today-quest';
+  card.setAttribute('aria-label',"Today's Main Quest");
+  card.innerHTML=`<p class="card-title">TODAY’S MAIN QUEST</p><div class="quest-heading">
+    <h2 class="quest-count${view.complete?' cleared':''}">${esc(view.label)}</h2><span class="quest-count-sub">${view.done} / ${view.total} 種目</span></div>
+    <div class="quest-steps" aria-hidden="true">${Array.from({length:view.total},(_,i)=>`<span class="${i<view.done?'hit':''}"></span>`).join('')}</div>`;
+  const list=el('div','quest-list');
+  tpl.exercises.forEach((e,idx)=>{
+    const count=sets.filter(s=>s.ex===e.ex).length;
+    const selected=sess?idx===(sess.curEx||0):e.ex===sel.ex;
+    const row=el('button','quest-exercise'+(count?' is-done':'')+(selected?' is-selected':''));
+    row.type='button'; row.dataset.exercise=e.ex;
+    row.setAttribute('aria-label',`${e.ex}、${count?count+'セット記録済み':'未記録'}。記録する`);
+    row.setAttribute('aria-pressed',String(selected));
+    row.innerHTML=`<span class="quest-check" aria-hidden="true">${count?'✓':String(idx+1).padStart(2,'0')}</span><span class="quest-ex-name">${esc(e.ex.replace('インクラインダンベル','インクラインDB'))}</span><span class="quest-ex-meta">${count?count+' SETS':'記録 →'}</span>`;
+    row.onclick=()=>selectQuestExercise(e,idx,sess); list.appendChild(row);
+  });
+  card.appendChild(list);
+  card.appendChild(el('p','quest-note',esc(view.note)));
+  if(view.target===3&&view.total===5) card.appendChild(el('div','quest-milestones','3 MAIN CLEAR　 /　 4 BONUS　 /　 5 FULL CLEAR'));
   root.appendChild(card);
+  if(questEvent){ questEvent=false; setTimeout(()=>hero.classList.remove('quest-event'),700); }
+  lastQuestCount={day:today,done:view.done};
+}
+function renderInputProgress(root){
+  const view=questView(dashboardTemplate(),todayLogs());
+  root.appendChild(el("p","input-quest-progress",`${esc(view.label)} <span>${view.done}/${view.total} 種目を記録</span>`));
+}
+function renderQuickSuggestion(root){ renderQuestDashboard(root,dashboardTemplate()); }
+function renderRoute(root,link=true){
+  const {dates,plan}=getCurrentPlan();
+  const trained=trainingDays(logs,dates), today=core.localDayKey(new Date());
+  const card=el('section','card route-card'); card.id='adventure-route';
+  const heading=el('div','route-heading','<h2 class="card-title">THIS WEEK / 冒険ルート</h2>');
+  if(link){const b=el('button','route-link','予定を調整 →'); b.onclick=()=>switchGymTab('plan'); heading.appendChild(b);}
+  card.appendChild(heading);
+  const route=el('div','adventure-route'); route.setAttribute('role','list');
+  dates.forEach((date,i)=>{
+    const day=routeDay(plan.dayInfo[date],trained.has(date));
+    const stop=el('div','route-stop'); stop.dataset.state=day.state; stop.setAttribute('role','listitem');
+    stop.setAttribute('aria-label',`${date} ${day.detail}`);
+    if(date===today)stop.setAttribute('aria-current','date');
+    stop.innerHTML=`<span class="route-day">${DAY_KEYS[i].toUpperCase()}</span><span class="route-node" aria-hidden="true">${day.state==='done'?'✓':day.state==='logged'?'·':day.state==='blocked'?'−':''}</span><span class="route-label">${day.label}</span>`;
+    route.appendChild(stop);
+  });
+  card.appendChild(route);
+  card.appendChild(el('p','quest-note','REST DAY / RECOVERY DAY<br>休む日も、冒険の一部。予定に合わせて進めよう。'));
+  root.appendChild(card);
+}
+function refreshQuestPanels(){
+  if(tab!=='today'&&tab!=='workout')return;
+  const oldHero=document.getElementById('quest-hero'), oldQuest=document.getElementById('today-quest');
+  if(oldHero&&oldQuest){
+    const fragment=document.createDocumentFragment();
+    renderQuestDashboard(fragment,dashboardTemplate(),tab==='workout'?TD.activeSession():null);
+    const [hero,quest]=[...fragment.children]; oldHero.replaceWith(hero); oldQuest.replaceWith(quest);
+  }
+  const oldRoute=document.getElementById('adventure-route');
+  if(oldRoute){ const fragment=document.createDocumentFragment(); renderRoute(fragment); oldRoute.replaceWith(fragment); }
+}
+function onSetSaved(){
+  const view=questView(dashboardTemplate(),todayLogs()), day=core.localDayKey(new Date());
+  if(lastQuestCount?.day===day&&view.done>lastQuestCount.done){
+    questEvent=true;
+    document.getElementById('quest-announcement').textContent=view.complete?view.label:`${view.done}種目を記録しました`;
+  }
+  if(navigator.vibrate&&!matchMedia('(prefers-reduced-motion: reduce)').matches)navigator.vibrate(20);
+}
+function toggleQuickPain(ex){
+  const day=core.localDayKey(new Date()), daily=TD.loadDaily();
+  const pain={...(daily[day]?.pain||{})};
+  const on=quickTarget(ex).painToday;
+  if(on)delete pain[ex]; else pain[ex]=true;
+  TD.saveDailyEntry(day,{pain:Object.keys(pain).length?pain:null});
+  const active=TD.activeSession();
+  if(active){
+    const def=core.templateExerciseDef(TD.loadProgram(),ex);
+    const key=def?.slot||ex, sessionPain={...(active.pain||{})};
+    if(on)delete sessionPain[key]; else sessionPain[key]=true;
+    TD.updateSession(active.id,{pain:sessionPain});
+  }
+}
+function reconcileDay(day){
+  // Only a reversible auto-completion marker is adjusted. No logs, custom
+  // templates, manually finished sessions, or Weekly XP are rewritten here.
+  const program=TD.loadProgram(), sets=logs.filter(l=>core.localDayKey(l.t)===day);
+  const sessions=TD.loadSessions(); let changed=false;
+  sessions.filter(s=>s.source==='free'&&s.date===day).forEach(s=>{
+    const tpl=program.templates.find(t=>t.id===s.templateId);
+    if(!tpl||!Number.isInteger(tpl.minExercises))return;
+    const complete=core.questExerciseProgress(tpl,sets.map(l=>l.ex)).complete;
+    if(s.status==='completed'&&!complete){s.status='aborted';s.questAutoUndone=true;changed=true;}
+    else if(s.questAutoUndone&&complete){s.status='completed';delete s.questAutoUndone;changed=true;}
+  });
+  if(changed)TD.saveSessions(sessions);
+}
+function finishQuick(){
+  const active=TD.activeSession();
+  if(active){ switchGymTab('workout'); openFinish(active,dashboardTemplate()); return; }
+  const view=questView(dashboardTemplate(),todayLogs());
+  showToast(view.complete?view.label:`今日は${view.done}/${view.total}。記録は残っています。`);
+  document.getElementById('content').scrollTo({top:0});
 }
 
 function onQuickLog(){
+  reconcileDay(core.localDayKey(new Date()));
   if(TD.activeSession()) return;
   const program=TD.loadProgram();
   const nextId=TD.nextWorkoutTemplateId(program);
@@ -1709,8 +1793,7 @@ function onQuickLog(){
   const exercises=[...new Set(today.map(l=>l.ex))];
   if(!core.freeLogMatchesTemplate(tpl, parts, exercises)) return;
   if(TD.ensureFreeSession(nextId, todayKey)){
-    const p=core.questExerciseProgress(tpl,exercises);
-    showToast(`🏆 Main Quest ${p.done}/${p.total} CLEAR`);
+    showToast(questView(tpl,today).label);
   }
 }
 
@@ -1846,6 +1929,12 @@ window.TrainingUI={
   renderExerciseHistory,
   quickTarget,
   renderQuickSuggestion,
+  renderRoute,
+  renderInputProgress,
+  onSetSaved,
+  reconcileDay,
+  finishQuick,
+  toggleQuickPain,
   onQuickLog,
   exportV2: TD.exportV2,
   importV2: TD.importV2,
@@ -1860,11 +1949,20 @@ function refreshIfStale(){
   if(gcalNeedsRefresh()) fetchGcalWeek();   // foreground復帰・週替わり・TTL超過で再取得
   if(tab==="plan"){ render(); return; }
   if(tab==="workout" && !TD.activeSession()) render();
+  else refreshQuestPanels();
 }
 document.addEventListener("visibilitychange",()=>{ if(!document.hidden) refreshIfStale(); });
 window.addEventListener("pageshow",refreshIfStale);
 window.addEventListener("storage",e=>{
-  if(e.key && (e.key.startsWith("wt_")||e.key.startsWith("gym_"))) refreshIfStale();
+  if(e.key && (e.key.startsWith("wt_")||e.key.startsWith("gym_"))){
+    // Reload persisted data before the next save after a storage notification.
+    try { logs=JSON.parse(localStorage.getItem("gym_logs")||"[]");
+      lastEx=JSON.parse(localStorage.getItem("gym_last")||"{}");
+      custom=JSON.parse(localStorage.getItem("gym_custom")||"{}");
+      stepPref=JSON.parse(localStorage.getItem("gym_stepkg")||"{}");
+      marks=JSON.parse(localStorage.getItem("gym_marks")||"{}"); } catch(e){}
+    refreshIfStale();
+  }
 });
 
 // AI Coach設定(endpoint URL + 任意token)。APIキーはここでは扱わない(サーバ側のみ)
@@ -1884,6 +1982,7 @@ document.getElementById("ai-config-btn").onclick=()=>{
   if(tab==="workout"&&!TD.activeSession()) render();
 };
 
+loadDefaults();
 if(tab==="workout"||tab==="today") render();
 // 起動時: GCal設定済みならタブに関係なくバックグラウンドで取得を開始。
 // 取得前はwt_schedulesのみで即表示され、取得完了後にTODAY/PLANが再計算される
