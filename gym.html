@@ -1266,7 +1266,7 @@ function openFinish(sess, tpl){
   const coreNames=new Set(coreExercises.map(e=>e.ex));
   const planned=coreExercises.reduce((a,e)=>a+e.sets,0);
   const coreDone=all.filter(l=>coreNames.has(l.ex)).length;
-  const under = coreDone>0 && coreDone < Math.ceil(planned*0.5);
+  const under = all.length>0 && coreDone < Math.ceil(planned*0.5);
   const ov=el("div","overlay");
   const box=el("div","modal-box");
   box.appendChild(el("h3","modal-title","今日のワークアウトはどうだった？"));
