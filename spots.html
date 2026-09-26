@@ -6,7 +6,7 @@
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="めぐり">
-<meta name="theme-color" content="#0c0c0e">
+<meta name="theme-color" content="#08090b">
 <title>めぐり記録</title>
 <link rel="manifest" href="spots-manifest.json">
 <link rel="apple-touch-icon" href="icon-180.png">
@@ -179,8 +179,9 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
 .btn { padding:10px 16px; font-size:13px; cursor:pointer; border:1px solid var(--line);
   background:none; color:var(--txt); }
 </style>
+<link rel="stylesheet" href="css/weekly-theme.css">
 </head>
-<body>
+<body data-app="spots">
 <div id="app">
   <div id="pin-bg"><svg viewBox="0 0 100 140" fill="#3ecfb2">
     <path d="M50 0 C22 0 4 20 4 46 C4 82 50 140 50 140 C50 140 96 82 96 46 C96 20 78 0 50 0 Z
@@ -188,7 +189,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   </svg></div>
   <div id="header">
     <p id="app-title">
-      <span>TOUR <span class="t-red">LOG</span><span class="t-jp">めぐり記録</span></span>
+      <span>Local <span class="t-red">Journey</span><span class="t-jp">めぐり記録</span></span>
       <span>
         <a class="mini-btn" href="tracker.html">QUEST</a>
         <a class="mini-btn" href="gym.html">GYM</a>
@@ -199,9 +200,9 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   </div>
   <div id="content"></div>
   <div id="tabbar">
-    <button class="tab-btn active" data-tab="today"><span class="tab-ico">📍</span>きろく</button>
-    <button class="tab-btn" data-tab="history"><span class="tab-ico">📜</span>履歴</button>
-    <button class="tab-btn" data-tab="spots"><span class="tab-ico">🗺️</span>スポット</button>
+    <button class="tab-btn active" data-tab="today"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M19 10c0 5-7 11-7 11S5 15 5 10a7 7 0 1 1 14 0z"/><circle cx="12" cy="10" r="2"/></svg></span>きろく</button>
+    <button class="tab-btn" data-tab="history"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 11a9 9 0 1 1 2 7M3 4v7h7m2-4v6l4 2"/></svg></span>履歴</button>
+    <button class="tab-btn" data-tab="spots"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3zM9 3v15m6-12v15"/></svg></span>スポット</button>
   </div>
 </div>
 
@@ -322,7 +323,8 @@ function renderToday(root){
   const totalPlaces=new Set(logs.map(l=>l.cat+"|"+l.place)).size;
 
   const wd=["日","月","火","水","木","金","土"][now.getDay()];
-  const head=el("div","card");
+  const head=el("div","card today-overview");
+  head.appendChild(el("div","",'<p class="eyebrow">LOCAL JOURNEY</p><h1>いつもの街に、発見を。</h1><p class="intro-note">好きな場所と、今日のひとこと。</p>'));
   head.appendChild(el("div","", `<div id="today-line">
     <span id="today-date">${now.getMonth()+1}/${now.getDate()}(${wd})</span>
     <span id="today-sub">今週 ${weekN}回 / 通算 ${totalPlaces}スポット</span>
