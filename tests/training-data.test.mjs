@@ -22,7 +22,7 @@ test("program: DEFAULT_TEMPLATESはloadProgram経由のmutationから隔離さ�
   Object.assign(p.templates[0].exercises[0], { sets: 99 });
   // module constantは不変
   assert.equal(TD.DEFAULT_TEMPLATES[0].exercises[0].ex, origName);
-  assert.equal(TD.DEFAULT_TEMPLATES[0].exercises.length, 7);
+  assert.equal(TD.DEFAULT_TEMPLATES[0].exercises.length, 5);
   assert.notEqual(TD.DEFAULT_TEMPLATES[0].exercises[0].sets, 99);
   // 保存していないので次のloadProgramも綺麗なdefault
   const p2 = TD.loadProgram();
@@ -65,7 +65,25 @@ test("program: 旧ABCDデフォルトは新しい胸＋背中Main Questへ自動
   assert.equal(p.mode, "repeat");
   assert.deepEqual(p.cycle, ["MAIN"]);
   assert.equal(p.templates[0].id, "MAIN");
-  assert.deepEqual(p.templates[0].requiredParts, ["chest","back"]);
+  assert.equal(p.templates[0].minExercises, 3);
+  assert.deepEqual(p.templates[0].exercises.map(e=>e.ex),
+    ["懸垂","ベンチプレス","リアデルト","インクラインダンベルプレス","ラットプルダウン"]);
+});
+
+test("program: v3の未編集Main Questは3-of-5へ自動移行", () => {
+  localStorage.clear();
+  localStorage.setItem("gym_program_v2", JSON.stringify({
+    programVersion:3, mode:"repeat", cycle:["MAIN"],
+    templates:[{id:"MAIN",exercises:[
+      {ex:"ベンチプレス"},{ex:"懸垂"},{ex:"インクラインダンベルプレス"},
+      {ex:"チェストサポーテッドロウ"},{ex:"ケーブルフライ"},{ex:"サイドレイズ"},{ex:"レッグプレス"}
+    ]}]
+  }));
+  const p=TD.loadProgram();
+  assert.equal(p.programVersion,4);
+  assert.equal(p.templates[0].minExercises,3);
+  assert.deepEqual(p.templates[0].exercises.map(e=>e.ex),
+    ["懸垂","ベンチプレス","リアデルト","インクラインダンベルプレス","ラットプルダウン"]);
 });
 
 test("program: 壊れたprogram(exercises=[])でもload/templateByIdがfatalにならない", () => {
