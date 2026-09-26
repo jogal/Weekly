@@ -27,7 +27,9 @@ export const DEFAULT_PROFILE = {
   currentWeightKg: 54,
   targetWeightKg: 57,
   proteinTargetG: 105,
-  weeklyWorkoutTarget: 4,
+  // 「週4を必達」ではなく、1日休んで次へ進むのを基本にする。
+  // 週の境界次第で3〜4回になるため、新規ユーザーの標準は3回。
+  weeklyWorkoutTarget: 3,
   defaultWednesdayBlocked: true,
   aiEndpoint: "",     // 例 https://<proj>.vercel.app/api/coach (任意)
   aiToken: "",        // サーバのCOACH_TOKENに対応(任意)
@@ -35,41 +37,40 @@ export const DEFAULT_PROFILE = {
 export function loadProfile() { return { ...DEFAULT_PROFILE, ...rd(K.profile, {}) }; }
 export function saveProfile(p) { wr(K.profile, p); }
 
-// ── Program (A/B/C/D templates) ──────────────────────────────────────────────
-// 種目名は既存gym.htmlの種目と同名にして gym_last / gym_logs の履歴と接続する。
-// part は既存の部位ID(chest/back/shoulder/arm/leg/core) = wt_records の workout_<part>。
+// ── Program (repeatable Main Quest) ───────────────────────────────────────────
+// A/B/C/Dを全部回す設計をやめ、今続いている「胸＋背中」を反復する。
+// optional=true は余力がある日の追加クエスト。未実施でもWorkout完了を妨げない。
+// 既存のユーザー編集済みprogramは勝手に上書きしない。
+// 旧デフォルトA/B/C/Dのままの端末だけ、初回load時に新標準へ移行する。
+export const PROGRAM_VERSION = 3;
+
+const LEGACY_DEFAULT_SIGNATURE = [
+  "A|ベンチプレス:4:6:10|インクラインダンベルプレス:3:8:12|ケーブルフライ:3:10:15|サイドレイズ:4:12:20|トライセプスプレスダウン:3:8:15",
+  "B|ラットプルダウン:4:6:12|チェストサポーテッドロウ:3:8:12|ケーブルロウ:3:8:12|リアレイズ:3:12:20|アームカール:3:8:12|ハンマーカール:2:10:15",
+  "C|スクワット:4:6:10|ルーマニアンデッドリフト:3:6:10|ブルガリアンスクワット:3:8:12|レッグカール:3:10:15|カーフレイズ:4:10:20|ケーブルクランチ:3:8:15",
+  "D|インクラインダンベルプレス:3:6:10|マシンチェストプレス:3:8:12|ローハイケーブルフライ:2:10:15|サイドレイズ:4:12:20|リアレイズ:3:12:20|オーバーヘッドエクステンション:3:10:15|アームカール:3:8:12",
+];
+
+function programSignature(p) {
+  if (!p || !Array.isArray(p.templates)) return [];
+  return p.templates.map(t =>
+    [t.id, ...(t.exercises || []).map(e => `${e.ex}:${e.sets}:${e.repMin}:${e.repMax}`)].join("|")
+  );
+}
+function isUntouchedLegacyDefault(p) {
+  return JSON.stringify(p?.cycle || []) === JSON.stringify(["A", "B", "C", "D"]) &&
+    JSON.stringify(programSignature(p)) === JSON.stringify(LEGACY_DEFAULT_SIGNATURE);
+}
+
 export const DEFAULT_TEMPLATES = [
-  { id: "A", name: "Workout A", focus: "胸・肩・三頭", exercises: [
-    { ex: "ベンチプレス",             slot: "A1", part: "chest",    sets: 4, repMin: 6,  repMax: 10 },
-    { ex: "インクラインダンベルプレス", slot: "A2", part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "ケーブルフライ",           slot: "A3", part: "chest",    sets: 3, repMin: 10, repMax: 15 },
-    { ex: "サイドレイズ",             slot: "A4", part: "shoulder", sets: 4, repMin: 12, repMax: 20 },
-    { ex: "トライセプスプレスダウン",   slot: "A5", part: "arm",      sets: 3, repMin: 8,  repMax: 15 },
-  ]},
-  { id: "B", name: "Workout B", focus: "背中・二頭", exercises: [
-    { ex: "ラットプルダウン",         slot: "B1", part: "back",     sets: 4, repMin: 6,  repMax: 12 },
-    { ex: "チェストサポーテッドロウ",   slot: "B2", part: "back",     sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "ケーブルロウ",             slot: "B3", part: "back",     sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "リアレイズ",               slot: "B4", part: "shoulder", sets: 3, repMin: 12, repMax: 20 },
-    { ex: "アームカール",             slot: "B5", part: "arm",      sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "ハンマーカール",           slot: "B6", part: "arm",      sets: 2, repMin: 10, repMax: 15 },
-  ]},
-  { id: "C", name: "Workout C", focus: "脚・腹", exercises: [
-    { ex: "スクワット",               slot: "C1", part: "leg",      sets: 4, repMin: 6,  repMax: 10 },
-    { ex: "ルーマニアンデッドリフト",   slot: "C2", part: "leg",      sets: 3, repMin: 6,  repMax: 10 },
-    { ex: "ブルガリアンスクワット",     slot: "C3", part: "leg",      sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "レッグカール",             slot: "C4", part: "leg",      sets: 3, repMin: 10, repMax: 15 },
-    { ex: "カーフレイズ",             slot: "C5", part: "leg",      sets: 4, repMin: 10, repMax: 20 },
-    { ex: "ケーブルクランチ",         slot: "C6", part: "core",     sets: 3, repMin: 8,  repMax: 15 },
-  ]},
-  { id: "D", name: "Workout D", focus: "上胸・肩・腕", exercises: [
-    { ex: "インクラインダンベルプレス", slot: "D1", part: "chest",    sets: 3, repMin: 6,  repMax: 10 },
-    { ex: "マシンチェストプレス",       slot: "D2", part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
-    { ex: "ローハイケーブルフライ",     slot: "D3", part: "chest",    sets: 2, repMin: 10, repMax: 15 },
-    { ex: "サイドレイズ",             slot: "D4", part: "shoulder", sets: 4, repMin: 12, repMax: 20 },
-    { ex: "リアレイズ",               slot: "D5", part: "shoulder", sets: 3, repMin: 12, repMax: 20 },
-    { ex: "オーバーヘッドエクステンション", slot: "D6", part: "arm",  sets: 3, repMin: 10, repMax: 15 },
-    { ex: "アームカール",             slot: "D7", part: "arm",      sets: 3, repMin: 8,  repMax: 12 },
+  { id: "MAIN", name: "Main Quest", focus: "胸＋背中 / 余力で追加", exercises: [
+    { ex: "ベンチプレス",               slot: "MAIN1", part: "chest",    sets: 4, repMin: 6,  repMax: 10 },
+    { ex: "懸垂",                       slot: "MAIN2", part: "back",     sets: 3, repMin: 5,  repMax: 10 },
+    { ex: "インクラインダンベルプレス", slot: "MAIN3", part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
+    { ex: "チェストサポーテッドロウ",   slot: "MAIN4", part: "back",     sets: 3, repMin: 8,  repMax: 12 },
+    { ex: "ケーブルフライ",             slot: "MAIN5", part: "chest",    sets: 2, repMin: 10, repMax: 15, optional: true },
+    { ex: "サイドレイズ",               slot: "MAIN6", part: "shoulder", sets: 2, repMin: 12, repMax: 20, optional: true },
+    { ex: "レッグプレス",               slot: "MAIN7", part: "leg",      sets: 2, repMin: 8,  repMax: 12, optional: true },
   ]},
 ];
 
@@ -77,13 +78,30 @@ export const DEFAULT_TEMPLATES = [
 const deepClone = o => (typeof structuredClone === "function"
   ? structuredClone(o) : JSON.parse(JSON.stringify(o)));
 export function cloneDefaultTemplates() { return deepClone(DEFAULT_TEMPLATES); }
+export function defaultProgram() {
+  return {
+    programVersion: PROGRAM_VERSION,
+    mode: "repeat",
+    templates: cloneDefaultTemplates(),
+    cycle: ["MAIN"],
+  };
+}
 
 export function loadProgram() {
   const p = rd(K.program, null);
-  if (p && Array.isArray(p.templates) && p.templates.length) return p;
-  return { templates: cloneDefaultTemplates(), cycle: ["A", "B", "C", "D"] };
+  if (p && Array.isArray(p.templates) && p.templates.length) {
+    if (!p.programVersion && isUntouchedLegacyDefault(p)) {
+      const migrated = defaultProgram();
+      wr(K.program, migrated);
+      return migrated;
+    }
+    return p;
+  }
+  return defaultProgram();
 }
-export function saveProgram(p) { wr(K.program, p); }
+export function saveProgram(p) {
+  wr(K.program, { ...p, programVersion: p?.programVersion || PROGRAM_VERSION });
+}
 export function templateById(program, id) {
   return program.templates.find(t => t.id === id) || program.templates[0];
 }
