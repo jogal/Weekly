@@ -665,3 +665,14 @@ test("free: 提案テンプレの部位が1つでも記録されていれば達�
   assert.equal(freeLogMatchesTemplate(A, ["leg", "core"]), false);
   assert.equal(freeLogMatchesTemplate(A, []), false);
 });
+
+test("free: requiredPartsは全て記録して初めて達成", () => {
+  const main = {
+    requiredParts: ["chest", "back"],
+    exercises: [{ part: "chest" }, { part: "back" }, { part: "shoulder", optional: true }],
+  };
+  assert.equal(freeLogMatchesTemplate(main, ["chest"]), false);
+  assert.equal(freeLogMatchesTemplate(main, ["back"]), false);
+  assert.equal(freeLogMatchesTemplate(main, ["chest", "back"]), true);
+  assert.equal(freeLogMatchesTemplate(main, ["chest", "back", "shoulder"]), true);
+});
