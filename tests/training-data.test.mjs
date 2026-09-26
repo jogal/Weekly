@@ -22,21 +22,21 @@ test("program: DEFAULT_TEMPLATESはloadProgram経由のmutationから隔離さ�
   Object.assign(p.templates[0].exercises[0], { sets: 99 });
   // module constantは不変
   assert.equal(TD.DEFAULT_TEMPLATES[0].exercises[0].ex, origName);
-  assert.equal(TD.DEFAULT_TEMPLATES[0].exercises.length, 5);
+  assert.equal(TD.DEFAULT_TEMPLATES[0].exercises.length, 7);
   assert.notEqual(TD.DEFAULT_TEMPLATES[0].exercises[0].sets, 99);
   // 保存していないので次のloadProgramも綺麗なdefault
   const p2 = TD.loadProgram();
   assert.equal(p2.templates[0].exercises[0].ex, origName);
 });
 
-test("program: A1編集→reset→完全に元のA1へ戻る", () => {
+test("program: MAIN先頭編集→reset→完全に標準へ戻る", () => {
   localStorage.clear();
   const p = TD.loadProgram();
   Object.assign(p.templates[0].exercises[0], { ex: "編集後", sets: 9, repMin: 1, repMax: 2 });
   TD.saveProgram(p);
   assert.equal(TD.loadProgram().templates[0].exercises[0].ex, "編集後");
   // reset(editorのデフォルトに戻す)
-  TD.saveProgram({ templates: TD.cloneDefaultTemplates(), cycle: ["A", "B", "C", "D"] });
+  TD.saveProgram(TD.defaultProgram());
   const after = TD.loadProgram().templates[0].exercises[0];
   assert.deepEqual(after, TD.DEFAULT_TEMPLATES[0].exercises[0]);
   // resetで保存されたのもcloneであり、後続mutationがconstantへ波及しない
@@ -44,6 +44,28 @@ test("program: A1編集→reset→完全に元のA1へ戻る", () => {
   p3.templates[0].exercises[0].ex = "再改変";
   TD.saveProgram(p3);
   assert.equal(TD.DEFAULT_TEMPLATES[0].exercises[0].ex, after.ex);
+});
+
+test("program: 旧ABCDデフォルトは新しい胸＋背中Main Questへ自動移行", () => {
+  localStorage.clear();
+  localStorage.setItem("gym_program_v2", JSON.stringify({
+    templates: [
+      { id:"A", exercises:[
+        {ex:"ベンチプレス",sets:4,repMin:6,repMax:10},{ex:"インクラインダンベルプレス",sets:3,repMin:8,repMax:12},{ex:"ケーブルフライ",sets:3,repMin:10,repMax:15},{ex:"サイドレイズ",sets:4,repMin:12,repMax:20},{ex:"トライセプスプレスダウン",sets:3,repMin:8,repMax:15}]},
+      { id:"B", exercises:[
+        {ex:"ラットプルダウン",sets:4,repMin:6,repMax:12},{ex:"チェストサポーテッドロウ",sets:3,repMin:8,repMax:12},{ex:"ケーブルロウ",sets:3,repMin:8,repMax:12},{ex:"リアレイズ",sets:3,repMin:12,repMax:20},{ex:"アームカール",sets:3,repMin:8,repMax:12},{ex:"ハンマーカール",sets:2,repMin:10,repMax:15}]},
+      { id:"C", exercises:[
+        {ex:"スクワット",sets:4,repMin:6,repMax:10},{ex:"ルーマニアンデッドリフト",sets:3,repMin:6,repMax:10},{ex:"ブルガリアンスクワット",sets:3,repMin:8,repMax:12},{ex:"レッグカール",sets:3,repMin:10,repMax:15},{ex:"カーフレイズ",sets:4,repMin:10,repMax:20},{ex:"ケーブルクランチ",sets:3,repMin:8,repMax:15}]},
+      { id:"D", exercises:[
+        {ex:"インクラインダンベルプレス",sets:3,repMin:6,repMax:10},{ex:"マシンチェストプレス",sets:3,repMin:8,repMax:12},{ex:"ローハイケーブルフライ",sets:2,repMin:10,repMax:15},{ex:"サイドレイズ",sets:4,repMin:12,repMax:20},{ex:"リアレイズ",sets:3,repMin:12,repMax:20},{ex:"オーバーヘッドエクステンション",sets:3,repMin:10,repMax:15},{ex:"アームカール",sets:3,repMin:8,repMax:12}]},
+    ],
+    cycle:["A","B","C","D"],
+  }));
+  const p=TD.loadProgram();
+  assert.equal(p.mode, "repeat");
+  assert.deepEqual(p.cycle, ["MAIN"]);
+  assert.equal(p.templates[0].id, "MAIN");
+  assert.deepEqual(p.templates[0].requiredParts, ["chest","back"]);
 });
 
 test("program: 壊れたprogram(exercises=[])でもload/templateByIdがfatalにならない", () => {
