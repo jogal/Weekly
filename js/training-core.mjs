@@ -356,11 +356,15 @@ export function templateExerciseDef(program, exName) {
   return null;
 }
 
-// 自由記録した部位が提案テンプレの部位と1つでも重なれば「そのWorkoutを達成」扱い。
-// 順番・種目数は問わない(自由度優先)
+// 自由記録モードのWorkout達成判定。
+// requiredPartsがあるテンプレートは、その部位をすべて記録したら達成。
+// 旧テンプレートは従来どおり「提案部位のどれか1つ」で後方互換。
 export function freeLogMatchesTemplate(tpl, loggedParts) {
+  const logged = new Set(loggedParts || []);
+  const required = Array.isArray(tpl?.requiredParts) ? tpl.requiredParts.filter(Boolean) : [];
+  if (required.length) return required.every(p => logged.has(p));
   const tplParts = new Set((tpl?.exercises || []).map(e => e.part));
-  return (loggedParts || []).some(p => tplParts.has(p));
+  return [...logged].some(p => tplParts.has(p));
 }
 
 // ── Template編集の不変条件(pure) ─────────────────────────────────────────────

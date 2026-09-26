@@ -843,9 +843,9 @@ function renderIdle(root){
   const {plan:curPlan}=getCurrentPlan();
   const todayKey=core.localDayKey(now);
   const rec=curPlan.recommendedDays.find(r=>r.date===todayKey);
-  const sub = rec ? `今日は ${esc("Workout "+rec.templateId)} の日`
-            : curPlan.remaining===0 ? `今週の目標は達成済み（次は ${esc(tpl.name)}）`
-            : `今日はREST DAY予定（次は ${esc(tpl.name)}）`;
+  const sub = rec ? `今日は ${esc(tpl.name)} の日`
+            : curPlan.remaining===0 ? `今週の目標は達成済み`
+            : `今日は回復日予定（次は ${esc(tpl.name)}）`;
   const head=el("div","card");
   head.appendChild(el("div","",`<div id="today-line">
     <span id="today-date">TODAY　${now.getMonth()+1}/${now.getDate()}(${wd})</span>
@@ -861,7 +861,7 @@ function renderIdle(root){
   tpl.exercises.forEach(e=>{
     const prev=core.lastSessionSets(logs, e.ex, {slot:e.slot});
     list.appendChild(el("div","wo-exrow",
-      `<span>${esc(e.ex)} <span class="wo-progress">${e.sets}×${e.repMin}-${e.repMax}</span></span>
+      `<span>${e.optional?'<span class="wo-progress">OPTIONAL</span> ':''}${esc(e.ex)} <span class="wo-progress">${e.sets}×${e.repMin}-${e.repMax}</span></span>
        <span class="prev">${prev? "前回 "+esc(fmtPrevShort(prev)) : "初回"}</span>`));
   });
   card.appendChild(list);
@@ -1160,7 +1160,8 @@ function renderActive(root, sess){
     `<span style="font-size:10px;color:${part.color};border:1px solid currentColor;padding:2px 9px;letter-spacing:.14em;margin-left:8px">${part.label}</span>`));
   headRow.appendChild(headR);
   card.appendChild(headRow);
-  card.appendChild(el("div","wo-target",`TARGET　${exDef.sets}セット × ${exDef.repMin}–${exDef.repMax}回`));
+  card.appendChild(el("div","wo-target",
+    `${exDef.optional?"OPTIONAL　":"TARGET　"}${exDef.sets}セット × ${exDef.repMin}–${exDef.repMax}回`));
   card.appendChild(el("div","wo-prev-line",`前回　<b>${fmtPrev(prev)}</b>`));
   // 今日の目標(progressive overload engineの決定 + 短い理由)
   if(tgt.status!=="first_time"){
@@ -1260,14 +1261,18 @@ function renderActive(root, sess){
 // 進まないように「中断(サイクルを進めない)」も選べるようにする。
 function openFinish(sess, tpl){
   const all=sessionAllSets(sess);
-  const planned=tpl.exercises.reduce((a,e)=>a+e.sets,0);
-  const under = all.length>0 && all.length < Math.ceil(planned*0.5);
+  // Optional種目は完了判定の必要セット数に含めない。
+  const coreExercises=tpl.exercises.filter(e=>!e.optional);
+  const coreNames=new Set(coreExercises.map(e=>e.ex));
+  const planned=coreExercises.reduce((a,e)=>a+e.sets,0);
+  const coreDone=all.filter(l=>coreNames.has(l.ex)).length;
+  const under = all.length>0 && coreDone < Math.ceil(planned*0.5);
   const ov=el("div","overlay");
   const box=el("div","modal-box");
   box.appendChild(el("h3","modal-title","今日のワークアウトはどうだった？"));
   if(under){
     box.appendChild(el("p","modal-sub",
-      `⚠ まだ ${all.length}/${planned} セット。完了するとサイクルが ${esc(tpl.id)}→次へ進みます。途中でやめる場合は「中断」を選んでください。`))
+      `⚠ Main Questはまだ ${coreDone}/${planned} セット。今日はここまでなら「中断」、十分やれたならそのまま完了でOKです。`))
       .style.cssText="font-size:12px;color:var(--dim);margin:0 0 12px";
   }
   [["easy","😎 楽だった"],["good","💪 ちょうど良い"],["hard","🥵 キツかった"]].forEach(([v,label])=>{
@@ -1468,7 +1473,9 @@ function currentPlanInput(){
       .filter(s=>s.status==="completed"&&dates.includes(s.date))
       .map(s=>({date:s.date,templateId:s.templateId})),
     nextWorkout:TD.nextWorkoutTemplateId(program),
-    targetSessions:profile.weeklyWorkoutTarget,
+    // repeat modeでは「週4を埋める」より1日休むリズムを優先。
+    // 週の切れ目で3〜4回になるが、週間表示は3回を基本にして詰め込みを防ぐ。
+    targetSessions:program.mode==="repeat" ? Math.min(profile.weeklyWorkoutTarget,3) : profile.weeklyWorkoutTarget,
     todayKey:core.localDayKey(new Date()),
     defaultWednesdayBlocked:profile.defaultWednesdayBlocked,
     cycle:program.cycle,
@@ -1653,14 +1660,14 @@ function renderQuickSuggestion(root){
   const head=el("div","wo-head",
     doneToday
       ? `<span class="wo-name">✅ 今日は ${esc(TD.templateById(program, doneToday.templateId).name)} 達成</span>
-         <span class="wo-focus">次は ${esc(tpl.name)}</span>`
+         <span class="wo-focus">次回は1日休んでから</span>`
       : `<span class="wo-name">今日の提案　${esc(tpl.name)}</span><span class="wo-focus">${esc(tpl.focus)}</span>`);
   card.appendChild(head);
   if(!doneToday){
     const chips=el("div","wo-chips"); chips.style.flexWrap="wrap"; chips.style.marginTop="8px";
     tpl.exercises.forEach(e=>{
       const hit=todayParts.has(e.part);
-      const c=el("button","wo-chip",(hit?"✓ ":"")+esc(e.ex));
+      const c=el("button","wo-chip",(hit?"✓ ":"")+(e.optional?"＋ ":"")+esc(e.ex));
       c.style.flex="0 0 auto";
       if(e.ex===sel.ex){ c.style.borderColor="var(--bolt)"; c.style.color="var(--bolt)"; }
       c.onclick=()=>{
@@ -1671,11 +1678,11 @@ function renderQuickSuggestion(root){
     });
     card.appendChild(chips);
     card.appendChild(el("div","wo-progress",
-      "参考メニュー。順番・種目数は自由。提案の部位を1セットでも記録すれば達成扱い(サイクルが進む)"));
+      "順番・種目数は自由。胸と背中を両方記録したらMain Quest達成。＋は余力がある日のOptional。"));
   }
   root.appendChild(card);
 }
-// 自由記録の達成判定: 提案テンプレの部位が今日記録されていればfree sessionを作る
+// 自由記録の達成判定: requiredParts(標準は胸＋背中)を満たしたらfree sessionを作る
 function onQuickLog(){
   if(TD.activeSession()) return;                    // 構造モード中は何もしない
   const program=TD.loadProgram();
@@ -1685,8 +1692,7 @@ function onQuickLog(){
   const parts=logs.filter(l=>core.localDayKey(l.t)===todayKey).map(l=>l.part);
   if(!core.freeLogMatchesTemplate(tpl, parts)) return;
   if(TD.ensureFreeSession(nextId, todayKey)){
-    const nextName=TD.templateById(program, TD.nextWorkoutTemplateId(program)).name;
-    showToast(`🏆 ${tpl.name} 達成扱い → 次は ${nextName}`);
+    showToast(`🏆 ${tpl.name} 達成。次回は1日休んでから`);
   }
 }
 
@@ -1747,8 +1753,8 @@ function openTemplateEditor(){
       });
       const reset=el("button","ghost-btn","デフォルトに戻す(全テンプレート)");
       reset.onclick=()=>{
-        if(!confirm("A〜D全テンプレートをデフォルトに戻す?(記録は消えない)")) return;
-        TD.saveProgram({templates:TD.cloneDefaultTemplates(), cycle:["A","B","C","D"]});
+        if(!confirm("Main Questを標準メニューに戻す?(過去の記録は消えない)")) return;
+        TD.saveProgram(TD.defaultProgram());
         showToast("デフォルトに戻しました"); draw();
       };
       box.appendChild(reset);
