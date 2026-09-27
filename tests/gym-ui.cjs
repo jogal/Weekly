@@ -91,8 +91,8 @@ const server = http.createServer((req,res)=>{
   const oldRecords={'2026-09-21':{sat:{medicine:{done:true,note:'手書きのメモ',duration:'30'}}}};
   const seed={gym_logs:oldLogs,gym_last:{[names[1]]:{kg:50,reps:10}},gym_sessions_v2:[{id:'old',date:'2026-09-26',templateId:'MAIN',status:'completed',pain:{A1:true}}],wt_records:oldRecords};
   const pain=await pageAt(390,seed);
-  assert.match(await pain.locator('#input-card').innerText(),/増量を止め/);
-  assert.equal(await pain.evaluate(()=>window.TrainingUI.quickTarget('ベンチプレス').target.weight),50);
+  assert.match(await pain.locator('#input-card').innerText(),/目標提案を休止/);
+  assert.equal(await pain.evaluate(()=>window.TrainingUI.quickTarget('ベンチプレス').target.weight),null);
   await pain.locator('#log-btn').click();
   assert.deepEqual(await pain.evaluate(()=>JSON.parse(localStorage.getItem('gym_logs')).slice(0,4)),oldLogs);
   assert.deepEqual(await pain.evaluate(()=>JSON.parse(localStorage.getItem('wt_records'))['2026-09-21']),oldRecords['2026-09-21']);

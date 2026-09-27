@@ -358,10 +358,9 @@ function stepOf(ex){
 function loadDefaults(){
   // 自由記録でも強度提案を効かせる: エンジンの目標(kg×目標rep)を優先プリフィル
   const q=window.TrainingUI? window.TrainingUI.quickTarget(sel.ex) : null;
-  if(q && q.target && q.target.weight!=null){
-    kg=q.target.weight;
-    const arr=q.target.suggestedSetTargets||[];
-    reps=arr[Math.min(q.doneToday, Math.max(arr.length-1,0))] ?? (arr[0]||10);
+  if(q?.target.suggestedSets[q.doneToday]){
+    const next=q.target.suggestedSets[q.doneToday];
+    kg=next.kg; reps=next.reps;
     return;
   }
   const d=lastEx[sel.ex];
@@ -372,6 +371,7 @@ loadDefaults();
 
 function exListOf(part){ return [...(PRESET_EX[part]||[]), ...(custom[part]||[])]; }
 function todayLogs(){ const k=dateKeyOf(new Date()); return logs.filter(l=>dateKeyOf(new Date(l.t))===k); }
+function fmtLoggedSet(l){return esc(window.TrainingUI?window.TrainingUI.formatLoggedSet(l):`${fmtKg(l.kg)}×${l.reps}回`)+(l.kind==="warmup"?"（準備）":"");}
 function fmtKg(v){ return v===0 ? "自重" : (v+"kg"); }
 function fmtTime(iso){ const d=new Date(iso);
   return String(d.getHours()).padStart(2,"0")+":"+String(d.getMinutes()).padStart(2,"0"); }
@@ -416,7 +416,9 @@ function syncQuest(part, dateObj){
 // 既存ログにこれらが無くても全機能が正常動作する(後方互換)。
 function saveSet(ex, part, kgV, repsV, meta){
   const now=new Date();
-  const entry={t:now.toISOString(), ex, part, kg:kgV, reps:repsV};
+  const extra=window.TrainingUI?.recordingMeta(ex, kgV)||{};
+  if(extra.loadMode==="bodyweight") kgV=0;
+  const entry={t:now.toISOString(), ex, part, kg:kgV, reps:repsV, ...extra};
   if(meta && meta.sessionId){
     entry.sessionId=meta.sessionId;
     entry.workoutTemplate=meta.workoutTemplate;
@@ -549,16 +551,7 @@ function renderToday(root){
       pain.onclick=()=>{ window.TrainingUI.toggleQuickPain(sel.ex); loadDefaults(); render(); };
       card.appendChild(pain);
       card.appendChild(el("div","wo-prev-line",`前回　<b>${q.prevText}</b>`));
-      if(q.target.status!=="first_time"){
-        const tl2=el("div","wo-prev-line");
-        tl2.innerHTML=`今日　<b>${q.targetText}</b>`;
-        if(q.target.status==="increase_weight") tl2.style.color="var(--bolt)";
-        card.appendChild(tl2);
-        const rs=el("div","wo-progress",esc(q.target.reason)); rs.style.marginBottom="10px";
-        card.appendChild(rs);
-      }else{
-        card.appendChild(el("div","wo-prev-line",`今日　<b>${esc(q.target.reason)}</b>`));
-      }
+      window.TrainingUI.renderTarget(card,q.target);
     }
   }
 
@@ -579,6 +572,7 @@ function renderToday(root){
     if(!isNaN(n)&&n>=0){ kg=Math.round(n*10)/10; updW(); }
   };
   updW();
+  if(window.TrainingUI) window.TrainingUI.renderRecordingOptions(card,sel.ex,kg,mode=>{if(mode==="bodyweight")kg=0;updW();});
   card.appendChild(wRow);
 
   // 回数: −1 / 値 / +1
@@ -603,6 +597,7 @@ function renderToday(root){
   logB.id="log-btn";
   logB.onclick=addSet;
   card.appendChild(logB);
+  if(window.TrainingUI) window.TrainingUI.renderEffort(card,sel.ex);
   root.appendChild(card);
 
   root.appendChild(extras);
@@ -621,7 +616,7 @@ function renderToday(root){
       const dot=el("span","set-part-dot"); dot.style.background=p.color;
       row.appendChild(dot);
       row.appendChild(el("span","set-main",
-        `${esc(l.ex)} <span class="set-kg">${fmtKg(l.kg)}×${l.reps}</span>`));
+        `${esc(l.ex)} <span class="set-kg">${fmtLoggedSet(l)}</span>`));
       const del=el("button","set-del","✕");
       del.onclick=()=>{ if(confirm("このセットを消す?")) delSet(l.t); };
       row.appendChild(del);
@@ -814,6 +809,7 @@ function fmtW(kgV){ return kgV===0 ? "自重" : kgV+"kg"; }
 // 前回表示: 全セット同重量なら「50kg 8/8/6/5」、重量が動いていたら「16kg×12 14kg×10」
 function fmtPrevShort(p){
   if(!p) return "初回";
+  if(p.sets.some(s=>s.loadMode||s.kind))return p.sets.map(s=>core.formatTargetSet(s)+(s.kind==="warmup"?"（準備）":"")).join(" / ");
   const uniform=p.sets.every(s=>s.kg===p.sets[0].kg);
   if(uniform) return `${fmtW(p.sets[0].kg)}×${p.sets.map(s=>s.reps).join("/")}`;
   return p.sets.map(s=>`${fmtW(s.kg)}×${s.reps}`).join(" ");
@@ -848,20 +844,16 @@ function renderIdle(root){
   // NEXT EXERCISE: 最初の種目の前回実績と今日の目標(spec#8)
   const first=tpl.exercises[0];
   if(first){
-    const hist=core.sessionHistory(logs, first.ex, {slot:first.slot, sessions:TD.loadSessions()});
+    const hist=core.sessionHistory(logs, first.ex, {slot:first.slot, sessions:TD.loadSessions(), daily:TD.loadDaily()});
     const prev=hist.length? hist[hist.length-1] : null;
     const tgt=core.getNextExerciseTarget({history:hist, targetSets:first.sets,
-      repMin:first.repMin, repMax:first.repMax, increment:stepOf(first.ex)});
+      repMin:first.repMin, repMax:first.repMax, increment:stepOf(first.ex), ...targetContext(first.ex)});
     const nx=el("div","card");
     nx.appendChild(el("p","card-title","NEXT EXERCISE"));
     nx.appendChild(el("div","wo-head",`<span style="font-size:16px;font-weight:600">${esc(first.ex)}</span>`));
     nx.appendChild(el("div","wo-prev-line",`前回　<b>${fmtPrev(prev)}</b>`));
-    if(tgt.status!=="first_time"){
-      const tl=el("div","wo-prev-line");
-      tl.innerHTML=`今日　<b>${fmtW(tgt.weight)}　計${tgt.targetTotalReps}回以上</b>`;
-      if(tgt.status==="increase_weight") tl.style.color="var(--bolt)";
-      nx.appendChild(tl);
-    }
+    renderTarget(nx,tgt);
+
     root.appendChild(nx);
   }
 
@@ -961,11 +953,12 @@ function gatherCoachPayload(){
   const nextTargets=tpl.exercises.map(e=>{
     const key=e.slot||e.ex;
     const pain=core.lastSessionPainFlag(sessions, nextId, key);
-    if(pain) painExercises.push(e.ex);
-    const hist=core.sessionHistory(logs,e.ex,{slot:e.slot,sessions});
+    if(pain||currentPain(e.ex)) painExercises.push(e.ex);
+    const hist=core.sessionHistory(logs,e.ex,{slot:e.slot,sessions,daily:TD.loadDaily()});
     const t=core.getNextExerciseTarget({history:hist,targetSets:e.sets,
-      repMin:e.repMin,repMax:e.repMax,increment:stepOf(e.ex),pain});
-    return {exercise:e.ex, status:t.status, weightKg:t.weight, targetTotalReps:t.targetTotalReps};
+      repMin:e.repMin,repMax:e.repMax,increment:stepOf(e.ex), ...targetContext(e.ex),pain: pain || currentPain(e.ex)});
+    return {exercise:e.ex, status:t.status, weightKg:t.weight, targetTotalReps:t.targetTotalReps,
+      suggestedSets:t.suggestedSets, reason:t.reason, challenge:t.challenge};
   });
   const {plan}=getCurrentPlan();
   const dayConstraints=Object.values(plan.dayInfo)
@@ -1087,7 +1080,7 @@ function renderActive(root, sess){
   const part=PART_MAP[exDef.part]||{label:exDef.part,color:"#999"};
   const allSessions=TD.loadSessions();
   const hist=core.sessionHistory(logs, exDef.ex,
-    {beforeISO:sess.startedAt, slot:exDef.slot, sessions:allSessions});
+    {beforeISO:sess.startedAt, slot:exDef.slot, sessions:allSessions,daily:TD.loadDaily()});
   const prev=hist.length? hist[hist.length-1] : null;
   const painKey=exDef.slot||exDef.ex;
   const painNow=!!(sess.pain&&sess.pain[painKey]) || !!TD.loadDaily()[core.localDayKey(new Date())]?.pain?.[exDef.ex];
@@ -1096,15 +1089,10 @@ function renderActive(root, sess){
   const prevPain=core.lastSessionPainFlag(allSessions, sess.templateId, painKey);
   const tgt=core.getNextExerciseTarget({history:hist, targetSets:exDef.sets,
     repMin:exDef.repMin, repMax:exDef.repMax, increment:stepOf(exDef.ex),
-    pain: painNow||prevPain});
+    ...targetContext(exDef.ex), pain: painNow||prevPain});
   const done=sessionSetsOf(sess, exDef.ex);
-  // プリフィル: エンジンの提案(増量時は新重量+目標rep) > 直前セット > 前回
-  let pre=core.prefillFor(done, prev) || {kg:0, reps:10};
-  if(!done.length && tgt.weight!=null){
-    pre={kg:tgt.weight, reps:(tgt.suggestedSetTargets&&tgt.suggestedSetTargets[0])||pre.reps};
-  }else if(done.length && tgt.suggestedSetTargets && tgt.suggestedSetTargets[done.length]!=null){
-    pre={kg:pre.kg, reps:tgt.suggestedSetTargets[done.length]};
-  }
+  const workingDone=done.filter(l=>l.kind!=="warmup");
+  const pre=core.targetPrefill(tgt,workingDone.length,core.prefillFor(done,prev)||{kg:0,reps:10});
 
   renderQuestDashboard(root, tpl, sess);
 
@@ -1131,20 +1119,9 @@ function renderActive(root, sess){
   headRow.appendChild(headR);
   card.appendChild(headRow);
   card.appendChild(el("div","wo-target",
-    `${exDef.optional?"OPTIONAL　":"TARGET　"}${exDef.sets}セット × ${exDef.repMin}–${exDef.repMax}回`));
+    `REP RANGE　${exDef.repMin}–${exDef.repMax}回 / セット追加は任意`));
   card.appendChild(el("div","wo-prev-line",`前回　<b>${fmtPrev(prev)}</b>`));
-  // 今日の目標(progressive overload engineの決定 + 短い理由)
-  if(tgt.status!=="first_time"){
-    const tl=el("div","wo-prev-line");
-    tl.innerHTML=`今日　<b>${fmtW(tgt.weight)}　計${tgt.targetTotalReps}回以上（${tgt.suggestedSetTargets.join("/")}）</b>`;
-    if(tgt.status==="increase_weight") tl.style.color="var(--bolt)";
-    card.appendChild(tl);
-    const rs=el("div","wo-progress",esc(tgt.reason));
-    rs.style.marginBottom="10px";
-    card.appendChild(rs);
-  }else{
-    card.appendChild(el("div","wo-prev-line",`今日　<b>${esc(tgt.reason)}</b>`));
-  }
+  renderTarget(card,tgt);
 
   // 入力: kg / reps (numeric keyboard・44px+タップ・長押し連打)
   let wKg=pre.kg, wReps=pre.reps;
@@ -1163,6 +1140,7 @@ function renderActive(root, sess){
   kgRow.appendChild(kgWrap);
   kgRow.appendChild(stepBtn("+"+step,"",()=>{wKg=Math.round((wKg+step)*10)/10;updK();}));
   updK();
+  renderRecordingOptions(card,exDef.ex,wKg,mode=>{if(mode==="bodyweight")wKg=0;updK();},pre.loadMode);
   card.appendChild(kgRow);
 
   const rRow=el("div","stepper-row");
@@ -1179,22 +1157,20 @@ function renderActive(root, sess){
   updR();
   card.appendChild(rRow);
 
-  // ワンタップ: 前回と同じ / 前回+1rep（対応する前回セット=同じセット番号を参照）
-  if(prev){
-    const ref=prev.sets[Math.min(done.length, prev.sets.length-1)];
-    const chips=el("div","wo-chips");
-    const c1=el("button","wo-chip",`前回と同じ（${fmtW(ref.kg)}×${ref.reps}）`);
-    c1.onclick=()=>{ wKg=ref.kg; wReps=ref.reps; updK(); updR(); };
-    const c2=el("button","wo-chip","前回 +1回");
-    c2.onclick=()=>{ wKg=ref.kg; wReps=ref.reps+1; updK(); updR(); };
-    chips.appendChild(c1); chips.appendChild(c2);
-    card.appendChild(chips);
+  // A candidate is opt-in and affects only this input, never the saved history.
+  const candidate=tgt.challenge?.sets[workingDone.length];
+  if(candidate && (candidate.kg!==pre.kg || candidate.reps!==pre.reps || candidate.loadMode!==pre.loadMode)){
+    const choose=el("button","wo-chip",`挑戦を入力に使う：${esc(core.formatTargetSet(candidate))}`);
+    choose.onclick=()=>{wKg=candidate.kg;wReps=candidate.reps;
+      setRecordingMode(exDef.ex,candidate.loadMode);updK();updR();};
+    card.appendChild(choose);
   }
 
   renderInputProgress(card);
   const logB=el("button","bolt-btn",`⚡ セット記録（${done.length+1}セット目）`);
   logB.onclick=()=>{ logWorkoutSet(exDef, wKg, wReps, sess, done.length+1); render(); };
   card.appendChild(logB);
+  renderEffort(card,exDef.ex);
 
   // このセッションで記録済みのセット
   if(done.length){
@@ -1202,7 +1178,7 @@ function renderActive(root, sess){
     done.forEach(l=>{
       const row=el("div","set-row");
       row.appendChild(el("span","set-time",fmtTime(l.t)));
-      row.appendChild(el("span","set-main",`<span class="set-kg">${fmtKg(l.kg)}×${l.reps}</span>`));
+      row.appendChild(el("span","set-main",`<span class="set-kg">${fmtLoggedSet(l)}</span>`));
       const del=el("button","set-del","✕");
       del.onclick=()=>{ if(confirm("このセットを消す?")) delSet(l.t); };
       row.appendChild(del);
@@ -1548,7 +1524,7 @@ function renderExerciseHistory(root){
     return;
   }
   names.forEach(ex=>{
-    const h=core.sessionHistory(logs, ex, {limit:2, sessions:TD.loadSessions()});
+    const h=core.sessionHistory(logs, ex, {limit:2, sessions:TD.loadSessions(), daily:TD.loadDaily()});
     if(!h.length) return;
     const last=h[h.length-1];
     const prev=h.length>1? h[0]:null;
@@ -1599,26 +1575,106 @@ function renderStale(root, sess){
 // ── 自由記録モード(きろくタブ) ────────────────────────────────────────────────
 // 種目名ベースで前回/今日の目標を出す(構造モードと自由記録のログを統合して評価)。
 // 今日のぶんは除外して目標を計算し、今日既に記録したセット数で目標repの位置を進める
+// Per-exercise feedback is bound to the last logged set, not an entire day/session.
+function latestTodaySet(ex){return logs.filter(l=>l.ex===ex&&core.localDayKey(l.t)===core.localDayKey(new Date())).at(-1);}
+function currentEffort(ex){
+  const last=latestTodaySet(ex), f=TD.loadDaily()[core.localDayKey(new Date())]?.exerciseFeedback?.[ex];
+  return last&&f?.lastSetAt===last.t?f.effort:null;
+}
+function currentPain(ex){
+  const active=TD.activeSession(), def=core.templateExerciseDef(TD.loadProgram(),ex);
+  return !!TD.loadDaily()[core.localDayKey(new Date())]?.pain?.[ex] || !!active?.pain?.[def?.slot||ex];
+}
+function targetContext(ex){return {exercise:ex,todayKey:core.localDayKey(new Date()),effort:currentEffort(ex),pain:currentPain(ex)};}
+function renderTarget(root,t){
+  const box=el('div','training-target');
+  if(t.suggestedSets.length){
+    box.appendChild(el('p','card-title',t.status==='returning'?'前回の参考':'基本：前回の再現'));
+    const list=el('div','target-sets');
+    t.suggestedSets.forEach((s,i)=>list.appendChild(el('div','target-set',`${i+1}<b>${esc(core.formatTargetSet(s))}</b>`)));
+    box.appendChild(list);
+  }
+  box.appendChild(el('p','quest-note target-reason',esc(t.reason)));
+  if(t.challenge){
+    const details=el('details','target-challenge');
+    details.appendChild(el('summary','','余裕があれば・任意の挑戦'));
+    t.challenge.sets.forEach((s,i)=>{
+      if(s.kg!==t.suggestedSets[i].kg||s.reps!==t.suggestedSets[i].reps)
+        details.appendChild(el('p','quest-note',`${i+1}セット目：${esc(core.formatTargetSet(s))}`));
+    });
+    details.appendChild(el('p','quest-note',esc(t.challenge.reason)));
+    box.appendChild(details);
+  }
+  root.appendChild(box);
+}
+function renderEffort(root,ex){
+  const last=latestTodaySet(ex);if(!last)return;
+  const box=el('div','exercise-effort');
+  box.appendChild(el('p','quest-note','この種目の手応え（任意・最後に1タップ）'));
+  const choices=el('div','wo-chips');
+  [['easy','余裕あり'],['good','ちょうどよい'],['hard','きつい']].forEach(([value,label])=>{
+    const b=el('button','wo-chip',label), on=currentEffort(ex)===value;
+    b.setAttribute('aria-pressed',String(on));
+    b.onclick=()=>{TD.saveExerciseFeedback(core.localDayKey(new Date()),ex,last.t,on?null:value);render();};
+    choices.appendChild(b);
+  });
+  box.appendChild(choices);root.appendChild(box);
+}
+const recordingOptions=new Map();
+function setRecordingMode(ex,mode){
+  const cur=recordingOptions.get(ex)||{};recordingOptions.set(ex,{...cur,loadMode:mode});
+  const select=document.querySelector('.recording-options select');if(select)select.value=mode;
+}
+function renderRecordingOptions(root,ex,kg,onMode,plannedMode=null){
+  const pullup=/懸垂/.test(ex);
+  const quick=tab==='today'?quickTarget(ex):null;
+  const mode=plannedMode||quick?.target.suggestedSets[quick.doneToday]?.loadMode||TD.loadProfile().exerciseLoadModes?.[ex]||core.loadModeOf({kg},ex);
+  const cur=recordingOptions.get(ex)||{loadMode:mode,kind:'working'};
+  recordingOptions.set(ex,cur);
+  const box=el('details','recording-options');box.appendChild(el('summary','','記録オプション（任意）'));
+  if(pullup){
+    const label=el('label','quest-note','懸垂の重量方式 '), select=el('select','mini-btn');
+    select.setAttribute('aria-label','懸垂の重量方式');
+    [['unknown','方式を選択'],['bodyweight','自重'],['weighted','加重（追加kg）'],['assisted','アシスト（補助kg）']].forEach(([v,text])=>{const o=el('option','',text);o.value=v;select.appendChild(o);});
+    select.value=cur.loadMode;
+    select.onchange=()=>{
+      setRecordingMode(ex,select.value);const profile=TD.loadProfile();
+      TD.saveProfile({...profile,exerciseLoadModes:{...profile.exerciseLoadModes,[ex]:select.value}});
+      onMode(select.value);
+    };
+    label.appendChild(select);box.appendChild(label);
+  }
+  const warm=el('button','wo-chip','このセットはウォームアップ');warm.setAttribute('aria-pressed',String(cur.kind==='warmup'));
+  warm.onclick=()=>{const value=recordingOptions.get(ex);value.kind=value.kind==='warmup'?'working':'warmup';warm.setAttribute('aria-pressed',String(value.kind==='warmup'));};
+  box.appendChild(warm);root.appendChild(box);
+}
+function recordingMeta(ex,kg){
+  const value=recordingOptions.get(ex)||{loadMode:core.loadModeOf({kg},ex),kind:'working'};
+  recordingOptions.delete(ex);
+  // Positive added weight is not zero-load bodyweight, even if the stepper was used.
+  const loadMode=value.loadMode==='bodyweight'&&kg>0?'weighted':value.loadMode;
+  return {kind:value.kind,...(loadMode!=='unknown'?{loadMode}:{})};
+}
+
 function quickTarget(ex){
   if(!ex) return null;
   const program=TD.loadProgram();
   const def=core.templateExerciseDef(program, ex)||core.FREE_DEFAULT_DEF;
   const sessions=TD.loadSessions();
   const startOfToday=new Date(); startOfToday.setHours(0,0,0,0);
-  const hist=core.sessionHistory(logs, ex, {sessions, beforeISO:startOfToday.toISOString()});
+  const hist=core.sessionHistory(logs, ex, {sessions, daily:TD.loadDaily(), beforeISO:startOfToday.toISOString()});
   const prev=hist.length? hist[hist.length-1]:null;
   const key=(core.templateExerciseDef(program, ex)||{});
   const active=TD.activeSession();
   const painToday=!!TD.loadDaily()[core.localDayKey(new Date())]?.pain?.[ex] || !!active?.pain?.[key.slot||ex];
   const pain=painToday || (key.templateId? core.lastSessionPainFlag(sessions, key.templateId, key.slot||ex):false);
   const target=core.getNextExerciseTarget({history:hist, targetSets:def.sets,
-    repMin:def.repMin, repMax:def.repMax, increment:stepOf(ex), pain});
-  const doneToday=logs.filter(l=>l.ex===ex && core.localDayKey(l.t)===core.localDayKey(new Date())).length;
+    repMin:def.repMin, repMax:def.repMax, increment:stepOf(ex), ...targetContext(ex), pain});
+  const doneToday=logs.filter(l=>l.ex===ex && l.kind!=="warmup" && core.localDayKey(l.t)===core.localDayKey(new Date())).length;
   return {
     prev, target, def, doneToday, painToday,
     prevText: fmtPrev(prev),
-    targetText: target.status==="first_time" ? esc(target.reason)
-      : `${fmtW(target.weight)}　計${target.targetTotalReps}回以上（${target.suggestedSetTargets.join("/")}）`,
+    targetText: esc(core.formatExerciseTarget(target)),
   };
 }
 // A single read-only dashboard for quick logging and Workout mode.
@@ -1946,6 +2002,8 @@ window.TrainingUI={
   reconcileDay,
   finishQuick,
   toggleQuickPain,
+  renderTarget, renderEffort, renderRecordingOptions, recordingMeta,
+  formatLoggedSet:core.formatTargetSet,
   onQuickLog,
   exportV2: TD.exportV2,
   importV2: TD.importV2,

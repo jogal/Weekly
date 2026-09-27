@@ -250,3 +250,19 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid
 .monk-actor:not(:disabled) .monk-action-hint { opacity:.8; }
 @media(max-width:360px) { .monk-actor { transform:translateY(15px) scale(.88); } }
 @media(prefers-reduced-motion:reduce) { .monk-action-sheet,.monk-action-hint { display:none !important; } .monk-actor .monk-clip { visibility:visible !important; } }
+
+/* Per-set reference targets; compact and readable on iPhone widths. */
+.training-target { margin: 12px 0 18px; }
+.target-sets { display: grid; gap: 6px; }
+.target-set { display:flex; align-items:center; gap:14px; color:var(--dim); font-size:13px; }
+.target-set b { color:var(--txt); font-size:16px; overflow-wrap:anywhere; }
+.target-reason { margin:12px 0 0; }
+.target-challenge, .recording-options { margin:12px 0; font-size:13px; color:var(--dim); }
+.target-challenge summary, .recording-options summary { cursor:pointer; padding:12px 0; min-height:44px; box-sizing:border-box; }
+.recording-options label { display:block; }
+.recording-options select { max-width:100%; margin:8px 0; }
+.recording-options .wo-chip { margin:6px 0; }
+.exercise-effort { margin-top:16px; }
+.exercise-effort .wo-chips { display:flex; flex-wrap:wrap; gap:8px; }
+.exercise-effort button { min-height:44px; }
+.exercise-effort button[aria-pressed="true"], .recording-options button[aria-pressed="true"] { border-color:var(--gold); color:var(--gold); }

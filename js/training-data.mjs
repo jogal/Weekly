@@ -210,6 +210,14 @@ export function saveDailyEntry(dateKey, patch) {
   return d;
 }
 
+// Optional effort, attached to the exact last set. Other daily fields survive.
+export function saveExerciseFeedback(day, exercise, lastSetAt, effort) {
+  const feedback = { ...(loadDaily()[day]?.exerciseFeedback || {}) };
+  if (["easy", "good", "hard"].includes(effort)) feedback[exercise] = { lastSetAt, effort };
+  else delete feedback[exercise];
+  return saveDailyEntry(day, { exerciseFeedback: Object.keys(feedback).length ? feedback : null });
+}
+
 // ── Weekly plan / manual overrides ───────────────────────────────────────────
 // overrides: {dateKey: "available"|"maybe"|"blocked"}。保存時に2週間より古いkeyを整理
 export function loadOverrides() { return rd(K.overrides, {}); }
