@@ -691,6 +691,7 @@ function renderHistory(root){
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function render(){
+  window.TrainingUI?.detachCompanion();
   const root=document.getElementById("content");
   root.innerHTML="";
   if(tab==="workout") renderWorkout(root);
@@ -789,7 +790,10 @@ import * as core from "./js/training-core.mjs";
 import * as TD from "./js/training-data.mjs";
 import { generateWeeklyTrainingPlan, mapGcalEvents, gcalCacheStale } from "./js/training-plan.mjs";
 import * as AIC from "./js/ai-coach.mjs";
+import { createMonkCompanion } from "./js/monk-companion.mjs";
 import { questView, trainingDays, routeDay, monkSpriteCandidates, creditedSessions } from "./js/gym-quest.mjs";
+
+const monkCompanion = createMonkCompanion();
 
 let justCompleted = null;  // 完了直後のリワード表示用(遷移すると消える一時状態)
 let staleResumeAck = null; // 前日以前のactive sessionを「再開する」と明示したid
@@ -1645,13 +1649,17 @@ function selectQuestExercise(e,idx,sess){
   }
   scrollToInput();
 }
-function setMonkSprite(clip,tier){
+function setMonkSprite(clip,tier,celebrate=false){
   const img=el('img','monk-sprite'); img.alt='主人公モンク';
   const candidates=monkSpriteCandidates(tier); let index=0;
   img.onload=()=>{
     const two=img.getAttribute('src').includes('x2.png');
     img.classList.toggle('anim2',two);
     clip.style.width=(166*img.naturalWidth/img.naturalHeight/(two?2:1))+'px';
+    if(clip.isConnected){
+      const resolvedTier=Number(img.getAttribute('src').match(/monk_lv(\d+)x2/)?.[1]);
+      monkCompanion.attach(clip.closest('.monk-actor'),resolvedTier,celebrate);
+    }
   };
   img.onerror=()=>{ if(++index<candidates.length)img.src=candidates[index];
     else { clip.textContent='MONK'; clip.setAttribute('aria-label','モンクの画像を読み込めませんでした'); } };
@@ -1675,9 +1683,9 @@ function renderQuestDashboard(root,tpl,sess=null){
       <div class="hero-xp-line"><b>${monk.xp} XP</b><span>次のLvまで ${xpNext-monk.xp}</span></div>
       <div class="hero-xp" role="progressbar" aria-label="次のレベルまでのXP" aria-valuemin="0" aria-valuemax="${xpNext-xpStart}" aria-valuenow="${monk.xp-xpStart}"><span style="width:${pct}%"></span></div>
       <p class="hero-stat"><span>THIS WEEK</span><b>${trained}<small>回</small></b><span>トレーニング</span></p>
-    </div><div class="hero-stage"><span class="monk-clip"></span></div></div>
+    </div><div class="hero-stage"><button type="button" class="monk-actor" data-pose="idle" data-paused="true" disabled aria-label="モンクとトレーニング。タップで正拳突きや力こぶポーズ"><span class="monk-clip"></span><span class="monk-action-sheet" aria-hidden="true"></span><span class="monk-action-hint" aria-hidden="true">タップでアクション</span></button></div></div>
     <div class="hero-status"><span>${esc(view.label)}</span><span>TODAY ${view.done} / ${view.total}</span></div>`;
-  setMonkSprite(hero.querySelector('.monk-clip'),monk.tier);
+  setMonkSprite(hero.querySelector('.monk-clip'),monk.tier,questEvent&&view.complete);
   root.appendChild(hero);
   const card=el('section','card quest-card'); card.id='today-quest';
   card.setAttribute('aria-label',"Today's Main Quest");
@@ -1731,6 +1739,7 @@ function refreshQuestPanels(){
   if(tab!=='today'&&tab!=='workout')return;
   const oldHero=document.getElementById('quest-hero'), oldQuest=document.getElementById('today-quest');
   if(oldHero&&oldQuest){
+    monkCompanion.detach();
     const fragment=document.createDocumentFragment();
     renderQuestDashboard(fragment,dashboardTemplate(),tab==='workout'?TD.activeSession():null);
     const [hero,quest]=[...fragment.children]; oldHero.replaceWith(hero); oldQuest.replaceWith(quest);
@@ -1917,6 +1926,7 @@ function openTemplateEditor(){
 
 // ── エントリポイント ──────────────────────────────────────────────────────────
 window.TrainingUI={
+  detachCompanion: monkCompanion.detach,
   render(root){
     const sess=TD.activeSession();
     if(!sess){ renderIdle(root); return; }
