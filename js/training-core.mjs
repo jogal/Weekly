@@ -125,18 +125,28 @@ export function getNextExerciseTarget({ history, targetSets, repMin, repMax, inc
   const last = usable[usable.length - 1];
   const primary = primaryOf(last);
   const w = primary.weight;
+  // 実施セット数と、同一重量での進行判定に使うセット数は別。
+  // 途中で増量/減量したセットも前回の実績として表示する。
+  const weightCounts = new Map();
+  last.sets.forEach(s => weightCounts.set(s.kg, (weightCounts.get(s.kg) || 0) + 1));
+  const mixedWeight = weightCounts.size > 1;
+  const previousSummary = mixedWeight
+    ? `前回は計${last.sets.length}セット（${[...weightCounts].map(([kg, count]) => `${fmtWt(kg)}：${count}セット`).join("・")}）。`
+    : "";
   // 戻り値の不変条件: targetTotalReps === sum(suggestedSetTargets)
   const finish = (status, weight, arr, reason) => ({
     status, weight,
     targetTotalReps: arr.reduce((a, b) => a + b, 0),
-    suggestedSetTargets: arr, reason,
+    suggestedSetTargets: arr, reason: previousSummary + reason,
   });
 
-  // 前回が予定セット数未満(primaryセット基準) → progressionを進めず、まずやり切る
+  // 同一重量のセットが予定数未満 → progressionを進めず目安を提示。
+  // 混合重量の実績を「未実施セット」として説明しない。
   if (primary.sets.length < targetSets) {
     const arr = setTargetsFrom(primary.sets, targetSets, repMin, repMax, 0);
     return finish("incomplete_prev", w, arr,
-      `前回は${primary.sets.length}/${targetSets}セット。${fmtWt(w)}でまず${targetSets}セットをやり切る`);
+      (mixedWeight ? "" : `前回は${last.sets.length}セット記録。`) +
+      `${fmtWt(w)}でそろえる場合は${targetSets}セットが目安。体調に合わせて調整できます`);
   }
   const hitTop = primary.sets.slice(0, targetSets).every(s => s.reps >= repMax);
   if (hitTop && !pain) {

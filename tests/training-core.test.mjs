@@ -229,7 +229,7 @@ test("overload: mixed loadでprimaryセットが予定数未満なら増量もre
   assert.equal(t.weight, 16);
 });
 
-test("overload: incomplete 2/4セット → progressionを進めず4セットやり切る目標", () => {
+test("overload: incomplete 2/4セット → progressionを進めず中立的な目安を提示", () => {
   const t = getNextExerciseTarget({ ...ARGS, history: [sess(50, [8, 8])] });
   assert.equal(t.status, "incomplete_prev");
   assert.equal(t.weight, 50);
@@ -237,6 +237,45 @@ test("overload: incomplete 2/4セット → progressionを進めず4セットや
   assert.equal(t.targetTotalReps,
     t.suggestedSetTargets.reduce((a, b) => a + b, 0));   // 合計不変条件
   assert.deepEqual(t.suggestedSetTargets, [8, 8, 6, 6]); // 不足はrepMin埋め・+2しない
+  assert.match(t.reason, /前回は2セット記録/);
+  assert.doesNotMatch(t.reason, /やり切る/);
+});
+
+test("overload: 50→60→50kgは計3セットと表示し、同一重量の目安と区別する", () => {
+  const history = sessionHistory([50, 60, 50].map((kg, i) => ({
+    ex: "ベンチプレス", kg, reps: [10, 8, 8][i],
+    t: T(2026, 9, 26, 10, i * 3),
+  })), "ベンチプレス");
+  const original = structuredClone(history);
+  const t = getNextExerciseTarget({ ...ARGS, history });
+  assert.match(t.reason, /前回は計3セット（50kg：2セット・60kg：1セット）/);
+  assert.match(t.reason, /50kgでそろえる場合は4セットが目安/);
+  assert.doesNotMatch(t.reason, /前回は2\/4|やり切る/);
+  assert.equal(t.weight, 50);
+  assert.deepEqual(t.suggestedSetTargets, [10, 8, 6, 6]);
+  assert.equal(t.targetTotalReps, 30);
+  assert.equal(history[0].totalReps, 26);
+  assert.equal(history[0].volume, 1380);
+  assert.deepEqual(history, original);
+});
+
+test("overload: ドロップセット・旧summaryでも全セットの内訳を表示", () => {
+  const t = getNextExerciseTarget({ targetSets: 3, repMin: 8, repMax: 12, increment: 1,
+    history: [{ sets: [{ kg: 16, reps: 12 }, { kg: 16, reps: 10 }, { kg: 14, reps: 10 }] }] });
+  assert.match(t.reason, /前回は計3セット（16kg：2セット・14kg：1セット）/);
+  assert.equal(t.weight, 16);
+  assert.deepEqual(t.suggestedSetTargets, [12, 10, 8]);
+});
+
+test("overload: 混合重量で進行・pain判定しても全セットの実績を表示", () => {
+  for (const pain of [false, true]) {
+    const t = getNextExerciseTarget({ targetSets: 2, repMin: 8, repMax: 12, increment: 1, pain,
+      history: [mixed([[16, 12], [16, 10], [14, 10]])] });
+    assert.match(t.reason, /前回は計3セット（16kg：2セット・14kg：1セット）/);
+    assert.equal(t.status, pain ? "hold_pain" : "progress_reps");
+    assert.equal(t.weight, 16);
+    assert.equal(t.targetTotalReps, pain ? 22 : 24);
+  }
 });
 
 test("overload: aborted sessionはprogression基準にしない", () => {
