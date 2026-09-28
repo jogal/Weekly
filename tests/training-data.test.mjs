@@ -123,3 +123,15 @@ test("free: ensureFreeSessionは1日1回だけcompleted sessionを作る", () =>
   assert.equal(TD.lastCompletedTemplateId(), "A");                 // サイクルが進む
   assert.equal(TD.ensureFreeSession("B", "2026-08-29"), true);     // 翌日はOK
 });
+
+test('exercise feedback is optional, reversible and preserves logs and other daily fields',()=>{
+  localStorage.clear();localStorage.setItem('gym_logs','[{"kg":50,"reps":8}]');
+  TD.saveDailyEntry('2026-09-27',{weightKg:54,pain:{'ベンチプレス':true}});
+  TD.saveExerciseFeedback('2026-09-27','ベンチプレス','last','easy');
+  TD.saveExerciseFeedback('2026-09-27','懸垂','other','hard');
+  const day=TD.loadDaily()['2026-09-27'];assert.equal(day.weightKg,54);assert.equal(day.pain['ベンチプレス'],true);
+  assert.deepEqual(day.exerciseFeedback['ベンチプレス'],{lastSetAt:'last',effort:'easy'});
+  TD.saveExerciseFeedback('2026-09-27','ベンチプレス','last',null);
+  assert.equal(TD.loadDaily()['2026-09-27'].exerciseFeedback['懸垂'].effort,'hard');
+  assert.equal(localStorage.getItem('gym_logs'),'[{"kg":50,"reps":8}]');
+});

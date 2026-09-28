@@ -152,126 +152,7 @@ const sess = (kg, reps, extra = {}) => ({
 });
 const ARGS = { targetSets: 4, repMin: 6, repMax: 10, increment: 2.5 };
 
-test("overload: 50kg 8/8/6/5 → 重量維持・計29回目標", () => {
-  const t = getNextExerciseTarget({ ...ARGS, history: [sess(50, [8, 8, 6, 5])] });
-  assert.equal(t.status, "progress_reps");
-  assert.equal(t.weight, 50);
-  assert.equal(t.targetTotalReps, 29);
-  assert.equal(t.suggestedSetTargets.reduce((a, b) => a + b, 0), 29);
-  assert.ok(t.suggestedSetTargets.every(r => r <= 10));
-});
-
-test("overload: 50kg 10/10/10/10 → 52.5kgへ増量・repMinから再構築", () => {
-  const t = getNextExerciseTarget({ ...ARGS, history: [sess(50, [10, 10, 10, 10])] });
-  assert.equal(t.status, "increase_weight");
-  assert.equal(t.weight, 52.5);
-  assert.equal(t.targetTotalReps, 24);
-  assert.deepEqual(t.suggestedSetTargets, [6, 6, 6, 6]);
-});
-
-test("overload: 1回のperformance低下では重量を下げない", () => {
-  const t = getNextExerciseTarget({ ...ARGS,
-    history: [sess(50, [8, 8, 8, 8]), sess(50, [7, 7, 6, 6])] });
-  assert.equal(t.weight, 50);                    // 下げない
-  assert.equal(t.status, "progress_reps");       // plateau扱いにもしない
-});
-
-test("overload: 同一重量で2回連続低下 → plateau(重量維持・volume増やさない)", () => {
-  const t = getNextExerciseTarget({ ...ARGS,
-    history: [sess(50, [8, 8, 8, 8]), sess(50, [7, 7, 6, 6]), sess(50, [6, 6, 6, 5])] });
-  assert.equal(t.status, "plateau");
-  assert.equal(t.weight, 50);
-  assert.equal(t.targetTotalReps, 23);           // 前回維持。増やさない
-});
-
-test("overload: pain=true では全セット上限到達でも増量しない", () => {
-  const t = getNextExerciseTarget({ ...ARGS, pain: true,
-    history: [sess(50, [10, 10, 10, 10])] });
-  assert.equal(t.status, "hold_pain");
-  assert.equal(t.weight, 50);
-});
-
-test("overload: 履歴なし → first_time(数値目標を出さない)", () => {
-  const t = getNextExerciseTarget({ ...ARGS, history: [] });
-  assert.equal(t.status, "first_time");
-  assert.equal(t.weight, null);
-});
-
-// mixed-load summary生成ヘルパ(sessionHistoryが返す形)
-const mixed = (pairs, extra = {}) => {
-  const sets = pairs.map(([kg, reps]) => ({ kg, reps }));
-  const primaryWeight = sets[0].kg;
-  const primarySets = sets.filter(s => s.kg === primaryWeight);
-  return {
-    day: "2026-08-24", sessionId: null, sessionStatus: null, sets,
-    firstWorkingWeight: primaryWeight, maxWeight: Math.max(...sets.map(s => s.kg)),
-    totalReps: sets.reduce((a, s) => a + s.reps, 0),
-    volume: sets.reduce((a, s) => a + s.kg * s.reps, 0),
-    primaryWeight, primarySets,
-    primaryTotalReps: primarySets.reduce((a, s) => a + s.reps, 0),
-    backoffSets: sets.filter(s => s.kg !== primaryWeight), ...extra,
-  };
-};
-
-test("overload: mixed load — backoff(14kg)のrepsをprimary(16kg)のprogressに数えない", () => {
-  // primary 16kg×12,10 = 22回。backoff 14kg×10 は無視 → 目標は22+2=24(合計32ではない)
-  const h = [mixed([[16, 12], [16, 10], [14, 10]])];
-  const t = getNextExerciseTarget({ targetSets: 2, repMin: 8, repMax: 12, increment: 1, history: h });
-  assert.equal(t.status, "progress_reps");
-  assert.equal(t.weight, 16);
-  assert.equal(t.targetTotalReps, 24);           // 22+2。32+2=34にならない
-});
-
-test("overload: mixed loadでprimaryセットが予定数未満なら増量もrep進行もしない", () => {
-  const h = [mixed([[16, 12], [16, 10], [14, 10]])];
-  const t = getNextExerciseTarget({ targetSets: 3, repMin: 8, repMax: 12, increment: 1, history: h });
-  assert.equal(t.status, "incomplete_prev");
-  assert.equal(t.weight, 16);
-});
-
-test("overload: incomplete 2/4セット → progressionを進めず4セットやり切る目標", () => {
-  const t = getNextExerciseTarget({ ...ARGS, history: [sess(50, [8, 8])] });
-  assert.equal(t.status, "incomplete_prev");
-  assert.equal(t.weight, 50);
-  assert.equal(t.suggestedSetTargets.length, 4);
-  assert.equal(t.targetTotalReps,
-    t.suggestedSetTargets.reduce((a, b) => a + b, 0));   // 合計不変条件
-  assert.deepEqual(t.suggestedSetTargets, [8, 8, 6, 6]); // 不足はrepMin埋め・+2しない
-});
-
-test("overload: aborted sessionはprogression基準にしない", () => {
-  const h = [
-    sess(50, [8, 8, 8, 8], { sessionStatus: "completed" }),
-    sess(50, [5], { sessionStatus: "aborted" }),          // 中断(1セットで終了)
-  ];
-  const t = getNextExerciseTarget({ ...ARGS, history: h });
-  assert.equal(t.status, "progress_reps");                // abortedを無視して前回完了が基準
-  assert.equal(t.targetTotalReps, 34);                    // 32+2
-});
-
-test("overload: increment 2kgのダンベル種目", () => {
-  const t = getNextExerciseTarget({ targetSets: 3, repMin: 8, repMax: 12, increment: 2,
-    history: [sess(16, [12, 12, 12])] });
-  assert.equal(t.status, "increase_weight");
-  assert.equal(t.weight, 18);
-});
-
-test("overload: 全ステータスで targetTotalReps === sum(suggestedSetTargets)", () => {
-  const cases = [
-    { ...ARGS, history: [sess(50, [8, 8, 6, 5])] },                      // progress
-    { ...ARGS, history: [sess(50, [10, 10, 10, 10])] },                  // increase
-    { ...ARGS, history: [sess(50, [8, 8])] },                            // incomplete
-    { ...ARGS, pain: true, history: [sess(50, [10, 10, 10, 10])] },      // hold_pain
-    { ...ARGS, history: [sess(50, [8,8,8,8]), sess(50, [7,7,6,6]), sess(50, [6,6,6,5])] }, // plateau
-    { targetSets: 2, repMin: 8, repMax: 12, increment: 1,
-      history: [mixed([[16, 12], [16, 10], [14, 10]])] },                // mixed
-  ];
-  cases.forEach(c => {
-    const t = getNextExerciseTarget(c);
-    assert.equal(t.targetTotalReps, t.suggestedSetTargets.reduce((a, b) => a + b, 0),
-      "invariant broken for status " + t.status);
-  });
-});
+// Target engine scenarios are covered in training-targets.test.mjs.
 
 test("sessionHistory: slotted logsが存在したらlegacyを混ぜない", () => {
   const logs = [
@@ -292,9 +173,9 @@ test("sessionHistory: sessions渡しでsessionStatusが付く", () => {
   assert.equal(h[0].sessionStatus, "aborted");
 });
 
-test("overload: 上限到達済みの合計はcapで頭打ち", () => {
+test("overload: 未入力の手応えでは前回の実績を基本とする", () => {
   const t = getNextExerciseTarget({ ...ARGS, history: [sess(50, [10, 10, 10, 9])] });
-  assert.equal(t.targetTotalReps, 40);           // min(39+2, 4×10)
+  assert.equal(t.targetTotalReps, 39);           // no automatic +2
 });
 
 test("sessionHistory: limitで直近n回・時系列昇順", () => {
