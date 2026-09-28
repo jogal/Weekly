@@ -231,12 +231,16 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid
 @media(min-width:600px) { .hero-body { grid-template-columns:minmax(0,1fr) 260px; } .hero-title { font-size:40px; } }
 @media(prefers-reduced-motion:reduce) { .quest-exercise { transition:none; } }
 
-/* Occasional actions share the existing idle's center and foot baseline. */
+/* Idle uses the action atlas's guard frame, with the exact same cell and baseline. */
 .monk-actor { position:relative; display:flex; align-items:flex-end; justify-content:center;
   width:160px; height:192px; flex-shrink:0; padding:0 0 12px; border:0; border-radius:14px;
   background:none; color:var(--dim); transform:translateY(15px); cursor:pointer; }
 .monk-actor:disabled { cursor:default; }
 .hero-stage .monk-actor .monk-clip { transform:none; }
+.monk-actor.uses-action-art { padding-bottom:0; }
+.monk-sprite.action-idle { height:192px; }
+.action-idle { animation:monkBreathe 3.6s ease-in-out infinite; transform-origin:50% 93.75%; }
+@keyframes monkBreathe { 50% { transform:scaleY(.992); } }
 .monk-action-sheet { position:absolute; inset:0; pointer-events:none; display:none;
   background-image:var(--action-sheet); background-size:480px 192px; background-repeat:no-repeat;
   image-rendering:pixelated; }
@@ -249,7 +253,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid
   letter-spacing:.04em; color:#989eab; opacity:0; }
 .monk-actor:not(:disabled) .monk-action-hint { opacity:.8; }
 @media(max-width:360px) { .monk-actor { transform:translateY(15px) scale(.88); } }
-@media(prefers-reduced-motion:reduce) { .monk-action-sheet,.monk-action-hint { display:none !important; } .monk-actor .monk-clip { visibility:visible !important; } }
+@media(prefers-reduced-motion:reduce) { .action-idle { animation:none !important; } .monk-action-sheet,.monk-action-hint { display:none !important; } .monk-actor .monk-clip { visibility:visible !important; } }
 
 /* Per-set reference targets; compact and readable on iPhone widths. */
 .training-target { margin: 12px 0 18px; }

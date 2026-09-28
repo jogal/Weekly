@@ -1044,9 +1044,15 @@ function renderCompleteCard(root){
     const clip=el("span","mk-clip");
     const img=el("img","mk-img");
     img.alt="モンク";
-    img.onload=()=>{ clip.style.width=(img.width/2)+"px"; clip.style.margin="0 auto"; };
-    img.onerror=()=>{ clip.style.display="none"; };
-    img.src=`sprites/monk_lv${c.monk.tier}x2.png`;
+    const candidates=monkSpriteCandidates(c.monk.tier); let index=0;
+    img.onload=()=>{
+      const action=img.getAttribute('src').includes('monk-actions/');
+      const frames=action?3:img.getAttribute('src').includes('x2.png')?2:1;
+      img.classList.toggle('action-idle',action);
+      clip.style.width=(img.width/frames)+"px"; clip.style.margin="0 auto";
+    };
+    img.onerror=()=>{ if(++index<candidates.length)img.src=candidates[index]; else clip.style.display="none"; };
+    img.src=candidates[0];
     clip.appendChild(img);
     card.appendChild(clip);
     card.appendChild(el("div","done-sub",
@@ -1709,11 +1715,14 @@ function setMonkSprite(clip,tier,celebrate=false){
   const img=el('img','monk-sprite'); img.alt='主人公モンク';
   const candidates=monkSpriteCandidates(tier); let index=0;
   img.onload=()=>{
+    const action=img.getAttribute('src').includes('monk-actions/');
     const two=img.getAttribute('src').includes('x2.png');
+    img.classList.toggle('action-idle',action);
     img.classList.toggle('anim2',two);
-    clip.style.width=(166*img.naturalWidth/img.naturalHeight/(two?2:1))+'px';
+    clip.style.width=(action?160:166*img.naturalWidth/img.naturalHeight/(two?2:1))+'px';
+    clip.closest('.monk-actor').classList.toggle('uses-action-art',action);
     if(clip.isConnected){
-      const resolvedTier=Number(img.getAttribute('src').match(/monk_lv(\d+)x2/)?.[1]);
+      const resolvedTier=Number(img.getAttribute('src').match(/(?:monk-actions\/lv|monk_lv)(\d+)/)?.[1]);
       monkCompanion.attach(clip.closest('.monk-actor'),resolvedTier,celebrate);
     }
   };

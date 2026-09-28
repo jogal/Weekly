@@ -292,10 +292,14 @@ textarea.field-input { height:76px; resize:vertical; }
 .hero-sprite-clip { display:block; overflow:hidden; }
 .hero-sprite.anim2 { animation:heroStep 1s steps(1,end) infinite; }
 @keyframes heroStep { 50% { transform:translateX(-50%); } }
+.hero-sprite.monk-idle { animation:monkBreathe 3.6s ease-in-out infinite; transform-origin:50% 93.75%; }
+@keyframes monkBreathe { 50% { transform:scaleY(.992); } }
+@media(prefers-reduced-motion:reduce) { .hero-sprite.monk-idle { animation:none; } }
 /* Tap-to-expand fullscreen viewer */
 .hero-compact .hero-sprite-box { cursor:pointer; }
 #hero-zoom { flex-direction:column; gap:12px; background:rgba(10,10,12,.96); cursor:pointer; }
 #hero-zoom .hero-sprite { height:min(56vh,460px); }
+#hero-zoom .hero-sprite.monk-idle { height:min(56vh,460px,108vw); }
 .hero-zoom-job { font-size:13px; color:var(--gold); letter-spacing:.3em;
   font-family:var(--cond); text-transform:uppercase; }
 .hero-zoom-lvl { font-size:30px; font-weight:700; line-height:1; }
@@ -1140,7 +1144,10 @@ function spriteCandidates(st){
   const tiers=[40,30,20,10,1].filter(t=>t<=st.tier);
   const out=[];
   const push=file=>{
-    tiers.forEach(t=>{out.push(`sprites/${file}_lv${t}x2.png`);out.push(`sprites/${file}_lv${t}.png`);});
+    tiers.forEach(t=>{
+      if(file==='monk')out.push(`sprites/monk-actions/lv${t}.webp`);
+      out.push(`sprites/${file}_lv${t}x2.png`);out.push(`sprites/${file}_lv${t}.png`);
+    });
     out.push(`sprites/${file}x2.png`);
     out.push(`sprites/${file}.png`);
   };
@@ -1149,29 +1156,34 @@ function spriteCandidates(st){
   if(!out.includes("sprites/novice.png"))out.push("sprites/novice.png");
   return out;
 }
+function sizeHeroSprite(img){
+  const action=img.src.includes('sprites/monk-actions/');
+  const two=img.src.includes('x2.png');
+  const frames=action?3:two?2:1;
+  img.classList.toggle('monk-idle',action);
+  img.classList.toggle('anim2',two);
+  const clip=img.closest('.hero-sprite-clip');
+  if(clip)clip.style.width=frames>1?(img.offsetWidth/frames)+'px':'';
+}
 function setHeroSprite(img,st){
   const cands=spriteCandidates(st);
   let i=0;
   img.onerror=()=>{i++;if(i<cands.length)img.src=cands[i];else img.onerror=null;};
-  img.onload=()=>{
-    const two=img.src.includes("x2.png");
-    img.classList.toggle("anim2",two);
-    const clip=img.closest(".hero-sprite-clip");
-    if(clip)clip.style.width=two?(img.getBoundingClientRect().width/2)+"px":"";
-  };
+  img.onload=()=>sizeHeroSprite(img);
   img.src=cands[0];
 }
+window.addEventListener('resize',()=>{
+  document.querySelectorAll('.hero-sprite').forEach(img=>{
+    if(img.complete&&img.naturalWidth&&img.getClientRects().length)sizeHeroSprite(img);
+  });
+});
 // Fullscreen character viewer
 function openHeroZoom(src,jobName,lvl){
   const ov=document.getElementById("hero-zoom");
   const img=ov.querySelector("img");
   const clip=ov.querySelector(".hero-sprite-clip");
-  img.classList.remove("anim2"); clip.style.width="";
-  img.onload=()=>{
-    const two=img.src.includes("x2.png");
-    img.classList.toggle("anim2",two);
-    clip.style.width=two?(img.getBoundingClientRect().width/2)+"px":"";
-  };
+  img.classList.remove("anim2","monk-idle"); clip.style.width="";
+  img.onload=()=>sizeHeroSprite(img);
   img.src=src;
   ov.querySelector(".hero-zoom-job").textContent="JOB─"+jobName;
   ov.querySelector(".hero-zoom-lvl").textContent="Lv."+lvl;
