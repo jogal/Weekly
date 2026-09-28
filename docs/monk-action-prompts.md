@@ -20,4 +20,4 @@ Match the references' crisp pixel-art clusters and shading, not vector or smooth
 
 Edit the generated 3-column, 5-row atlas. Add transparent cell margins so no head, hand or foot is clipped. Match row FOUR to the supplied original `monk_lv30x2.png`: black/gold forearm guards, red sash, black/red/white/gold hanging apron, bare torso with no necklace. Keep row FIVE's white/gold outfit and necklace. Preserve the 15 poses, identities, body scale, pixel style and alpha; no new objects or text.
 
-Pose-dependent silhouette widths differ from the idle art by design. These assets are used only for short actions; the existing idle sprites remain the canonical character art.
+Pose-dependent silhouette widths differ from the original idle art. Since SW v50, the guard cell in this atlas is also the canonical resting Monk in Gym, Workout completion, and Weekly's status/zoom views. This reuses identical pixels for rest and guard without generating another interpretation. The original idle PNGs remain unmodified as fallbacks.

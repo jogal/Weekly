@@ -52,6 +52,19 @@ const server = http.createServer((req,res)=>{
   const shots=process.env.QA_SCREENSHOTS;
   if(shots)fs.mkdirSync(shots,{recursive:true});
   async function shot(name){if(shots)await p.locator('#quest-hero').screenshot({path:path.join(shots,name+'.png')});}
+  async function sameGuardCell(page){
+    // The resting image is the first cell of the very same atlas, including its padding.
+    const cell=await page.locator('.monk-actor').evaluate(a=>{
+      const img=a.querySelector('.monk-sprite'),clip=a.querySelector('.monk-clip');
+      const sheet=a.querySelector('.monk-action-sheet');
+      return {src:img.src,sheet:getComputedStyle(sheet).backgroundImage,
+        width:clip.offsetWidth,height:clip.offsetHeight,bottom:clip.offsetTop+clip.offsetHeight,
+        actorHeight:a.offsetHeight,frames:img.offsetWidth/clip.offsetWidth};
+    });
+    assert.ok(cell.sheet.includes(cell.src));
+    assert.deepEqual([cell.width,cell.height,cell.bottom,cell.actorHeight,cell.frames],[160,192,192,192,3]);
+  }
+  await sameGuardCell(p);
   await shot('idle');
   await actor.click();await p.clock.runFor(250);
   assert.equal(await pose(),'punch');await shot('punch');
@@ -64,6 +77,8 @@ const server = http.createServer((req,res)=>{
   await p.clock.runFor(18000);assert.notEqual(await pose(),'idle','occasional action');
   await p.emulateMedia({reducedMotion:'reduce'});await new Promise(r=>setTimeout(r,100));
   assert.equal(await pose(),'idle');assert.equal(await actor.isDisabled(),true);
+  assert.equal(await p.locator('.monk-sprite').evaluate(e=>getComputedStyle(e).animationName),'none');
+  await sameGuardCell(p);
   await p.clock.runFor(45000);assert.equal(await pose(),'idle');
   await p.emulateMedia({reducedMotion:'no-preference'});await new Promise(r=>setTimeout(r,100));
   // Hide like a PWA background/foreground transition; no replay of missed timers.
@@ -95,6 +110,7 @@ const server = http.createServer((req,res)=>{
     for(let n=0;n<Math.ceil(questXpToReach(tier)/40);n++)records['2026-09-28'].mon['workout_qa_'+n]={done:true,duration:100,rating:5};
     const q=await pageAt([320,375,390,430,1024][i],{wt_records:records});
     assert.match(await q.locator('.monk-actor').getAttribute('style'),new RegExp('lv'+tier+'\\.webp'));
+    await sameGuardCell(q);
     await q.locator('.monk-actor').click();await q.clock.runFor(250);
     assert.equal(await q.locator('.monk-actor').getAttribute('data-pose'),'punch');
     assert.ok(await q.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
@@ -113,6 +129,37 @@ const server = http.createServer((req,res)=>{
   assert.equal(await missing.locator('.monk-sprite').evaluate(e=>e.naturalWidth>0),true);
   await missing.locator('#log-btn').click();assert.equal(await missing.evaluate(()=>JSON.parse(localStorage.getItem('gym_logs')).length),1);
   await missing.context().close();
+  // Weekly's status card and expanded viewer use the same guard frame.
+  await p.context().setOffline(false);
+  await p.goto(base+'/tracker.html');
+  await p.evaluate(()=>{
+    // Render the normal status UI; its sprite selection is checked for every tier below.
+    renderStatus();
+  });
+  for(const [i,tier] of [1,10,20,30,40].entries()){
+    await p.setViewportSize({width:[320,375,390,430,1024][i],height:844});
+    await p.evaluate(t=>setHeroSprite(document.querySelector('.hero-compact .hero-sprite'),
+      {key:'monk',primary:'monk',tier:t}),tier);
+    const hero=p.locator('.hero-compact .hero-sprite');
+    await p.waitForFunction(t=>{
+      const img=document.querySelector('.hero-compact .hero-sprite');
+      return img.complete&&img.naturalWidth>0&&img.src.endsWith(`lv${t}.webp`);
+    },tier);
+    assert.ok(Math.abs(await hero.evaluate(img=>img.offsetWidth/img.closest('.hero-sprite-clip').offsetWidth)-3)<.02);
+    await p.locator('.hero-compact .hero-sprite-box').click();
+    await p.waitForFunction(()=>{
+      const img=document.querySelector('#hero-zoom img');
+      return img.complete&&img.naturalWidth>0&&img.classList.contains('monk-idle');
+    });
+    const frameRatio=await p.locator('#hero-zoom img').evaluate(img=>img.offsetWidth/img.closest('.hero-sprite-clip').offsetWidth);
+    assert.ok(Math.abs(frameRatio-3)<.02);
+    assert.ok(await p.locator('#hero-zoom .hero-sprite-clip').evaluate(e=>{
+      const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;
+    }));
+    assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+    if(shots&&tier===20)await p.screenshot({path:path.join(shots,'weekly-zoom.png')});
+    await p.locator('#hero-zoom').click();
+  }
   assert.deepEqual(errors,[]);
   await browser.close();server.close();
   console.log('Monk actions: punch/flex, idle timer, spam, reduced motion, background, offscreen, detach, milestone, all tiers, storage and offline passed.');

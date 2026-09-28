@@ -30,7 +30,8 @@ export function routeDay(info, hasLogs) {
 
 export function monkSpriteCandidates(tier) {
   return [40, 30, 20, 10, 1].filter(t => t <= tier)
-    .map(t => `sprites/monk_lv${t}x2.png`).concat("sprites/monk.png");
+    .flatMap(t => [`sprites/monk-actions/lv${t}.webp`, `sprites/monk_lv${t}x2.png`])
+    .concat("sprites/monk.png");
 }
 
 // Re-evaluate today's credit after deleting a set. Older completed sessions are
