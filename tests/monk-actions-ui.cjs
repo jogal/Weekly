@@ -52,6 +52,41 @@ const server = http.createServer((req,res)=>{
   const shots=process.env.QA_SCREENSHOTS;
   if(shots)fs.mkdirSync(shots,{recursive:true});
   async function shot(name){if(shots)await p.locator('#quest-hero').screenshot({path:path.join(shots,name+'.png')});}
+  async function checkBreathing(locator){
+    const frames=await locator.evaluate(img=>{
+      const animation=img.getAnimations()[0];
+      if(!animation)return [];
+      const savedTime=animation.currentTime;
+      const duration=animation.effect.getTiming().duration;
+      animation.pause();
+      const frames=[.125,.375,.625,.875,1.125].map(phase=>{
+        animation.currentTime=phase*duration;
+        const rect=img.getBoundingClientRect();
+        return {transform:getComputedStyle(img).transform,height:rect.height,
+          foot:rect.top+rect.height*.9375};
+      });
+      animation.currentTime=savedTime;animation.play();
+      return frames;
+    });
+    assert.equal(frames.length,5,'resting Monk must breathe');
+    assert.equal(frames[0].transform,frames[1].transform,'hold the exhale pose');
+    assert.equal(frames[2].transform,frames[3].transform,'hold the inhale pose');
+    assert.notEqual(frames[0].transform,frames[2].transform,'two distinct breathing poses');
+    assert.equal(frames[0].transform,frames[4].transform,'repeat the two-pose loop');
+    const expansion=frames[2].height/frames[0].height;
+    assert.ok(expansion>1.015&&expansion<1.04,'visible but restrained breathing');
+    assert.ok(Math.abs(frames[0].foot-frames[2].foot)<.1,'keep the feet planted');
+  }
+  await checkBreathing(p.locator('.monk-sprite'));
+  if(shots){
+    for(const [name,time]of [['exhale',0],['inhale',800]]){
+      await p.locator('.monk-sprite').evaluate((img,time)=>{
+        const animation=img.getAnimations()[0];animation.pause();animation.currentTime=time;
+      },time);
+      await shot(name);
+    }
+    await p.locator('.monk-sprite').evaluate(img=>img.getAnimations()[0].play());
+  }
   async function sameGuardCell(page){
     // The resting image is the first cell of the very same atlas, including its padding.
     const cell=await page.locator('.monk-actor').evaluate(a=>{
@@ -145,6 +180,7 @@ const server = http.createServer((req,res)=>{
       const img=document.querySelector('.hero-compact .hero-sprite');
       return img.complete&&img.naturalWidth>0&&img.src.endsWith(`lv${t}.webp`);
     },tier);
+    await checkBreathing(hero);
     assert.ok(Math.abs(await hero.evaluate(img=>img.offsetWidth/img.closest('.hero-sprite-clip').offsetWidth)-3)<.02);
     await p.locator('.hero-compact .hero-sprite-box').click();
     await p.waitForFunction(()=>{

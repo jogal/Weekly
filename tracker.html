@@ -292,8 +292,8 @@ textarea.field-input { height:76px; resize:vertical; }
 .hero-sprite-clip { display:block; overflow:hidden; }
 .hero-sprite.anim2 { animation:heroStep 1s steps(1,end) infinite; }
 @keyframes heroStep { 50% { transform:translateX(-50%); } }
-.hero-sprite.monk-idle { animation:monkBreathe 3.6s ease-in-out infinite; transform-origin:50% 93.75%; }
-@keyframes monkBreathe { 50% { transform:scaleY(.992); } }
+.hero-sprite.monk-idle { animation:monkBreathe 1.6s steps(1,end) infinite; transform-origin:50% 93.75%; }
+@keyframes monkBreathe { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(1.024); } }
 @media(prefers-reduced-motion:reduce) { .hero-sprite.monk-idle { animation:none; } }
 /* Tap-to-expand fullscreen viewer */
 .hero-compact .hero-sprite-box { cursor:pointer; }
