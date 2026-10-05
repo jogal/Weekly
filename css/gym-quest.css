@@ -231,7 +231,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid
 @media(min-width:600px) { .hero-body { grid-template-columns:minmax(0,1fr) 260px; } .hero-title { font-size:40px; } }
 @media(prefers-reduced-motion:reduce) { .quest-exercise { transition:none; } }
 
-/* Idle uses the action atlas's guard frame, with the exact same cell and baseline. */
+/* Two separately drawn idle frames share the action atlas's cell and baseline. */
 .monk-actor { position:relative; display:flex; align-items:flex-end; justify-content:center;
   width:160px; height:192px; flex-shrink:0; padding:0 0 12px; border:0; border-radius:14px;
   background:none; color:var(--dim); transform:translateY(15px); cursor:pointer; }
@@ -239,9 +239,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid
 .hero-stage .monk-actor .monk-clip { transform:none; }
 .monk-actor.uses-action-art { padding-bottom:0; }
 .monk-sprite.action-idle { height:192px; }
-/* Two held breathing poses, with the feet anchored to the atlas baseline. */
-.action-idle { animation:monkBreathe 1.6s steps(1,end) infinite; transform-origin:50% 93.75%; }
-@keyframes monkBreathe { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(1.024); } }
+.monk-sprite.action-idle.anim2, .mk-img.action-idle.anim2 { animation:monkIdle 1.6s steps(1,end) infinite; }
 .monk-action-sheet { position:absolute; inset:0; pointer-events:none; display:none;
   background-image:var(--action-sheet); background-size:480px 192px; background-repeat:no-repeat;
   image-rendering:pixelated; }

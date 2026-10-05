@@ -19,7 +19,7 @@ const server = http.createServer((req,res)=>{
   const base=`http://127.0.0.1:${server.address().port}`;
   const browser=await chromium.launch({headless:true,...(process.env.BROWSER_PATH?{executablePath:process.env.BROWSER_PATH}:{}),args:['--no-sandbox','--disable-dev-shm-usage','--disable-gpu']});
   const errors=[];
-  async function pageAt(width=390,seed={},missingActions=false){
+  async function pageAt(width=390,seed={},missingActions=false,missingIdle=false){
     const ctx=await browser.newContext({viewport:{width,height:844},isMobile:width<600,hasTouch:width<600,timezoneId:'Asia/Tokyo'});
     // Optional locally installed fontsource fonts for offline screenshot QA.
     await ctx.route(/fonts\.googleapis\.com/,async route=>{
@@ -36,6 +36,7 @@ const server = http.createServer((req,res)=>{
       await route.fulfill({contentType:'font/woff2',body:fs.readFileSync(path.join(process.env.QA_FONTS,family,'files',file))});
     });
     if(missingActions)await ctx.route('**/sprites/monk-actions/**',r=>r.abort());
+    if(missingIdle)await ctx.route('**/sprites/monk-idle/**',r=>r.abort());
     const p=await ctx.newPage();p.setDefaultTimeout(10000);await p.addInitScript(()=>{Math.random=()=>0;});p.on('pageerror',e=>errors.push(e.message));
     await p.clock.install({time:new Date('2026-09-28T10:00:00+09:00')});
     if(Object.keys(seed).length)await p.addInitScript(data=>{for(const [k,v]of Object.entries(data))localStorage.setItem(k,JSON.stringify(v));},seed);
@@ -62,8 +63,9 @@ const server = http.createServer((req,res)=>{
       const frames=[.125,.375,.625,.875,1.125].map(phase=>{
         animation.currentTime=phase*duration;
         const rect=img.getBoundingClientRect();
-        return {transform:getComputedStyle(img).transform,height:rect.height,
-          foot:rect.top+rect.height*.9375};
+        const matrix=new DOMMatrix(getComputedStyle(img).transform);
+        return {transform:matrix.toString(),height:rect.height,width:rect.width,
+          x:matrix.m41,scaleX:matrix.m11,scaleY:matrix.m22,top:rect.top};
       });
       animation.currentTime=savedTime;animation.play();
       return frames;
@@ -73,9 +75,10 @@ const server = http.createServer((req,res)=>{
     assert.equal(frames[2].transform,frames[3].transform,'hold the inhale pose');
     assert.notEqual(frames[0].transform,frames[2].transform,'two distinct breathing poses');
     assert.equal(frames[0].transform,frames[4].transform,'repeat the two-pose loop');
-    const expansion=frames[2].height/frames[0].height;
-    assert.ok(expansion>1.015&&expansion<1.04,'visible but restrained breathing');
-    assert.ok(Math.abs(frames[0].foot-frames[2].foot)<.1,'keep the feet planted');
+    for(const f of frames){assert.equal(f.scaleX,1);assert.equal(f.scaleY,1);}
+    assert.ok(Math.abs(frames[2].x-frames[0].x+frames[0].width/2)<.1,'show the other drawn frame');
+    assert.equal(frames[0].height,frames[2].height,'never stretch the drawing');
+    assert.equal(frames[0].top,frames[2].top,'keep the cell baseline fixed');
   }
   await checkBreathing(p.locator('.monk-sprite'));
   if(shots){
@@ -88,7 +91,7 @@ const server = http.createServer((req,res)=>{
     await p.locator('.monk-sprite').evaluate(img=>img.getAnimations()[0].play());
   }
   async function sameGuardCell(page){
-    // The resting image is the first cell of the very same atlas, including its padding.
+    // Separate idle/action sheets must share a tier, display cell and baseline.
     const cell=await page.locator('.monk-actor').evaluate(a=>{
       const img=a.querySelector('.monk-sprite'),clip=a.querySelector('.monk-clip');
       const sheet=a.querySelector('.monk-action-sheet');
@@ -96,8 +99,9 @@ const server = http.createServer((req,res)=>{
         width:clip.offsetWidth,height:clip.offsetHeight,bottom:clip.offsetTop+clip.offsetHeight,
         actorHeight:a.offsetHeight,frames:img.offsetWidth/clip.offsetWidth};
     });
-    assert.ok(cell.sheet.includes(cell.src));
-    assert.deepEqual([cell.width,cell.height,cell.bottom,cell.actorHeight,cell.frames],[160,192,192,192,3]);
+    assert.match(cell.src,/monk-idle\/lv\d+\.webp$/);
+    assert.ok(cell.sheet.includes(cell.src.replace('/monk-idle/','/monk-actions/')));
+    assert.deepEqual([cell.width,cell.height,cell.bottom,cell.actorHeight,cell.frames],[160,192,192,192,2]);
   }
   await sameGuardCell(p);
   await shot('idle');
@@ -156,6 +160,7 @@ const server = http.createServer((req,res)=>{
   await p.reload();await p.context().setOffline(true);await p.reload();
   await p.waitForFunction(()=>document.querySelector('.monk-actor')?.dataset.paused==='false');
   for(const tier of [1,10,20,30,40])assert.ok(await p.evaluate(async t=>(await fetch(`sprites/monk-actions/lv${t}.webp`)).ok,tier));
+  for(const tier of [1,10,20,30,40])assert.ok(await p.evaluate(async t=>(await fetch(`sprites/monk-idle/lv${t}.webp`)).ok,tier));
   await p.locator('.monk-actor').click();
   await p.waitForFunction(()=>document.querySelector('.monk-actor')?.dataset.pose==='punch');
   const missing=await pageAt(390,{},true);
@@ -164,7 +169,14 @@ const server = http.createServer((req,res)=>{
   assert.equal(await missing.locator('.monk-sprite').evaluate(e=>e.naturalWidth>0),true);
   await missing.locator('#log-btn').click();assert.equal(await missing.evaluate(()=>JSON.parse(localStorage.getItem('gym_logs')).length),1);
   await missing.context().close();
-  // Weekly's status card and expanded viewer use the same guard frame.
+  const missingIdle=await pageAt(390,{},false,true);
+  assert.match(await missingIdle.locator('.monk-sprite').getAttribute('src'),/monk-actions/);
+  assert.equal(await missingIdle.locator('.monk-sprite').evaluate(e=>getComputedStyle(e).animationName),'none');
+  await missingIdle.context().close();
+  const missingBoth=await pageAt(390,{},true,true);
+  assert.match(await missingBoth.locator('.monk-sprite').getAttribute('src'),/monk_lv1x2/);
+  await missingBoth.context().close();
+  // Weekly's status card and expanded viewer use the new two-frame drawing.
   await p.context().setOffline(false);
   await p.goto(base+'/tracker.html');
   await p.evaluate(()=>{
@@ -181,14 +193,14 @@ const server = http.createServer((req,res)=>{
       return img.complete&&img.naturalWidth>0&&img.src.endsWith(`lv${t}.webp`);
     },tier);
     await checkBreathing(hero);
-    assert.ok(Math.abs(await hero.evaluate(img=>img.offsetWidth/img.closest('.hero-sprite-clip').offsetWidth)-3)<.02);
+    assert.ok(Math.abs(await hero.evaluate(img=>img.offsetWidth/img.closest('.hero-sprite-clip').offsetWidth)-2)<.02);
     await p.locator('.hero-compact .hero-sprite-box').click();
     await p.waitForFunction(()=>{
       const img=document.querySelector('#hero-zoom img');
       return img.complete&&img.naturalWidth>0&&img.classList.contains('monk-idle');
     });
     const frameRatio=await p.locator('#hero-zoom img').evaluate(img=>img.offsetWidth/img.closest('.hero-sprite-clip').offsetWidth);
-    assert.ok(Math.abs(frameRatio-3)<.02);
+    assert.ok(Math.abs(frameRatio-2)<.02);
     assert.ok(await p.locator('#hero-zoom .hero-sprite-clip').evaluate(e=>{
       const r=e.getBoundingClientRect();return r.left>=0&&r.right<=innerWidth;
     }));

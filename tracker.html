@@ -292,8 +292,7 @@ textarea.field-input { height:76px; resize:vertical; }
 .hero-sprite-clip { display:block; overflow:hidden; }
 .hero-sprite.anim2 { animation:heroStep 1s steps(1,end) infinite; }
 @keyframes heroStep { 50% { transform:translateX(-50%); } }
-.hero-sprite.monk-idle { animation:monkBreathe 1.6s steps(1,end) infinite; transform-origin:50% 93.75%; }
-@keyframes monkBreathe { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(1.024); } }
+.hero-sprite.monk-idle.anim2 { animation-duration:1.6s; }
 @media(prefers-reduced-motion:reduce) { .hero-sprite.monk-idle { animation:none; } }
 /* Tap-to-expand fullscreen viewer */
 .hero-compact .hero-sprite-box { cursor:pointer; }
@@ -1145,7 +1144,7 @@ function spriteCandidates(st){
   const out=[];
   const push=file=>{
     tiers.forEach(t=>{
-      if(file==='monk')out.push(`sprites/monk-actions/lv${t}.webp`);
+      if(file==='monk')out.push(`sprites/monk-idle/lv${t}.webp`,`sprites/monk-actions/lv${t}.webp`);
       out.push(`sprites/${file}_lv${t}x2.png`);out.push(`sprites/${file}_lv${t}.png`);
     });
     out.push(`sprites/${file}x2.png`);
@@ -1157,10 +1156,11 @@ function spriteCandidates(st){
   return out;
 }
 function sizeHeroSprite(img){
+  const idle=img.src.includes('sprites/monk-idle/');
   const action=img.src.includes('sprites/monk-actions/');
-  const two=img.src.includes('x2.png');
+  const two=idle||img.src.includes('x2.png');
   const frames=action?3:two?2:1;
-  img.classList.toggle('monk-idle',action);
+  img.classList.toggle('monk-idle',idle||action);
   img.classList.toggle('anim2',two);
   const clip=img.closest('.hero-sprite-clip');
   if(clip)clip.style.width=frames>1?(img.offsetWidth/frames)+'px':'';

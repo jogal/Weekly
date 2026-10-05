@@ -39,8 +39,9 @@ test('route preserves planner decisions and presents rest/partial records neutra
 test('all five sprite tiers have a lower-tier fallback', () => {
   for(const tier of [1,10,20,30,40]) {
     const c=monkSpriteCandidates(tier);
-    assert.equal(c[0],`sprites/monk-actions/lv${tier}.webp`);
-    assert.equal(c[1],`sprites/monk_lv${tier}x2.png`);
+    assert.equal(c[0],`sprites/monk-idle/lv${tier}.webp`);
+    assert.equal(c[1],`sprites/monk-actions/lv${tier}.webp`);
+    assert.equal(c[2],`sprites/monk_lv${tier}x2.png`);
     assert.equal(c.at(-1),'sprites/monk.png');
   }
 });
