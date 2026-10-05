@@ -239,8 +239,9 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid
 .hero-stage .monk-actor .monk-clip { transform:none; }
 .monk-actor.uses-action-art { padding-bottom:0; }
 .monk-sprite.action-idle { height:192px; }
-.action-idle { animation:monkBreathe 3.6s ease-in-out infinite; transform-origin:50% 93.75%; }
-@keyframes monkBreathe { 50% { transform:scaleY(.992); } }
+/* Two held breathing poses, with the feet anchored to the atlas baseline. */
+.action-idle { animation:monkBreathe 1.6s steps(1,end) infinite; transform-origin:50% 93.75%; }
+@keyframes monkBreathe { 0%,100% { transform:scaleY(1); } 50% { transform:scaleY(1.024); } }
 .monk-action-sheet { position:absolute; inset:0; pointer-events:none; display:none;
   background-image:var(--action-sheet); background-size:480px 192px; background-repeat:no-repeat;
   image-rendering:pixelated; }
