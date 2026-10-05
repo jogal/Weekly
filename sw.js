@@ -1,4 +1,4 @@
-const CACHE = "weekly-quest-v51";
+const CACHE = "weekly-quest-v52";
 const ASSETS = [
   "./tracker.html",
   "./gym.html",
@@ -6,6 +6,11 @@ const ASSETS = [
   "./css/weekly-theme.css",
   "./js/gym-quest.mjs",
   "./js/monk-companion.mjs",
+  "./sprites/monk-idle/lv1.webp",
+  "./sprites/monk-idle/lv10.webp",
+  "./sprites/monk-idle/lv20.webp",
+  "./sprites/monk-idle/lv30.webp",
+  "./sprites/monk-idle/lv40.webp",
   "./sprites/monk-actions/lv1.webp",
   "./sprites/monk-actions/lv10.webp",
   "./sprites/monk-actions/lv20.webp",

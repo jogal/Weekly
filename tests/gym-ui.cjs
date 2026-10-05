@@ -124,8 +124,8 @@ const server = http.createServer((req,res)=>{
   await mixed.getByRole('button',{name:'記録を残して終了'}).click();
   assert.equal(await mixed.evaluate(()=>JSON.parse(localStorage.getItem('gym_sessions_v2'))[0].status),'completed');
   await mixed.waitForFunction(()=>document.querySelector('.mk-img')?.naturalWidth>0);
-  assert.match(await mixed.locator('.mk-img').getAttribute('src'),/monk-actions\/lv\d+\.webp$/);
-  assert.ok(Math.abs(await mixed.locator('.mk-img').evaluate(img=>img.offsetWidth/img.parentElement.offsetWidth)-3)<.02);
+  assert.match(await mixed.locator('.mk-img').getAttribute('src'),/monk-idle\/lv\d+\.webp$/);
+  assert.ok(Math.abs(await mixed.locator('.mk-img').evaluate(img=>img.offsetWidth/img.parentElement.offsetWidth)-2)<.02);
   await mixed.locator('[data-tab="today"]').click();mixed.on('dialog',d=>d.accept());
   await mixed.locator('.set-del').first().click();
   assert.equal(await mixed.locator('#today-quest .quest-count').innerText(),'2 / 3 CLEAR');

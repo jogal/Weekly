@@ -30,7 +30,7 @@ export function routeDay(info, hasLogs) {
 
 export function monkSpriteCandidates(tier) {
   return [40, 30, 20, 10, 1].filter(t => t <= tier)
-    .flatMap(t => [`sprites/monk-actions/lv${t}.webp`, `sprites/monk_lv${t}x2.png`])
+    .flatMap(t => [`sprites/monk-idle/lv${t}.webp`, `sprites/monk-actions/lv${t}.webp`, `sprites/monk_lv${t}x2.png`])
     .concat("sprites/monk.png");
 }
 
