@@ -284,6 +284,39 @@ textarea.field-input { height:76px; resize:vertical; }
 .mcal-legend span { display:inline-flex; align-items:center; gap:3px; }
 .mcal-legend i { width:9px; height:9px; display:inline-block; }
 
+/* Heatmap (month calendar / year grid) */
+.hm-chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
+.hm-chip { background:none; border:1px solid var(--line); color:var(--dim); font-size:11px;
+  padding:4px 9px; cursor:pointer; font-family:var(--cond); letter-spacing:.08em; }
+.hm-chip.active { color:#fff; border-color:transparent; font-weight:700; }
+.hm-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:10px; }
+.hm-summary div { background:var(--panel2); border:1px solid var(--line); padding:6px 2px; text-align:center; }
+.hm-summary b { display:block; font-size:16px; font-family:var(--cond); letter-spacing:.06em; line-height:1.2; }
+.hm-summary span { font-size:9px; color:var(--dim); }
+.hm-month { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
+.hm-cell { aspect-ratio:1; background:#0f0f12; border:1px solid #1e1e24; position:relative;
+  font-size:9px; color:var(--dim); padding:2px 3px; cursor:pointer; box-sizing:border-box; }
+.hm-cell.empty { background:none; border-color:transparent; cursor:default; }
+.hm-cell.today { border-color:#fff; }
+.hm-cell.lit { color:#fff; }
+.hm-cell.sel { outline:2px solid var(--gold); outline-offset:-1px; }
+.hm-cell .hm-n { position:absolute; right:3px; bottom:1px; font-size:11px; font-weight:700; }
+.hm-year-row { display:flex; align-items:flex-start; }
+.hm-ylabels { display:grid; grid-template-rows:repeat(7,11px); gap:2px; font-size:8px; color:var(--dim);
+  margin-right:4px; margin-top:14px; flex-shrink:0; line-height:11px; }
+.hm-year-wrap { overflow-x:auto; -webkit-overflow-scrolling:touch; padding-bottom:4px; flex:1; }
+.hm-months { display:grid; grid-auto-flow:column; grid-auto-columns:13px; font-size:9px; color:var(--dim);
+  height:12px; margin-bottom:2px; white-space:nowrap; }
+.hm-year { display:grid; grid-auto-flow:column; grid-template-rows:repeat(7,11px); grid-auto-columns:11px; gap:2px; }
+.hm-ycell { width:11px; height:11px; background:#0f0f12; border:1px solid #1e1e24; box-sizing:border-box; cursor:pointer; }
+.hm-ycell.today { border-color:#fff; }
+.hm-ycell.sel { outline:2px solid var(--gold); outline-offset:-1px; }
+.hm-ycell.empty { visibility:hidden; }
+.hm-info { font-size:11px; color:var(--dim); margin-top:8px; min-height:14px; }
+.hm-legend { display:flex; align-items:center; gap:3px; font-size:9px; color:var(--dim);
+  margin-top:6px; justify-content:flex-end; }
+.hm-legend i { width:10px; height:10px; display:inline-block; background:#0f0f12; border:1px solid #1e1e24; }
+
 /* Hero character (dossier profile style) */
 .hero-sprite { width:auto; height:148px; display:block;
   filter:saturate(.9) contrast(1.03); }
@@ -522,6 +555,8 @@ let recRating = 0;
 let statsMode = "month";              // "month" | "year"
 let statsYear = new Date().getFullYear();
 let statsMonth= new Date().getMonth();  // 0-11
+let heatTrack = "all";                 // "all" | CAL_TRACKS id
+let heatSel   = null;                  // tapped date key in the heatmap
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getWeekKey(date){
@@ -1350,6 +1385,183 @@ function completedTracksForMonth(year,month){
   return map;
 }
 
+// ── Heatmap ───────────────────────────────────────────────────────────────────
+function dateKeyOf(d){
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+}
+// All completed quests per calendar day: {dateKey: {total, byTrack:{workout:n,...}}}
+function dailyDoneMap(){
+  const map={};
+  Object.keys(records).forEach(wk=>{
+    const dates=getWeekDates(wk);
+    DAY_KEYS.forEach((dk,di)=>{
+      const day=records[wk]?.[dk];
+      if(!day)return;
+      const key=dateKeyOf(dates[di]);
+      Object.keys(day).forEach(catId=>{
+        if(!day[catId]?.done)return;
+        const m=(map[key]=map[key]||{total:0,byTrack:{}});
+        m.total++;
+        const t=trackOf(catId);
+        m.byTrack[t]=(m.byTrack[t]||0)+1;
+      });
+    });
+  });
+  return map;
+}
+function heatCount(m,track){
+  if(!m)return 0;
+  return track==="all"?m.total:(m.byTrack[track]||0);
+}
+const HEAT_ALPHA=[0,.3,.52,.76,1];
+function heatLevel(n,track){
+  if(n<=0)return 0;
+  // 単一習慣は1日1回が普通なので1回で濃く、2回以上で最大
+  return track==="all"?Math.min(4,n):Math.min(4,n+2);
+}
+function hexA(hex,a){
+  const h=hex.replace("#","");
+  return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;
+}
+function heatBase(track){
+  return track==="all"?"#c8a557":(CAL_TRACKS.find(t=>t.id===track)?.color||"#e01937");
+}
+function heatColor(n,track){
+  const lv=heatLevel(n,track);
+  return lv?hexA(heatBase(track),HEAT_ALPHA[lv]):"";
+}
+// Streak that ends on `d` (walks backwards while each day has a hit)
+function streakEndingAt(map,track,d){
+  const c=new Date(d); let n=0;
+  while(heatCount(map[dateKeyOf(c)],track)>0){n++;c.setDate(c.getDate()-1);}
+  return n;
+}
+// Period summary: active days / total count / best streak inside the period /
+// current streak (only when the period includes today; a quiet today keeps
+// yesterday's streak alive)
+function heatSummary(map,track,from,to){
+  let active=0,total=0,best=0,run=0;
+  const today=new Date(); today.setHours(0,0,0,0);
+  for(const d=new Date(from);d<=to;d.setDate(d.getDate()+1)){
+    const n=heatCount(map[dateKeyOf(d)],track);
+    if(n>0){active++;total+=n;run++;if(run>best)best=run;}else run=0;
+  }
+  let cur=null;
+  if(today>=from&&today<=to){
+    cur=streakEndingAt(map,track,today);
+    if(cur===0){const y=new Date(today);y.setDate(y.getDate()-1);cur=streakEndingAt(map,track,y);}
+  }
+  return {active,total,best,cur};
+}
+function heatInfoText(map,key){
+  const m=map[key];
+  const [y,mo,d]=key.split("-").map(Number);
+  const dt=new Date(y,mo-1,d);
+  const head=`${mo}/${d}(${DAYS[(dt.getDay()+6)%7]})`;
+  if(!m)return `${head} 記録なし`;
+  const parts=CAL_TRACKS.filter(t=>m.byTrack[t.id])
+    .map(t=>`${t.icon}${t.label}${m.byTrack[t.id]>1?"×"+m.byTrack[t.id]:""}`);
+  return `${head} ${m.total}件 · ${parts.join("　")}`;
+}
+
+function renderHeatmapCard(){
+  const map=dailyDoneMap();
+  const card=el("div","stats-card");
+  const today=new Date(); today.setHours(0,0,0,0);
+  const todayKey=dateKeyOf(today);
+
+  // ── Track filter chips ──
+  const chips=el("div","hm-chips");
+  [{id:"all",label:"すべて",color:"#c8a557"},...CAL_TRACKS].forEach(t=>{
+    const b=el("button","hm-chip"+(heatTrack===t.id?" active":""),(t.icon||"")+t.label);
+    if(heatTrack===t.id)b.style.background=t.color;
+    b.onclick=()=>{heatTrack=t.id;heatSel=null;renderStats();};
+    chips.appendChild(b);
+  });
+  card.appendChild(chips);
+
+  // ── Period range ──
+  const from=statsMode==="month"?new Date(statsYear,statsMonth,1):new Date(statsYear,0,1);
+  const to  =statsMode==="month"?new Date(statsYear,statsMonth+1,0):new Date(statsYear,11,31);
+  const sm=heatSummary(map,heatTrack,from,to);
+  const summary=el("div","hm-summary");
+  summary.innerHTML=
+    `<div><b>${sm.active}</b><span>活動日</span></div>`+
+    `<div><b>${sm.total}</b><span>達成数</span></div>`+
+    `<div><b>${sm.best}</b><span>最長連続</span></div>`+
+    `<div><b>${sm.cur===null?"—":sm.cur}</b><span>現在連続</span></div>`;
+  card.appendChild(summary);
+
+  const info=el("div","hm-info");
+  const select=(key,cell)=>{
+    heatSel=key;
+    card.querySelectorAll(".sel").forEach(x=>x.classList.remove("sel"));
+    if(cell)cell.classList.add("sel");
+    info.textContent=heatInfoText(map,key);
+  };
+
+  if(statsMode==="month"){
+    // ── Month: calendar heatmap ──
+    const grid=el("div","hm-month");
+    DAYS.forEach(d=>grid.appendChild(el("div","mcal-hdr",d)));
+    const offset=(from.getDay()+6)%7;
+    for(let i=0;i<offset;i++)grid.appendChild(el("div","hm-cell empty"));
+    for(let dd=1;dd<=to.getDate();dd++){
+      const key=dateKeyOf(new Date(statsYear,statsMonth,dd));
+      const n=heatCount(map[key],heatTrack);
+      const cell=el("div","hm-cell"+(key===todayKey?" today":"")+(n>0?" lit":"")+(key===heatSel?" sel":""));
+      const bg=heatColor(n,heatTrack);
+      if(bg)cell.style.background=bg;
+      cell.appendChild(el("span","",String(dd)));
+      if(n>0)cell.appendChild(el("span","hm-n",String(n)));
+      cell.onclick=()=>select(key,cell);
+      grid.appendChild(cell);
+    }
+    card.appendChild(grid);
+  }else{
+    // ── Year: week-column grid (Monday-start), horizontally scrollable ──
+    const row=el("div","hm-year-row");
+    const labels=el("div","hm-ylabels");
+    DAYS.forEach((d,i)=>labels.appendChild(el("div","",i%2===0?d:"")));
+    row.appendChild(labels);
+    const scroll=el("div","hm-year-wrap");
+    const months=el("div","hm-months");
+    const grid=el("div","hm-year");
+    const start=new Date(from); start.setDate(start.getDate()-((start.getDay()+6)%7)); // Monday on/before Jan 1
+    let lastMonth=-1, col=0;
+    for(const d=new Date(start);d<=to;d.setDate(d.getDate()+1)){
+      const inYear=d.getFullYear()===statsYear;
+      const isMon=(d.getDay()+6)%7===0;
+      if(isMon){
+        const lbl=el("div","");
+        if(inYear&&d.getMonth()!==lastMonth){lbl.textContent=`${d.getMonth()+1}月`;lastMonth=d.getMonth();}
+        months.appendChild(lbl);
+        col++;
+      }
+      const key=dateKeyOf(d);
+      const n=inYear?heatCount(map[key],heatTrack):0;
+      const cell=el("div","hm-ycell"+(inYear?"":" empty")+(key===todayKey?" today":"")+(key===heatSel?" sel":""));
+      const bg=heatColor(n,heatTrack);
+      if(bg)cell.style.background=bg;
+      if(inYear)cell.onclick=()=>select(key,cell);
+      grid.appendChild(cell);
+    }
+    scroll.appendChild(months);scroll.appendChild(grid);
+    row.appendChild(scroll);
+    card.appendChild(row);
+    // scroll to the latest week for the current year
+    if(statsYear===today.getFullYear())requestAnimationFrame(()=>{scroll.scrollLeft=scroll.scrollWidth;});
+  }
+
+  const legend=el("div","hm-legend");
+  legend.innerHTML=`少<i></i>`+[1,2,3,4].map(l=>`<i style="background:${hexA(heatBase(heatTrack),HEAT_ALPHA[l])}"></i>`).join("")+`多`;
+  card.appendChild(legend);
+  if(heatSel)info.textContent=heatInfoText(map,heatSel);
+  else info.textContent="日をタップすると内訳を表示";
+  card.appendChild(info);
+  return card;
+}
+
 function renderStats(){
   const cont=document.getElementById("content");
   cont.innerHTML="";
@@ -1359,8 +1571,8 @@ function renderStats(){
   const toggle=el("div","mode-toggle");
   const mBtn=el("button",statsMode==="month"?"active":"","月間");
   const yBtn=el("button",statsMode==="year"?"active":"","年間");
-  mBtn.onclick=()=>{statsMode="month";renderStats();};
-  yBtn.onclick=()=>{statsMode="year";renderStats();};
+  mBtn.onclick=()=>{statsMode="month";heatSel=null;renderStats();};
+  yBtn.onclick=()=>{statsMode="year";heatSel=null;renderStats();};
   toggle.appendChild(mBtn);toggle.appendChild(yBtn);
   wrap.appendChild(toggle);
 
@@ -1372,15 +1584,15 @@ function renderStats(){
   const lbl=el("span","period-label");
   if(statsMode==="month"){
     lbl.textContent=`${statsYear}年 ${statsMonth+1}月`;
-    prevB.onclick=()=>{statsMonth--;if(statsMonth<0){statsMonth=11;statsYear--;}renderStats();};
-    nextB.onclick=()=>{statsMonth++;if(statsMonth>11){statsMonth=0;statsYear++;}renderStats();};
+    prevB.onclick=()=>{statsMonth--;if(statsMonth<0){statsMonth=11;statsYear--;}heatSel=null;renderStats();};
+    nextB.onclick=()=>{statsMonth++;if(statsMonth>11){statsMonth=0;statsYear++;}heatSel=null;renderStats();};
     // disable next if future
     if(statsYear>now.getFullYear()||(statsYear===now.getFullYear()&&statsMonth>=now.getMonth()))
       nextB.disabled=true;
   }else{
     lbl.textContent=`${statsYear}年`;
-    prevB.onclick=()=>{statsYear--;renderStats();};
-    nextB.onclick=()=>{statsYear++;renderStats();};
+    prevB.onclick=()=>{statsYear--;heatSel=null;renderStats();};
+    nextB.onclick=()=>{statsYear++;heatSel=null;renderStats();};
     if(statsYear>=now.getFullYear())nextB.disabled=true;
   }
   pNav.appendChild(prevB);pNav.appendChild(lbl);pNav.appendChild(nextB);
@@ -1392,6 +1604,10 @@ function renderStats(){
     return d.getFullYear()===statsYear;
   };
   const st=aggregateStats(filterFn);
+
+  // ── Heatmap (month calendar / year grid) ──
+  wrap.appendChild(el("p","section-label","ヒートマップ"));
+  wrap.appendChild(renderHeatmapCard());
 
   // ── Monthly achievement dot calendar ──
   if(statsMode==="month"){
