@@ -369,6 +369,9 @@ textarea.field-input { height:76px; resize:vertical; }
 .td-ico { font-size:18px; width:22px; text-align:center; }
 .td-rname { flex:1; min-width:0; overflow-wrap:anywhere; }
 .td-tbox { margin-bottom:10px; }
+.td-ticon { position:relative; width:52px; height:52px; flex-shrink:0; display:grid; place-items:center; font-size:22px; }
+.td-ticon svg { position:absolute; inset:0; transform:rotate(-90deg); }
+.td-ticon span { width:38px; height:38px; display:grid; place-items:center; border-radius:50%; background:#0000002e; }
 .td-tbox .td-task { min-height:68px; margin-bottom:0; }
 .td-tbox.open .td-task { border-bottom-left-radius:0; border-bottom-right-radius:0; }
 .td-tbody { border:1px solid color-mix(in srgb,var(--c) 34%,#2a2c32); border-top:0; border-radius:0 0 20px 20px;
@@ -2470,7 +2473,7 @@ function taskBox(t, s, day) {
   c.setAttribute("aria-expanded", String(isOpen));
   c.setAttribute("aria-label", `${t.name}のステップを${isOpen ? "閉じる" : "開く"}`);
   c.innerHTML = `<div class="hb-fill"></div>
-    <div class="hb-icon" aria-hidden="true">${esc(t.icon)}</div>
+    <div class="td-ticon" role="img" aria-label="ステップ ${p.done}/${p.total}">${ringSvg(52, 4, t.doneOn ? 1 : p.total ? p.done / p.total : 0, "#8fb3d9")}<span aria-hidden="true">${esc(t.icon)}</span></div>
     <div class="hb-main"><div class="hb-name">${esc(t.name)}</div><div class="hb-sub">${taskSub(t, s.today)}</div></div>
     <span class="td-go" aria-hidden="true">${isOpen ? "⌃" : "⌄"}</span>`;
   const toggle = () => { if (isOpen) openTaskIds.delete(t.id); else openTaskIds.add(t.id); renderToday(); };

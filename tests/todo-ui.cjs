@@ -104,6 +104,8 @@ const server = http.createServer((req, res) => {
   assert.equal(await box.locator('.td-step').count(), 0);
   assert.match(await box.innerText(), /あと3日/);
   assert.match(await box.innerText(), /ステップ 1\/4/);
+  assert.equal(await box.locator('.td-ticon').getAttribute('aria-label'), 'ステップ 1/4');
+  assert.equal(await box.locator('.td-ticon svg circle').count(), 2, 'progress ring around the icon');
   await box.locator('.td-task').click();
   assert.equal(await box.locator('.td-step').count(), 4);
 
