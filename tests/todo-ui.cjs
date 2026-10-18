@@ -80,7 +80,7 @@ const server = http.createServer((req, res) => {
   assert.equal(await p.locator('#today-view .td-rcal, .td-cal').count(), 0);
   await p.locator('[data-tab="stats"]').click();
   await p.waitForSelector('.td-rcal');
-  assert.equal(await p.locator('.td-rcal').count(), 2);
+  assert.equal(await p.locator('.td-rcal[data-rid]').count(), 2);
   const cal = p.locator('.td-rcal', { hasText: '歯みがき' });
   assert.match(await cal.innerText(), /🔥1日連続[\s\S]*最長 1日/);
   assert.equal(await cal.locator('.td-rcal-day.today').evaluate(e => e.classList.contains('done')), true);
@@ -90,8 +90,8 @@ const server = http.createServer((req, res) => {
   // 年間表示では日課も1年ぶんのヒートマップ(2026年は木曜はじまり → 先頭に空き3つ)
   await p.locator('button', { hasText: '年間' }).click();
   await p.waitForSelector('.td-ryear');
-  assert.equal(await p.locator('.td-ryear').count(), 2);
-  assert.equal(await p.locator('.td-rcal-grid').count(), 0, 'no 8-week grid in year mode');
+  assert.equal(await p.locator('.td-ryear[data-rid]').count(), 2);
+  assert.equal(await p.locator('.td-rcal[data-rid] .td-rcal-grid').count(), 0, 'no 8-week grid in year mode');
   const yr = p.locator('.td-ryear', { hasText: '歯みがき' });
   assert.equal(await yr.locator('.hm-ycell').count(), 3 + 365);
   assert.equal(await yr.locator('.hm-ycell.empty').count(), 3);
@@ -125,7 +125,7 @@ const server = http.createServer((req, res) => {
   const av = p.locator('.td-rcal.avoid');
   assert.match(await av.innerText(), /連続なし[\s\S]*最長 0日 ・ 直近30日 守れた 0\/1日/);
   assert.equal(await av.locator('.td-rcal-day.today').evaluate(e => e.classList.contains('slip')), true);
-  assert.equal(await p.locator('.td-rcal:not(.avoid)').count(), 2);
+  assert.equal(await p.locator('.td-rcal[data-rid]:not(.avoid)').count(), 2);
   await p.locator('[data-tab="today"]').click();
   await phone().click(); await p.clock.runFor(400); // 取り消すと今日は守れた日
   await p.locator('[data-tab="stats"]').click();

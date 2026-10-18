@@ -208,6 +208,22 @@ export function bestStreak(h, from, to, ctx) {
   return { n: best, unit: "d" };
 }
 
+// 統計カレンダー用の日ごとの状態: done / miss / rest(休息日・護符) / off(予定のない日・作る前) / future
+// 週N回の習慣は、やっていない日を miss(ただの空き)として扱う
+export function habitDayState(h, key, ctx, today) {
+  if (key > today) return "future";
+  if (!isActiveOn(h, key)) return "off";
+  if (isAchieved(h, key, ctx)) return "done";
+  if (h.freq.type !== "weekly" && !isDue(h, key)) return "off";
+  if (isRest(h, key, ctx) || isFrozen(h, key, ctx)) return "rest";
+  return "miss";
+}
+export function habitDays(h, from, to, ctx, today) {
+  const out = [];
+  for (let k = from; k <= to; k = addDays(k, 1)) out.push({ key: k, state: habitDayState(h, k, ctx, today) });
+  return out;
+}
+
 // ── 達成率 ───────────────────────────────────────────────────────────────────
 // 休息日・護符の日は分母から除く。今日が未達成ならまだ数えない
 export function habitRate(h, from, to, today, ctx) {

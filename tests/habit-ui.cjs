@@ -178,11 +178,17 @@ function seedRecords() {
 
   // 9) 統計タブ: 習慣の達成度。予定に入れていない記録も達成回数に入る
   await p.locator('[data-tab="stats"]').click();
-  await p.waitForSelector('.hs-row');
-  assert.ok(await p.locator('.hs-row', { hasText: 'ストレッチ' }).count() === 1);
+  // 習慣ごとのカード(日課と同じ見た目)。8週のカレンダーで、達成した日は習慣の色
+  await p.waitForSelector('.hs-cal');
+  assert.ok(await p.locator('.hs-cal', { hasText: 'ストレッチ' }).count() === 1);
+  const studyCal = p.locator('.hs-cal', { hasText: '専門医勉強' });
+  assert.equal(await studyCal.locator('.td-rcal-wk').count(), 9, 'header + 8 weeks');
+  assert.ok(await studyCal.locator('.td-rcal-day.done').count() >= 1);
+  assert.match(await studyCal.locator('.td-rcal-sub').innerText(), /🔥\d+日連続|連続なし/);
+  assert.notEqual(await studyCal.locator('.td-rcal-day.done').first().evaluate(e => getComputedStyle(e).backgroundColor), 'rgba(0, 0, 0, 0)');
   const medicineCount = await p.locator('.stats-card').filter({ hasText: '専門医勉強' }).filter({ hasText: '合計' }).innerText();
   assert.match(medicineCount, /7回/);
-  if (shots) { await p.locator('.hs-row').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'habit-stats.png') }); }
+  if (shots) { await p.locator('.hs-cal').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'habit-stats.png') }); }
 
   assert.equal(await p.locator('#stats-view').innerText().then(t => t.includes('平均評価')), false);
 
@@ -198,6 +204,13 @@ function seedRecords() {
   assert.match(await p.locator('.section-label', { hasText: 'まとめ' }).innerText(), /週ごと/);
   assert.match(await p.locator('.tr-row', { hasText: '10/12〜' }).innerText(), /7日/);
   if (shots) { await p.locator('.tr-row').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'habit-stats-trend.png') }); }
+  // 年間: 習慣ごとのカードも1年ぶんのヒートマップ(2026年は木曜はじまり → 空き3つ)
+  await p.locator('.mode-toggle button', { hasText: '年間' }).click();
+  const yStudy = p.locator('.hs-cal.td-ryear', { hasText: '専門医勉強' });
+  assert.equal(await yStudy.locator('.hm-ycell').count(), 3 + 365);
+  assert.ok(await yStudy.locator('.hm-ycell.done').count() >= 1);
+  if (shots) { await yStudy.scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'habit-stats-year.png') }); }
+  await p.locator('.mode-toggle button', { hasText: '月間' }).click();
   await p.locator('.hm-cell', { hasText: /^14/ }).first().click();
   await p.locator('.hm-jump').click();
   assert.equal(await p.locator('.tab-btn.active').getAttribute('data-tab'), 'today');
