@@ -307,7 +307,7 @@ textarea.field-input { height:76px; resize:vertical; }
 .hb-pill.shield { border-color:#2a2c32; color:var(--dim); cursor:default; }
 .hb-add { width:40px; height:40px; border-radius:50%; border:1px solid #4a4335; background:#1d1b16; color:var(--gold);
   font-size:22px; line-height:1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
-.hb-weeknav { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 0 6px; }
+.hb-weeknav { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 0 6px; min-height:36px; }
 .hb-weeknav button { min-height:36px; padding:0 12px; border-radius:999px; border:1px solid var(--line); background:none;
   color:var(--dim); font-size:12px; cursor:pointer; }
 .hb-weeknav button:disabled { opacity:.35; cursor:default; }
@@ -466,17 +466,6 @@ textarea.field-input { height:76px; resize:vertical; }
 .hb-celebrate-sub { font-size:12px; color:var(--dim); line-height:1.8; }
 .hb-celebrate-gold { font:700 22px var(--cond); color:#f0d7a3; margin-top:10px; letter-spacing:.04em; }
 /* quests */
-.hb-quest { display:flex; align-items:center; gap:10px; width:100%; text-align:left; margin:0 0 14px; padding:10px 12px;
-  border-radius:16px; border:1px solid #2e2850; background:#15141f; color:var(--txt); cursor:pointer; font:inherit; }
-.hb-quest.ready { border-color:#8a7449; background:linear-gradient(110deg,#3a2f1c,#1d1a14); }
-.hb-quest-ico { font-size:22px; width:34px; text-align:center; flex-shrink:0; }
-.hb-quest-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
-.hb-quest-main b { font-size:13px; }
-.hb-quest-main > span { font-size:11px; color:var(--dim); }
-.hb-quest-bar { display:block; height:5px; border-radius:4px; background:#ffffff12; overflow:hidden; margin-top:4px; }
-.hb-quest-bar i { display:block; height:100%; background:linear-gradient(90deg,#7b63d6,#a48cf2); }
-.hb-quest-go { font:600 13px var(--cond); color:#a48cf2; letter-spacing:.06em; flex-shrink:0; }
-.hb-quest.ready .hb-quest-go { background:var(--gold); color:#1d1a14; padding:7px 12px; border-radius:999px; }
 .qb-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--line); }
 .qb-ico { width:44px; height:44px; flex-shrink:0; border-radius:12px; display:grid; place-items:center; font-size:24px; background:#ffffff07; }
 .qb-row.ready .qb-ico { background:#dfbd7c22; }
@@ -1991,20 +1980,6 @@ function renderToday() {
   sum.innerHTML = `<span>達成 <b>${dc.done}/${dc.due}</b></span>${g ? `<span>この日 <b>+${g}G</b></span>` : ""}`
     + (day < H.addDays(s.today, -(H.SETTLE_WINDOW - 1)) ? `<span>${H.SETTLE_WINDOW}日以上前の記録はゴールドには入りません（XP・統計・クエストには反映）</span>` : "");
   v.appendChild(sum);
-
-  // クエスト: 受け取れる報酬があれば最優先、なければ「あと少し」のクエスト
-  const qb = questBoardOf(s), ready = Q.claimableQuests(qb), near = Q.nearestQuest(qb);
-  if (ready.length || near) {
-    const qs = el("button", "hb-quest" + (ready.length ? " ready" : "")); qs.type = "button";
-    qs.innerHTML = ready.length
-      ? `<span class="hb-quest-ico" aria-hidden="true">🎁</span><span class="hb-quest-main"><b>クエスト達成！</b><span>受け取れる報酬が ${ready.length}件あります</span></span><span class="hb-quest-go">受け取る</span>`
-      : `<span class="hb-quest-ico" aria-hidden="true">${esc(near.line.icon)}</span><span class="hb-quest-main"><b>${esc(near.title)}</b>
-          <span>${esc(Q.questDesc(near))} ・ ${esc(Q.progressText(near))}</span>
-          <span class="hb-quest-bar"><i style="width:${(near.ratio * 100).toFixed(1)}%"></i></span></span><span class="hb-quest-go" aria-hidden="true">›</span>`;
-    qs.setAttribute("aria-label", ready.length ? `クエスト達成。受け取れる報酬が${ready.length}件` : `次のクエスト ${near.title} ${Q.progressText(near)}`);
-    qs.onclick = () => openQuests();
-    v.appendChild(qs);
-  }
 
   renderTasks(v, s, day);
   v.appendChild(sectionHead("習慣", "習慣を追加", () => openEditor(null)));

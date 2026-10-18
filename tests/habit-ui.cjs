@@ -105,8 +105,11 @@ function seedRecords() {
   assert.match(await p.locator('.hb-card', { hasText: '筋トレ' }).innerText(), /今週 3\/4/);
 
   // 6) 日付ストリップで昨日を選ぶ → 昨日の記録が見える
+  const navH = await p.locator('.hb-weeknav').evaluate(e => e.getBoundingClientRect().height);
   await p.locator('.hb-day[data-day="2026-10-17"]').click();
   assert.equal(await p.locator('.hb-top h1').innerText(), '昨日');
+  assert.equal(await p.locator('.hb-weeknav .back').count(), 1);
+  assert.equal(await p.locator('.hb-weeknav').evaluate(e => e.getBoundingClientRect().height), navH, 'the 今日へ button does not shift the page');
   assert.ok(await p.locator('.hb-card', { hasText: '専門医勉強' }).evaluate(e => e.classList.contains('done')));
   await p.locator('.hb-day[data-day="2026-10-18"]').click();
 
