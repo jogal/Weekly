@@ -62,6 +62,7 @@ const server = http.createServer((req,res)=>{
     await p.setViewportSize({width:390,height:844});
     await p.locator('.tab-btn').first().click();
     if(page==='tracker') {
+      await p.locator('[data-tab="schedule"]').click();
       await p.locator('.add-btn').first().click();
       await p.locator('#add-label').fill('朝の習慣');await p.locator('#add-save').click();
       await p.locator('[data-tab="log"]').click();
