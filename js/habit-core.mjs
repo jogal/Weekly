@@ -35,6 +35,8 @@ export const LINKS = {
   instrument: { label: "楽器練習",   icon: "🎵", color: "#7986CB" },
   english:    { label: "英語学習",   icon: "🌐", color: "#26C6DA" },
   cooking:    { label: "自炊",       icon: "🍳", color: "#66BB6A" },
+  // 読書は本棚(wt_reading_v1)と連動。進んだページ数は ctx.readPages(key) から。XP・習慣のゴールドは付かない(ページのゴールドだけ)
+  reading:    { label: "読書",       icon: "📖", color: "#8FB3D9" },
 };
 export const HABIT_COLORS = ["#E57373", "#FFA726", "#dfbd7c", "#66BB6A", "#26C6DA",
   "#7986CB", "#BA68C8", "#F06292", "#90A4AE"];
@@ -45,7 +47,7 @@ export const FREQ_TYPES = ["daily", "days", "weekly"];
 // 連動習慣で選べる目標。筋トレは「部位数」、それ以外は「時間」を数えられる
 export function allowedGoalTypes(link) {
   if (!link) return GOAL_TYPES;
-  return link === "workout" ? ["check", "count"] : ["check", "minutes"];
+  return link === "workout" || link === "reading" ? ["check", "count"] : ["check", "minutes"];
 }
 
 export function defaultHabits(todayKey) {
@@ -88,10 +90,17 @@ export function normalizeHabit(h) {
     archivedOn: h?.archived && /^\d{4}-\d{2}-\d{2}$/.test(h?.archivedOn || "") ? h.archivedOn : null,
   };
 }
-// 保存済みの習慣リストを読み、無ければ5トラック連動の初期習慣を返す
-export function ensureHabits(saved, todayKey) {
+// 保存済みの習慣リストを読み、無ければ5トラック連動の初期習慣を返す。
+// 読書の習慣が無ければ足す(readingFrom: 本棚の最初の記録日。それより前の日は対象外)
+export function readingHabit(fromKey) {
+  return normalizeHabit({ id: "h_reading", link: "reading", goal: { type: "check", target: 1 },
+    freq: { type: "daily", days: [], times: 1 }, createdOn: fromKey });
+}
+export function ensureHabits(saved, todayKey, readingFrom = null) {
   const list = Array.isArray(saved?.habits) ? saved.habits.map(normalizeHabit) : null;
-  return { habits: list && list.length ? list : defaultHabits(todayKey) };
+  const habits = list && list.length ? list : defaultHabits(todayKey);
+  if (!habits.some(h => h.link === "reading")) habits.push(readingHabit(readingFrom && readingFrom < todayKey ? readingFrom : todayKey));
+  return { habits };
 }
 
 // ── 進捗・判定 ───────────────────────────────────────────────────────────────
@@ -100,6 +109,10 @@ const mins = r => parseInt(r?.duration, 10) || 0;
 export function targetOf(h) { return h.goal.type === "check" ? 1 : Math.max(1, h.goal.target | 0); }
 
 export function progressOf(h, key, ctx) {
+  if (h.link === "reading") {
+    const n = Math.max(0, Number(ctx.readPages?.(key)) || 0);
+    return h.goal.type === "count" ? n : n > 0 ? 1 : 0;
+  }
   if (h.link) {
     const day = recDay(ctx.records, key);
     if (!day) return 0;
@@ -122,7 +135,7 @@ export function isDue(h, key) {
 }
 // 期間の対象になる日か(独自習慣は作成日から、アーカイブ後は対象外)
 export function isActiveOn(h, key) {
-  if (!h.link && h.createdOn && key < h.createdOn) return false;
+  if ((!h.link || h.link === "reading") && h.createdOn && key < h.createdOn) return false;
   if (h.archivedOn && key >= h.archivedOn) return false;
   return true;
 }
@@ -264,6 +277,7 @@ export function medalIcon(unit, tier) {
 }
 
 export function habitDayGold(h, key, ctx) {
+  if (h.link === "reading") return null; // 読書のゴールドは本棚のページ分だけ(二重に付けない)
   if (!isActiveOn(h, key) || !isAchieved(h, key, ctx)) return null;
   if (h.freq.type === "weekly") {
     let g = GOLD.base, streak = 0, ms = 0;
@@ -527,7 +541,7 @@ export function freqLabel(h) {
 }
 export function unitLabel(h) {
   if (h.goal.type === "minutes") return "分";
-  if (h.goal.type === "count") return h.link === "workout" ? "部位" : "回";
+  if (h.goal.type === "count") return h.link === "workout" ? "部位" : h.link === "reading" ? "ページ" : "回";
   return "";
 }
 export function progressLabel(h, key, ctx) {

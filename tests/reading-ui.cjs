@@ -42,7 +42,7 @@ const server = http.createServer((req, res) => {
   // 1週間前から使っている状態にする(ゴールドは使いはじめた日から数える)
   await p.evaluate(() => { const r = JSON.parse(localStorage.getItem('wt_reward_v1')); r.startedOn = '2026-10-11'; localStorage.setItem('wt_reward_v1', JSON.stringify(r)); });
   await p.reload(); await p.waitForSelector('#rd-today');
-  assert.equal(await p.locator('#today-view .hb-card').count(), 5);
+  assert.equal(await p.locator('#today-view .hb-card').count(), 6, '5 linked habits + 読書');
   const g0 = await balance();
 
   // 2) 今日タブから本を追加(全ページ数は必須)
@@ -69,6 +69,12 @@ const server = http.createServer((req, res) => {
   assert.match(await p.locator('#rd-today .rd-book').innerText(), /p\.35 \/ 400 ・ この日 \+35ページ ・ \+17G/);
   let d = await saved();
   assert.deepEqual(d.books[0].log, { '2026-10-18': { page: 35 } });
+  // 習慣「読書」も達成になり、今日の進捗に入る。リングをタップすると(読書中が1冊なので)ページ記録が開く
+  const rh = p.locator('#today-view .hb-card:not(.rd-book)').filter({ has: p.locator('.hb-name', { hasText: /^読書$/ }) });
+  assert.ok(await rh.evaluate(e => e.classList.contains('done')), 'reading habit done');
+  await rh.locator('.hb-ring').click();
+  await p.waitForSelector('#rd-sheet .rd-page');
+  await p.locator('#rd-sheet button', { hasText: '閉じる' }).click();
 
   // 4) 昨日に戻ると昨日は p.0、昨日に20ページまで記録 → 今日の分は +15 に変わり、合計は同じ17G
   await p.locator('.hb-day[data-day="2026-10-17"]').click();

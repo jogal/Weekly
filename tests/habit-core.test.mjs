@@ -33,7 +33,7 @@ test('defaults link the five Weekly tracks; normalize clamps and repairs input',
   const d = H.defaultHabits(TODAY);
   assert.deepEqual(d.map(h => h.link), ['workout', 'medicine', 'english', 'instrument', 'cooking']);
   assert.equal(d[0].freq.type, 'weekly'); assert.equal(d[0].freq.times, 4);
-  assert.deepEqual(H.ensureHabits(null, TODAY).habits.length, 5);
+  assert.deepEqual(H.ensureHabits(null, TODAY).habits.map(h => h.link), ['workout', 'medicine', 'english', 'instrument', 'cooking', 'reading']);
   const n = H.normalizeHabit({ link: 'medicine', goal: { type: 'count', target: 5 }, freq: { type: 'days', days: [] } });
   assert.equal(n.goal.type, 'check');
   assert.equal(n.freq.type, 'daily');

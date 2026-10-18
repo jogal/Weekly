@@ -129,3 +129,25 @@ test('questStats feeds the reading quests (record-only books do not count)', asy
   assert.equal(Q.progressText(pages), '340/500ページ');
   assert.equal(Q.questDesc(books), '本を1冊読み終える');
 });
+
+test('reading habit: added once, counts pages read that day, streak and completion, no habit gold', () => {
+  const saved = { habits: H.defaultHabits('2026-01-01') };
+  const hs = H.ensureHabits(saved, TODAY, '2026-10-10').habits;
+  const rh = hs.find(h => h.link === 'reading');
+  assert.equal(rh.createdOn, '2026-10-10', 'starts at the first reading log');
+  assert.equal(H.ensureHabits({ habits: hs }, TODAY).habits.filter(h => h.link === 'reading').length, 1);
+  let b = R.setPage(book(), '2026-10-16', 10);
+  b = R.setPage(b, '2026-10-17', 30);
+  b = R.setPage(b, TODAY, 45);
+  const ctx = { log: {}, records: {}, freezes: {}, floorKey: '2026-10-16', today: TODAY, readPages: k => R.pagesOnDay([b], k) };
+  assert.equal(H.progressOf(rh, TODAY, ctx), 1);
+  assert.equal(H.currentStreak(rh, TODAY, ctx).n, 3);
+  assert.deepEqual(H.dayCompletion([rh], TODAY, ctx), { due: 1, done: 1 });
+  assert.equal(H.habitDayGold(rh, TODAY, ctx), null, 'gold comes from pages only');
+  const pages = H.normalizeHabit({ ...rh, goal: { type: 'count', target: 20 } });
+  assert.equal(H.progressOf(pages, TODAY, ctx), 15);
+  assert.equal(H.isAchieved(pages, '2026-10-17', ctx), true);
+  assert.equal(H.unitLabel(pages), 'ページ');
+  assert.equal(H.isActiveOn(rh, '2026-10-09'), false);
+  assert.equal(R.firstLogDay([b]), '2026-10-16');
+});

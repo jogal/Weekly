@@ -49,9 +49,9 @@ function seedRecords() {
   const gold = () => p.evaluate(() => { const r = JSON.parse(localStorage.getItem('wt_reward_v1')); return r; });
   const balance = async () => p.$eval('#today-view .hb-pill.gold', e => Number(e.textContent.replace(/[^\d]/g, '')));
 
-  // 1) 起動すると今日タブ。5トラック連動の初期習慣・はじめてボーナス100G。予定・記録タブはない
+  // 1) 起動すると今日タブ。5トラック連動の初期習慣と読書・はじめてボーナス100G。予定・記録タブはない
   assert.equal(await p.locator('.tab-btn.active').getAttribute('data-tab'), 'today');
-  assert.equal(await p.locator('#today-view .hb-card').count(), 5);
+  assert.equal(await p.locator('#today-view .hb-card').count(), 6);
   assert.deepEqual(await p.locator('.tab-btn').evaluateAll(b => b.map(x => x.dataset.tab)), ['today', 'status', 'stats']);
   assert.equal(await p.locator('#gcal-open').count(), 0);
   assert.equal(await balance(), 100);
