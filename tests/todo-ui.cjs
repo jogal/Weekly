@@ -87,6 +87,20 @@ const server = http.createServer((req, res) => {
   assert.equal(await cal.locator('.td-rcal-wk').count(), 9, 'header + 8 weeks');
   await cal.scrollIntoViewIfNeeded();
   if (shots) await p.screenshot({ path: path.join(shots, 'todo-routine-cal.png') });
+  // 年間表示では日課も1年ぶんのヒートマップ(2026年は木曜はじまり → 先頭に空き3つ)
+  await p.locator('button', { hasText: '年間' }).click();
+  await p.waitForSelector('.td-ryear');
+  assert.equal(await p.locator('.td-ryear').count(), 2);
+  assert.equal(await p.locator('.td-rcal-grid').count(), 0, 'no 8-week grid in year mode');
+  const yr = p.locator('.td-ryear', { hasText: '歯みがき' });
+  assert.equal(await yr.locator('.hm-ycell').count(), 3 + 365);
+  assert.equal(await yr.locator('.hm-ycell.empty').count(), 3);
+  assert.equal(await yr.locator('.hm-ycell.today').evaluate(e => e.classList.contains('done')), true);
+  assert.match(await yr.innerText(), /この年 1\/1日/);
+  assert.equal(await yr.locator('.hm-months div:has-text("12月")').count(), 1);
+  if (shots) { await yr.scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'todo-routine-year.png') }); }
+  await p.locator('button', { hasText: '月間' }).click();
+  await p.waitForSelector('.td-rcal-grid');
   await p.locator('[data-tab="today"]').click();
   await p.waitForSelector('#today-view .td-routine');
 

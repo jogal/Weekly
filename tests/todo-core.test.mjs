@@ -121,4 +121,11 @@ test('routines: streaks, rate and weekly calendar (view only, no gold)', () => {
   assert.deepEqual(w[0].days.map(d => d.state), ['done', 'miss', 'done', 'done', 'done', 'done', 'done']);
   assert.equal(w[2].days[0].state, 'off');
   assert.equal(T.routineWeeks(s, 'r', '2026-10-15', 1)[0].days[6].state, 'future');
+  const y = T.routineDays(s, 'r', '2026-01-01', '2026-12-31', TODAY);
+  assert.equal(y.length, 365);
+  assert.equal(y.find(d => d.key === '2026-10-04').state, 'off');
+  assert.equal(y.find(d => d.key === '2026-10-13').state, 'miss');
+  assert.equal(y.find(d => d.key === TODAY).state, 'done');
+  assert.equal(y.find(d => d.key === '2026-10-19').state, 'future');
+  assert.equal(y.filter(d => d.state === 'done').length, 8);
 });
