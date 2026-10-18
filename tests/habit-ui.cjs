@@ -104,28 +104,42 @@ function seedRecords() {
   assert.match(await p.locator('.hb-card', { hasText: '筋トレ' }).innerText(), /今週 3\/4/);
 
   // 6) 日付ストリップで昨日を選ぶ → 昨日の記録が見える
-  await p.locator('.hb-day').nth(5).click();
+  await p.locator('.hb-day[data-day="2026-10-17"]').click();
   assert.equal(await p.locator('.hb-top h1').innerText(), '昨日');
   assert.ok(await p.locator('.hb-card', { hasText: '専門医勉強' }).evaluate(e => e.classList.contains('done')));
-  await p.locator('.hb-day').nth(6).click();
+  await p.locator('.hb-day[data-day="2026-10-18"]').click();
 
-  // 6b) 「前へ」で何週でもさかのぼれる。古い日の記録も書ける(ゴールドは確定済みなので増えない)
-  await p.locator('.hb-weeknav .prev').click();
-  assert.equal(await p.locator('.hb-top h1').innerText(), '10/11(日)');
-  await p.locator('.hb-weeknav .prev').click();
-  await p.locator('.hb-weeknav .prev').click();
+  // 6b) 日付の列を横にスクロールすると、どこまでもさかのぼれる(左端で4週間ずつ足される)
+  const strip = p.locator('.hb-days');
+  assert.equal(await p.locator('.hb-day').count(), 28);
+  assert.ok(await strip.evaluate(e => e.scrollLeft + e.clientWidth >= e.scrollWidth - 2), 'starts at today');
+  await strip.evaluate(e => { e.scrollLeft = 0; e.dispatchEvent(new Event('scroll')); });
+  assert.equal(await p.locator('.hb-day').count(), 56);
+  await p.locator('.hb-day[data-day="2026-09-27"]').click();
   assert.equal(await p.locator('.hb-top h1').innerText(), '9/27(日)');
-  assert.match(await p.locator('.hb-weeknav span').innerText(), /9\/21 〜 9\/27/);
+  assert.equal(await p.locator('.hb-weeknav span').innerText(), '9月');
+  assert.ok(await p.locator('.hb-day.sel').evaluate(b => { const s = b.parentElement; return b.offsetLeft >= s.scrollLeft && b.offsetLeft + b.offsetWidth <= s.scrollLeft + s.clientWidth; }), 'selected day stays in view');
   assert.match(await p.locator('.hb-sum').innerText(), /ゴールドには入りません/);
   const oldGold = await balance();
   await p.locator('.hb-card', { hasText: '自炊' }).locator('.hb-ring').click();
   assert.equal(await balance(), oldGold);
   assert.equal((await p.evaluate(() => JSON.parse(localStorage.getItem('wt_records'))))['2026-09-21'].sun.cooking.done, true);
-  await p.locator('.hb-day').nth(2).click();
-  assert.equal(await p.locator('.hb-top h1').innerText(), '9/23(水)');
+  assert.ok(await p.locator('.hb-day.sel').evaluate(b => { const s = b.parentElement; return b.offsetLeft >= s.scrollLeft && b.offsetLeft + b.offsetWidth <= s.scrollLeft + s.clientWidth; }), 'strip keeps its place after recording');
+  // 一覧を左右にスワイプすると1日ずつ動く
+  const swipe = async dx => p.locator('#today-view').evaluate((v, dx) => {
+    const at = x => [new Touch({ identifier: 1, target: v, clientX: x, clientY: 400 })];
+    v.dispatchEvent(new TouchEvent('touchstart', { touches: at(200), changedTouches: at(200), bubbles: true }));
+    v.dispatchEvent(new TouchEvent('touchend', { touches: [], changedTouches: at(200 + dx), bubbles: true }));
+  }, dx);
+  await swipe(120);
+  assert.equal(await p.locator('.hb-top h1').innerText(), '9/26(土)');
+  await swipe(-120);
+  await swipe(-120);
+  assert.equal(await p.locator('.hb-top h1').innerText(), '9/28(月)');
   await p.locator('.hb-weeknav .back').click();
   assert.equal(await p.locator('.hb-top h1').innerText(), '今日');
-  assert.equal(await p.locator('.hb-weeknav .next').isDisabled(), true);
+  await swipe(-120);
+  assert.equal(await p.locator('.hb-top h1').innerText(), '今日', 'cannot swipe into the future');
   if (shots) await p.screenshot({ path: path.join(shots, 'habit-today-after.png') });
 
   // 7) 画面幅ごとのはみ出しなし
