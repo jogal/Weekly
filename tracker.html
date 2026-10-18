@@ -2042,7 +2042,7 @@ function renderToday() {
   }
   renderRoutines(v, s, day);
   window.ReadingUI?.renderTodayBooks(v, day);
-  v.appendChild(el("p", "hb-hint", "リングをタップで記録 ・ 長押しで休息日<br>カードをタップすると細かく記録・編集できます<br>タスクはタップでステップを開く ・ 日課はタップで済み、長押しで編集"));
+  v.appendChild(el("p", "hb-hint", "リングをタップで記録 ・ 長押しで休息日<br>カードをタップすると細かく記録・編集できます<br>タスクはタップでステップを開く ・ 日課はタップで済み、ダブルタップで編集"));
   const archived = s.habits.filter(h => h.archived);
   if (archived.length) {
     const a = el("button", "hb-link", `アーカイブした習慣（${archived.length}）`); a.type = "button";
@@ -2422,14 +2422,42 @@ function renderRoutines(v, s, day) {
       b.type = "button";
       b.dataset.rid = r.id;
       b.setAttribute("aria-pressed", String(done));
-      b.setAttribute("aria-label", `${r.name}${done ? "（済み）" : ""}。長押しで編集`);
+      b.setAttribute("aria-label", `${r.name}${done ? "（済み）" : ""}。ダブルタップで編集`);
       b.innerHTML = `<span class="td-check" aria-hidden="true">${done ? "✓" : ""}</span>
         <span class="td-ico" aria-hidden="true">${esc(r.icon)}</span><span class="td-rname">${esc(r.name)}</span>`;
-      bindRing(b, () => changeTodo(t => T.toggleRoutine(t, day, r.id)), () => openRoutineEditor(r.id));
+      bindDoubleTap(b, r.id, () => changeTodo(t => T.toggleRoutine(t, day, r.id)), () => openRoutineEditor(r.id));
       box.appendChild(b);
     });
   });
   v.appendChild(box);
+}
+
+// 日課: 1回タップで済み/戻す、ダブルタップで編集(長押しはスクロール中に誤作動しやすいため)。
+// 1回目は見た目だけすぐ切り替え、少し待っても2回目が来なければ保存する
+const DOUBLE_TAP_MS = 300;
+let tapPending = null; // {key, timer, commit}
+function bindDoubleTap(b, key, onTap, onDouble) {
+  b.addEventListener("click", e => {
+    e.stopPropagation();
+    if (tapPending?.key === key) {
+      clearTimeout(tapPending.timer); tapPending = null;
+      b.classList.toggle("done"); // 見た目を元に戻す
+      syncRoutineLook(b);
+      return onDouble();
+    }
+    if (tapPending) { clearTimeout(tapPending.timer); const c = tapPending.commit; tapPending = null; c(); }
+    // 前の日課を保存すると描き直されるので、いま画面にある同じ日課の行を切り替える
+    const cur = b.isConnected ? b : document.querySelector(`.td-routine[data-rid="${key}"]`) || b;
+    cur.classList.toggle("done");
+    syncRoutineLook(cur);
+    const commit = () => { tapPending = null; onTap(); };
+    tapPending = { key, commit, timer: setTimeout(commit, DOUBLE_TAP_MS) };
+  });
+}
+function syncRoutineLook(b) {
+  const on = b.classList.contains("done");
+  b.setAttribute("aria-pressed", String(on));
+  const ck = b.querySelector(".td-check"); if (ck) ck.textContent = on ? "✓" : "";
 }
 
 function openRoutineEditor(rid) {
