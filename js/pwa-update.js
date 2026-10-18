@@ -12,7 +12,8 @@
   let pending = false, reloading = false;
   const busy = () =>
     [...document.querySelectorAll(".overlay")].some(o => getComputedStyle(o).display !== "none")
-    || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
+    || /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "")
+    || !!document.querySelector("input[data-backup-pick]");   // 復元のファイルを選んでいる最中
   const reloadIfSafe = () => {
     if (!pending || reloading || document.hidden || busy()) return;
     reloading = true;
