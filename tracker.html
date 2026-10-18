@@ -442,10 +442,6 @@ textarea.field-input { height:76px; resize:vertical; }
 .hb-archived-row span { flex:1; }
 /* rewards (育成) */
 .hero-title { font-size:11px; color:#f0d7a3; letter-spacing:.12em; margin:-3px 0 7px; }
-.hero-sprite-box { position:relative; }
-.hero-pet { position:absolute; right:-6px; bottom:2px; font-size:26px; line-height:1; animation:hb-bob 2.4s ease-in-out infinite;
-  filter:drop-shadow(0 2px 2px #0008); pointer-events:none; }
-@keyframes hb-bob { 0%,100% { transform:translateY(0); } 50% { transform:translateY(-4px); } }
 .rw-top { display:flex; align-items:center; gap:10px; }
 .rw-gold { font:700 30px var(--cond); letter-spacing:.03em; color:#f0d7a3; }
 .rw-gold small { font-size:13px; color:var(--dim); margin-left:4px; }
@@ -473,6 +469,44 @@ textarea.field-input { height:76px; resize:vertical; }
 .hb-celebrate-title { font-size:18px; font-weight:700; margin:10px 0 4px; }
 .hb-celebrate-sub { font-size:12px; color:var(--dim); line-height:1.8; }
 .hb-celebrate-gold { font:700 22px var(--cond); color:#f0d7a3; margin-top:10px; letter-spacing:.04em; }
+/* quests */
+.hb-quest { display:flex; align-items:center; gap:10px; width:100%; text-align:left; margin:0 0 14px; padding:10px 12px;
+  border-radius:16px; border:1px solid #2e2850; background:#15141f; color:var(--txt); cursor:pointer; font:inherit; }
+.hb-quest.ready { border-color:#8a7449; background:linear-gradient(110deg,#3a2f1c,#1d1a14); }
+.hb-quest-ico { font-size:22px; width:34px; text-align:center; flex-shrink:0; }
+.hb-quest-main { flex:1; min-width:0; display:flex; flex-direction:column; gap:2px; }
+.hb-quest-main b { font-size:13px; }
+.hb-quest-main > span { font-size:11px; color:var(--dim); }
+.hb-quest-bar { display:block; height:5px; border-radius:4px; background:#ffffff12; overflow:hidden; margin-top:4px; }
+.hb-quest-bar i { display:block; height:100%; background:linear-gradient(90deg,#7b63d6,#a48cf2); }
+.hb-quest-go { font:600 13px var(--cond); color:#a48cf2; letter-spacing:.06em; flex-shrink:0; }
+.hb-quest.ready .hb-quest-go { background:var(--gold); color:#1d1a14; padding:7px 12px; border-radius:999px; }
+.qb-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--line); }
+.qb-ico { width:44px; height:44px; flex-shrink:0; border-radius:12px; display:grid; place-items:center; font-size:24px; background:#ffffff07; }
+.qb-row.ready .qb-ico { background:#dfbd7c22; }
+.qb-main { flex:1; min-width:0; }
+.qb-title { font-size:14px; font-weight:700; }
+.qb-desc { font-size:11px; color:var(--dim); margin:2px 0 6px; }
+.qb-bar { position:relative; height:18px; border-radius:6px; background:#1b1830; border:1px solid #2e2850; overflow:hidden; }
+.qb-fill { position:absolute; inset:0 auto 0 0; background:linear-gradient(90deg,#6c55c8,#a48cf2); }
+.qb-row.ready .qb-fill { background:linear-gradient(90deg,#b8924f,#f0d7a3); }
+.qb-bar span { position:relative; display:block; text-align:right; padding-right:6px; font:600 11px/18px var(--cond);
+  letter-spacing:.04em; color:#fff; text-shadow:0 1px 2px #000c; }
+.qb-reward { font-size:10px; color:#d9c08a; margin-top:4px; }
+.qb-btn { width:76px; min-height:56px; flex-shrink:0; border-radius:12px; border:1px solid #5c2a2d; background:#38191c;
+  color:#e7a3a3; font-size:12px; font-weight:700; letter-spacing:.04em; cursor:pointer; font-family:inherit; }
+.qb-btn:disabled { cursor:default; }
+.qb-btn.ready { border-color:#c9a45f; background:linear-gradient(160deg,#f0d7a3,#c9a45f); color:#1d1a14; animation:qb-pulse 1.6s ease-in-out infinite; }
+@keyframes qb-pulse { 0%,100% { box-shadow:0 0 0 0 #dfbd7c66; } 50% { box-shadow:0 0 0 6px #dfbd7c00; } }
+.qb-log { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); font-size:13px; }
+.qb-log-t { flex:1; min-width:0; }
+.qb-log-g { font:600 12px var(--cond); color:#f0d7a3; }
+.qb-log-d { font:500 12px var(--cond); color:var(--dim); min-width:38px; text-align:right; }
+.tab-btn { position:relative; }
+.tab-btn.has-badge::after { content:""; position:absolute; top:7px; left:calc(50% + 7px); width:8px; height:8px; border-radius:50%;
+  background:var(--gold); box-shadow:0 0 0 2px #15171b; }
+.hb-celebrate-kicker { font:600 11px var(--cond); letter-spacing:.3em; color:var(--gold); margin-bottom:6px; }
+.hb-celebrate-item { font-size:13px; margin-top:8px; color:var(--txt); }
 /* stats: per-habit rates */
 .hs-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
 .hs-row:last-child { border-bottom:0; }
@@ -2316,6 +2350,7 @@ function render(){
   else if(tab==="stats")renderStats();
   else if(tab==="status")renderStatus();
   else renderList();
+  window.HabitUI?.updateQuestBadge();
 }
 render();
 
@@ -2364,6 +2399,7 @@ handleQuestParam();
 <!-- 習慣トラッカー: 今日タブ・目標・ゴールド・ショップ。ロジックは js/habit-core.mjs -->
 <script type="module">
 import * as H from "./js/habit-core.mjs";
+import * as Q from "./js/quest-core.mjs";
 
 const read = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
 const write = (k, v) => localStorage.setItem(k, JSON.stringify(v));
@@ -2515,6 +2551,20 @@ function renderToday() {
   sum.innerHTML = `<span>達成 <b>${dc.done}/${dc.due}</b></span>${g ? `<span>この日 <b>+${g}G</b></span>` : ""}`
     + (day !== s.today ? `<span>過去${H.SETTLE_WINDOW - 1}日までさかのぼって記録できます</span>` : "");
   v.appendChild(sum);
+
+  // クエスト: 受け取れる報酬があれば最優先、なければ「あと少し」のクエスト
+  const qb = questBoardOf(s), ready = Q.claimableQuests(qb), near = Q.nearestQuest(qb);
+  if (ready.length || near) {
+    const qs = el("button", "hb-quest" + (ready.length ? " ready" : "")); qs.type = "button";
+    qs.innerHTML = ready.length
+      ? `<span class="hb-quest-ico" aria-hidden="true">🎁</span><span class="hb-quest-main"><b>クエスト達成！</b><span>受け取れる報酬が ${ready.length}件あります</span></span><span class="hb-quest-go">受け取る</span>`
+      : `<span class="hb-quest-ico" aria-hidden="true">${esc(near.line.icon)}</span><span class="hb-quest-main"><b>${esc(near.title)}</b>
+          <span>${esc(Q.questDesc(near))} ・ ${esc(Q.progressText(near))}</span>
+          <span class="hb-quest-bar"><i style="width:${(near.ratio * 100).toFixed(1)}%"></i></span></span><span class="hb-quest-go" aria-hidden="true">›</span>`;
+    qs.setAttribute("aria-label", ready.length ? `クエスト達成。受け取れる報酬が${ready.length}件` : `次のクエスト ${near.title} ${Q.progressText(near)}`);
+    qs.onclick = () => openQuests();
+    v.appendChild(qs);
+  }
 
   if (!shown.length) v.appendChild(el("div", "hb-empty", "習慣がまだありません。<br>右上の ＋ から追加しましょう。"));
   main.forEach(h => v.appendChild(habitCard(h, day, ctx)));
@@ -2833,11 +2883,9 @@ function openArchived() {
 // ── 育成タブ: ゴールド・もちもの・ショップ ────────────────────────────────
 function decorateHero(hero) {
   const eq = loadState().reward.equipped;
-  const bg = H.shopItem(eq.bg), title = H.shopItem(eq.title), pet = H.shopItem(eq.pet);
+  const bg = H.shopItem(eq.bg), title = H.shopItem(eq.title);
   if (bg?.css) hero.style.background = bg.css;
   if (title) hero.querySelector(".hero-job")?.insertAdjacentHTML("afterend", `<div class="hero-title">《${esc(title.name)}》</div>`);
-  if (pet) hero.querySelector(".hero-sprite-box")?.insertAdjacentHTML("beforeend",
-    `<span class="hero-pet" role="img" aria-label="おとも ${esc(pet.name)}">${pet.icon}</span>`);
 }
 function renderRewardCard(wrap) {
   const s = loadState(), r = s.reward;
@@ -2862,6 +2910,108 @@ function renderRewardCard(wrap) {
     + `週N回の目標を達成 +${H.GOLD.weekGoal}G〜 ・ その日の予定をすべて達成 +${H.GOLD.perfect}G<br>`
     + `7・30・100・365日連続でメダルとボーナス ・ 休息日は連続記録を保ちます`));
   wrap.appendChild(card);
+  renderQuestCard(wrap, s);
+}
+
+// ── クエスト掲示板 ─────────────────────────────────────────────────────────
+function questBoardOf(s) {
+  const m = Q.questMetrics({ records, log: s.log, habits: s.habits, reward: s.reward, today: s.today });
+  return Q.questBoard(m, s.reward, s.habits);
+}
+function updateQuestBadge(board) {
+  const n = Q.claimableQuests(board || questBoardOf(loadState())).length;
+  const t = document.querySelector('.tab-btn[data-tab="status"]');
+  if (t) {
+    t.classList.toggle("has-badge", n > 0);
+    if (n) t.setAttribute("aria-label", `育成（受け取れるクエスト ${n}件）`); else t.removeAttribute("aria-label");
+  }
+  return n;
+}
+function questRow(q, onClaim) {
+  const row = el("div", "qb-row" + (q.claimable ? " ready" : ""));
+  row.innerHTML = `<div class="qb-ico" aria-hidden="true">${esc(q.line.icon)}</div>
+    <div class="qb-main"><div class="qb-title">${esc(q.title)}</div>
+      <div class="qb-desc">${esc(Q.questDesc(q))}</div>
+      <div class="qb-bar" role="progressbar" aria-label="${esc(q.title)}の進み具合" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(q.ratio * 100)}">
+        <div class="qb-fill" style="width:${(q.ratio * 100).toFixed(1)}%"></div><span>${esc(Q.progressText(q))}</span></div>
+      <div class="qb-reward">報酬 ${esc(Q.rewardText(q))}</div></div>`;
+  if (onClaim || !q.claimable) {
+    const b = btn(q.claimable ? "受け取る" : "ロック中", "qb-btn" + (q.claimable ? " ready" : ""), q.claimable ? () => onClaim(q) : null,
+      { "aria-label": q.claimable ? `${q.title}の報酬を受け取る` : `${q.title}はまだロック中` });
+    if (!q.claimable) b.disabled = true;
+    row.appendChild(b);
+  }
+  return row;
+}
+function renderQuestCard(wrap, s) {
+  const board = questBoardOf(s), ready = Q.claimableQuests(board);
+  updateQuestBadge(board);
+  const claimedN = Object.keys(s.reward.quests?.claimed || {}).length;
+  wrap.appendChild(el("p", "section-label", "クエスト掲示板"));
+  const card = el("div", "stats-card");
+  card.appendChild(el("div", "rw-today", `受け取り済み ${claimedN}件 ・ 制覇 ${board.filter(q => q.done).length}/${board.length}`));
+  const top = [...ready, ...board.filter(q => !q.done && !q.claimable).sort((a, b) => b.ratio - a.ratio)].slice(0, 3);
+  top.forEach(q => card.appendChild(questRow(q, claim)));
+  card.appendChild(btn(ready.length ? `🎁 報酬を受け取る（${ready.length}）` : "📜 掲示板を開く", "btn btn-primary rw-shop", () => openQuests()));
+  wrap.appendChild(card);
+}
+function openQuests(seg = "active") {
+  const s = loadState(), board = questBoardOf(s);
+  updateQuestBadge(board);
+  sheet(box => {
+    const head = el("div", "hb-sheet-head");
+    head.innerHTML = `<h3 class="modal-title">📜 クエスト掲示板</h3><span class="hb-pill" aria-label="所持ゴールド">🪙 ${fmt(H.balance(s.reward))}</span>`;
+    box.appendChild(head);
+    const ready = Q.claimableQuests(board).length;
+    const sg = el("div", "hb-seg");
+    sg.appendChild(btn(`進行中${ready ? `（${ready}）` : ""}`, seg === "active" ? "on" : "", () => openQuests("active")));
+    sg.appendChild(btn("達成の記録", seg === "log" ? "on" : "", () => openQuests("log")));
+    box.appendChild(sg);
+    if (seg === "active") {
+      board.map((q, i) => ({ q, i })).filter(x => !x.q.done)
+        .sort((a, b) => (b.q.claimable - a.q.claimable) || (b.q.ratio - a.q.ratio) || (a.i - b.i))
+        .forEach(({ q }) => box.appendChild(questRow(q, claim)));
+      const done = board.filter(q => q.done);
+      if (done.length) box.appendChild(el("p", "hb-note", esc(`制覇：${done.map(q => q.line.icon + q.line.name).join("・")}`)));
+      box.appendChild(el("p", "hb-note", "進み具合はこれまでの記録から数えています。休んでも減りません。"));
+    } else {
+      const hist = Q.claimedHistory(s.reward, s.habits);
+      if (!hist.length) box.appendChild(el("p", "hb-empty", "まだ受け取ったクエストはありません。"));
+      hist.forEach(x => {
+        const r = el("div", "qb-log");
+        r.innerHTML = `<span aria-hidden="true">${esc(x.icon)}</span><span class="qb-log-t">${esc(x.title)}</span>
+          <span class="qb-log-g">+${x.tier?.g || 0}G</span><span class="qb-log-d">${x.on.slice(5).replace("-", "/")}</span>`;
+        box.appendChild(r);
+      });
+    }
+    box.appendChild(closeRow());
+  });
+}
+function claim(q) {
+  const s = loadState();
+  const res = Q.claimQuest(s.reward, questBoardOf(s), q.id, s.today);
+  if (!res.ok) { showToast(res.reason === "claimed" ? "受け取り済みです" : "まだ受け取れません"); return; }
+  write(H.KEYS.reward, res.state);
+  render();
+  if (document.getElementById("hb-sheet")?.style.display === "flex") openQuests("active");
+  const it = res.item ? H.shopItem(res.item) : null;
+  rewardOverlay({ icon: q.line.icon, kicker: "QUEST CLEAR", title: q.title, sub: Q.questDesc(q), gold: res.gold,
+    item: it, equipped: !!it && res.state.equipped[it.kind] === it.id });
+}
+function rewardOverlay({ icon, kicker, title, sub, gold, item, equipped }) {
+  const o = document.createElement("div");
+  o.className = "hb-celebrate";
+  o.innerHTML = `<div class="hb-celebrate-box" role="dialog" aria-label="${esc(kicker)}">
+    <div class="hb-celebrate-kicker">${esc(kicker)}</div>
+    <div class="hb-celebrate-ico">${esc(icon)}</div>
+    <div class="hb-celebrate-title">${esc(title)}</div>
+    <div class="hb-celebrate-sub">${esc(sub)}</div>
+    <div class="hb-celebrate-gold">+${gold}G</div>
+    ${item ? `<div class="hb-celebrate-item">${item.icon} ${esc(item.name)}を手に入れた${equipped ? "（装備しました）" : ""}</div>` : ""}
+    <div class="hb-celebrate-sub" style="margin-top:12px">タップして閉じる</div></div>`;
+  o.onclick = () => o.remove();
+  document.body.appendChild(o);
+  if (navigator.vibrate) navigator.vibrate([30, 40, 60]);
 }
 function openShop(kind = "shield") {
   const s = loadState(), r = s.reward, bal = H.balance(r);
@@ -2877,11 +3027,14 @@ function openShop(kind = "shield") {
       const owned = r.owned.includes(it.id), worn = r.equipped[it.kind] === it.id;
       const preview = it.css ? ` style="background:${it.css}"` : "";
       row.innerHTML = `<div class="shop-ico"${preview}>${it.icon}</div>
-        <div class="shop-main"><div class="shop-name">${esc(it.name)}</div><div class="shop-desc">${esc(it.desc)}${it.kind === "shield" ? `（所持 ${H.shieldCount(r)}/${H.SHIELD_MAX}）` : ""}</div></div>`;
+        <div class="shop-main"><div class="shop-name">${esc(it.name)}</div><div class="shop-desc">${esc(it.quest ? `クエスト「${Q.questForItem(it.id) || ""}」の報酬` : it.desc)}${it.kind === "shield" ? `（所持 ${H.shieldCount(r)}/${H.SHIELD_MAX}）` : ""}</div></div>`;
       if (it.kind !== "shield" && owned) {
         row.appendChild(btn(worn ? "はずす" : "装備する", "shop-btn ghost", () => {
           write(H.KEYS.reward, H.equip(r, it.kind, worn ? null : it.id)); render(); openShop(kind);
         }));
+      } else if (it.quest) {
+        const b = btn("クエスト報酬", "shop-btn ghost", null, { "aria-label": `${it.name}はクエストの報酬` });
+        b.disabled = true; row.appendChild(b);
       } else {
         const full = it.kind === "shield" && H.shieldCount(r) >= H.SHIELD_MAX;
         const b = btn(full ? "満タン" : `${fmt(it.price)}G`, "shop-btn", () => {
@@ -2928,7 +3081,7 @@ function renderHabitStats(wrap) {
   wrap.appendChild(card);
 }
 
-window.HabitUI = { renderToday, decorateHero, renderRewardCard, renderHabitStats };
+window.HabitUI = { renderToday, decorateHero, renderRewardCard, renderHabitStats, updateQuestBadge: () => updateQuestBadge() };
 if (["today", "status", "stats"].includes(tab)) render();
 </script>
 </body>
