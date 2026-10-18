@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="音楽🎵">
 <meta name="theme-color" content="#08090b">
 <title>🎵音楽練習記録</title>
@@ -566,8 +566,7 @@ document.getElementById("import-btn").onclick=()=>{
 };
 
 // ── PWA service worker ────────────────────────────────────────────────────────
-if("serviceWorker" in navigator&&location.protocol==="https:")
-  navigator.serviceWorker.register("./sw.js").catch(()=>{});
+// Service Worker の登録と更新の反映は js/pwa-update.js
 
 // 日付が変わったら描き直す(開きっぱなし対策)。タイマー表示の復帰も兼ねる
 let lastDay=dateKeyOf(new Date());
@@ -579,5 +578,6 @@ document.addEventListener("visibilitychange",()=>{
 
 render();
 </script>
+<script src="js/pwa-update.js"></script>
 </body>
 </html>

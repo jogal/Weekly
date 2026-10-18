@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-status-bar-style" content="black">
 <meta name="apple-mobile-web-app-title" content="週クエ">
 <meta name="theme-color" content="#08090b">
 <title>週間クエスト</title>
@@ -2158,8 +2158,7 @@ document.getElementById("gcal-test").onclick=()=>{
 };
 
 // ── PWA service worker ────────────────────────────────────────────────────────
-if("serviceWorker" in navigator&&location.protocol==="https:")
-  navigator.serviceWorker.register("./sw.js").catch(()=>{});
+// Service Worker の登録と更新の反映は js/pwa-update.js
 
 // ── 外部(ジムアプリ⚡等)の書き込みを取り込む ─────────────────────────────────
 // メモリ上の古いコピーで localStorage を上書きしてジムの記録を消さないよう、
@@ -3210,5 +3209,6 @@ function renderHabitStats(wrap) {
 window.HabitUI = { renderToday, decorateHero, renderRewardCard, renderHabitStats, updateQuestBadge: () => updateQuestBadge() };
 if (["today", "status", "stats"].includes(tab)) render();
 </script>
+<script src="js/pwa-update.js"></script>
 </body>
 </html>
