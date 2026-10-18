@@ -265,8 +265,9 @@ export function openEditor(id, opts = {}) {
 export function renderTodayBooks(v, day) {
   const t0 = today(), books = R.booksOn(load().books, day);
   const sec = h("div", "rd-today"); sec.id = "rd-today";
-  const head = h("div", "rd-today-head", `<p class="hb-group">読書</p>`);
-  head.appendChild(button("＋ 本", "hb-link rd-today-add", () => openEditor(null, { status: "reading", day }), { "aria-label": "読書中の本を追加" }));
+  // 見出しは今日タブの日課・タスク・習慣と同じ形(td-head)
+  const head = h("div", "td-head", `<p class="hb-group">読書</p>`);
+  head.appendChild(button("＋", "td-plus rd-today-add", () => openEditor(null, { status: "reading", day }), { "aria-label": "読書中の本を追加" }));
   sec.appendChild(head);
   if (!books.length) sec.appendChild(h("p", "hb-note", "読んでいる本を追加すると、何ページまで進んだかを記録できます（1ページ1G・読了でボーナス）。"));
   books.forEach(b => {

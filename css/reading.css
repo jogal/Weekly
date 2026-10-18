@@ -33,8 +33,6 @@
 .rd-month-l { font-size:9px; color:var(--faint); }
 /* 今日タブ */
 .rd-today { margin-top:6px; }
-.rd-today-head { display:flex; align-items:center; justify-content:space-between; }
-.rd-today-add.hb-link { display:inline-block; margin:0; padding:8px 4px; font-size:12px; }
 .rd-book { width:100%; text-align:left; color:var(--txt); font:inherit; cursor:pointer; }
 .rd-book .rd-bar { margin-top:6px; }
 .rd-pct { font:600 15px var(--cond); color:var(--dim); min-width:44px; text-align:right; }
