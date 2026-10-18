@@ -26,6 +26,7 @@ function fixture(existing) {
     assert.equal(options.headers['x-csrf-token'], server.csrfToken);
     if (action === 'connect') return response({ authorizationUrl: 'https://accounts.google.com/o/oauth2/v2/auth?synthetic=true' });
     if (action === 'disconnect') { server.connected = false; return response({ ok: true }); }
+    assert.equal(body.consentVersion, 3, 'every snapshot write binds Notion consent');
     const saved = JSON.parse(map.get(SYNC_KEY));
     assert.equal(saved.queue.operationId, body.operationId, 'operation is persisted before network request');
     assert.deepEqual(saved.queue.payload, body.payload);
@@ -346,14 +347,14 @@ test('initial approval must be fresh, exact, and explicitly versioned for catego
   await assert.rejects(f.client.enable({...approved,consentVersion:1}),{code:'REVIEW_REQUIRED'});
   f.source.name='変更後'; await assert.rejects(f.client.enable(approved),{code:'REVIEW_REQUIRED'});
   assert.equal(f.calls.length,0); assert.equal(f.client.getState().queue,null);
-  await f.enable(); assert.equal(f.client.getState().consentVersion,2);
+  await f.enable(); assert.equal(f.client.getState().consentVersion,3);
 });
 function legacyState(queue=null) {
   return { version:1,deviceId:'legacy-device',enabled:true,selection:{habitIds:['old'],readingIds:[],taskIds:[]},
     approvedNames:{habitIds:[{id:'old',name:'旧名'}],readingIds:[],taskIds:[]},consentToken:'legacy-consent',
     revision:3,lastSyncedAt:'2026-10-17T12:00:00Z',lastPayload:null,queue,blocked:null };
 }
-test('v1 opt-in without pending data stays off until a fresh v2 scope review', async () => {
+test('v1 opt-in without pending data stays off until a fresh v3 Notion review', async () => {
   const raw=JSON.stringify(legacyState()), map=new Map([[SYNC_KEY,raw],[STOP_KEY,'legacy-consent']]), f=fixture(map);
   assert.equal(f.client.getState().blocked,'SCOPE_REVIEW_REQUIRED');
   await f.client.resume(); await f.client.localSaved('wt_habits_v1');
@@ -362,7 +363,7 @@ test('v1 opt-in without pending data stays off until a fresh v2 scope review', a
   assert.equal(f.client.getState().enabled,false);
   f.client=f.make(); await f.client.resume();
   assert.equal(f.calls.filter(c=>c.action==='enable'||c.action==='upload').length,0,'OAuth return does not grant consent');
-  await f.enable(); assert.equal(f.client.getState().version,2); assert.equal(f.client.getState().consentVersion,2);
+  await f.enable(); assert.equal(f.client.getState().version,2); assert.equal(f.client.getState().consentVersion,3);
   assert.equal(f.client.getState().deviceId,'legacy-device');
   assert.equal('selection' in JSON.parse(map.get(SYNC_KEY)),false);
 });
@@ -414,7 +415,7 @@ test('renames, additions, and date rollovers never rewrite an already queued sna
   assert.equal(posts[1].body.payload.name,'新しい名前'); assert.equal(posts[1].body.payload.asOf,'2026-10-19');
   assert.equal(posts[1].body.payload.habits.length,2);
 });
-test('mixed-cache UI without v2 handshake cannot review, connect, enable, resume, or recover a pending send', async () => {
+test('mixed-cache UI without v3 handshake cannot review, connect, enable, resume, or recover a pending send', async () => {
   const f=fixture(); await f.enable(); f.online=false; f.source.value=2; await f.client.localSaved('wt_habit_log_v1');
   const approved=f.approval(), pending={...f.client.pendingReview(),confirmed:true}, raw=f.map.get(SYNC_KEY), count=f.calls.length;
   f.online=true; const stale=f.make({uiConsentVersion:undefined});
@@ -446,7 +447,7 @@ test('dismissing setup before its Web Lock is acquired cancels the queued activa
 // Small DOM adapter executes the real UI module without browser dependencies.
 // This covers interaction wiring, not layout, accessibility rendering, or CUA.
 function uiFixture() {
-  const nodes=new Map(), listeners=new Map(), navigations=[];
+  const nodes=new Map(), listeners=new Map(), navigations=[], timers=new Map(), savedKeys=[]; let timerId=0, resumes=0;
   function element(tag) {
     const e={tagName:tag,children:[],listeners:new Map(),hidden:false,disabled:false,checked:false,textContent:'',
       append(...children){this.children.push(...children);},appendChild(child){this.append(child);},replaceChildren(...children){this.children=children;},
@@ -463,21 +464,22 @@ function uiFixture() {
     addEventListener:(type,handler)=>listeners.set(`document:${type}`,handler)};
   nodes.set('private-sync-open',element('button'));document.activeElement=nodes.get('private-sync-open');
   const payload={schemaVersion:2,habits:[{name:'<img src=x onerror=unsafe>'}],tasks:[{},{}],routines:[{}],reading:[{},{},{}]},
-    review={consentVersion:2,payload,json:JSON.stringify(payload,null,2)};
+    review={consentVersion:3,payload,json:JSON.stringify(payload,null,2)};
   const state={enabled:false,busy:false,queue:null,online:true,configured:true,connected:false,lastSyncedAt:null,blocked:null,error:null};
   const hold=deferred();let pauses=0,clientOptions;
-  const client={getState:()=>state,review:()=>review,refreshStatus:async()=>{},resume:async()=>{},pause:()=>{pauses++;},
-    connect:()=>hold.promise,syncExternal:()=>{},localSaved:async()=>{}};
+  const client={getState:()=>state,review:()=>review,refreshStatus:async()=>{},resume:async()=>{resumes++;},pause:()=>{pauses++;},
+    connect:()=>hold.promise,syncExternal:()=>{},localSaved:async key=>{savedKeys.push(key);}};
   const source=fs.readFileSync(new URL('../js/private-sync-ui.mjs',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
   vm.runInNewContext(source,{document,window:{addEventListener:(type,handler)=>listeners.set(type,handler)},localStorage:{},
     fetch:()=>{throw new Error('No network allowed');},location:{assign:url=>navigations.push(url)},
     createPrivateSyncClient:options=>{clientOptions=options;return client;},buildPayload:()=>payload,validatePayload:()=>{},validateLegacyPayload:()=>{},
-    SOURCE_KEYS:new Set(['wt_habits_v1']),SYNC_KEY,STOP_KEY});
-  return {nodes,document,payload,review,hold,navigations,clientOptions,pauses:()=>pauses,overlay:document.body.children[0]};
+    SOURCE_KEYS:new Set(['wt_habits_v1','wt_records']),SYNC_KEY,STOP_KEY,
+    setTimeout:(fn,delay)=>{assert.equal(delay,1500);timers.set(++timerId,fn);return timerId;},clearTimeout:id=>timers.delete(id)});
+  return {nodes,document,payload,review,hold,navigations,clientOptions,listeners,timers,savedKeys,resumes:()=>resumes,flush:()=>{const jobs=[...timers.values()];timers.clear();jobs.forEach(fn=>fn());},pauses:()=>pauses,overlay:document.body.children[0]};
 }
 test('UI renders four category counts, a single scope consent checkbox, and exact text-only JSON preview', async () => {
   const f=uiFixture(); await f.nodes.get('private-sync-open').dispatch('click');
-  assert.equal(f.clientOptions.uiConsentVersion,2,'UI pins the consent wording version independently of imported client constants');
+  assert.equal(f.clientOptions.uiConsentVersion,3,'UI pins the consent wording version independently of imported client constants');
   assert.deepEqual(f.nodes.get('ps-categories').children.map(row=>row.children.map(node=>node.textContent)),
     [['タスク','2 件'],['習慣','1 件'],['日課','1 件'],['本','3 件']]);
   assert.equal((f.overlay.innerHTML.match(/type="checkbox"/g)||[]).length,1);
@@ -498,4 +500,106 @@ test('UI Close and Escape invalidate setup and prevent late OAuth navigation, ev
     f.hold.resolve('https://accounts.google.com/o/oauth2/v2/auth?synthetic=true');await flight;
     assert.deepEqual(f.navigations,[]);
   }
+});
+
+// Schema 2 was already used by Drive; a schema check alone cannot identify consent.
+test('Drive schema-2 pending operations never replay to Notion and retain original bytes', async () => {
+  for (const action of ['upload', 'enable']) {
+    const source=fixture(); await source.enable();
+    const state=source.client.getState(); state.consentVersion=2;
+    state.queue={action,operationId:'drive-uncertain',baseRevision:state.revision,payload:source.approval().payload};
+    const raw=JSON.stringify(state,null,3), map=new Map([[SYNC_KEY,raw],[STOP_KEY,state.consentToken]]), f=fixture(map);
+    assert.equal(f.client.getState().enabled,false);
+    assert.equal(f.client.getState().blocked,'LEGACY_PENDING_REVIEW_REQUIRED');
+    const approved={...f.client.pendingReview(),confirmed:true};
+    assert.equal(approved.incompatible,true); assert.deepEqual(approved.payload,state.queue.payload);
+    await f.client.resume(); await f.client.localSaved('wt_records'); await f.client.attempt();
+    await assert.rejects(f.client.retryPending(approved),{code:'LEGACY_PENDING_REVIEW_REQUIRED'});
+    await assert.rejects(f.client.connect(approved),{code:'LEGACY_PENDING_REVIEW_REQUIRED'});
+    await assert.rejects(f.enable(),{code:'LEGACY_PENDING_REVIEW_REQUIRED'});
+    await f.client.disable(); f.client=f.make(); await f.client.resume();
+    assert.equal(f.calls.length,0); assert.equal(map.get(SYNC_KEY),raw);
+    assert.deepEqual(f.client.getState().queue,state.queue);
+  }
+});
+test('Drive consent without a queue requires a fresh Notion review and uses new destination revision', async () => {
+  const source=fixture(); await source.enable();
+  const state=source.client.getState(); state.consentVersion=2; state.revision=45;
+  const raw=JSON.stringify(state), f=fixture(new Map([[SYNC_KEY,raw],[STOP_KEY,state.consentToken]]));
+  await f.client.resume(); await f.client.localSaved('wt_records');
+  assert.equal(f.calls.length,0); assert.equal(f.client.getState().blocked,'SCOPE_REVIEW_REQUIRED');
+  await assert.rejects(f.client.enable({...f.approval(),consentVersion:2}),{code:'REVIEW_REQUIRED'});
+  assert.equal(f.calls.length,0);
+  await f.enable();
+  const sent=f.calls.find(c=>c.action==='enable');
+  assert.equal(sent.body.baseRevision,0); assert.equal(sent.body.consentVersion,3);
+  assert.equal(f.client.getState().revision,1); assert.equal(f.client.getState().consentVersion,3);
+  assert.equal(f.client.getState().version,2); assert.equal(sent.body.payload.schemaVersion,2);
+});
+test('old Drive UI consent version cannot trigger Notion transport', async () => {
+  const f=fixture(), stale=f.make({uiConsentVersion:2});
+  assert.throws(()=>stale.review(),{code:'UPDATE_REQUIRED'});
+  await assert.rejects(stale.connect(f.approval()),{code:'UPDATE_REQUIRED'});
+  await assert.rejects(stale.enable(f.approval()),{code:'UPDATE_REQUIRED'});
+  await stale.resume(); assert.equal(f.calls.length,0);
+});
+test('UI describes readable Notion snapshots, owner privacy verification, identity-only Google login, and staged completion', () => {
+  const f=uiFixture(), copy=f.overlay.innerHTML;
+  assert.match(copy,/Notion に進捗/); assert.match(copy,/見出しと項目ごとの記録/);
+  assert.match(copy,/Notion API だけでは非公開を確認できません/);
+  assert.match(copy,/所有者自身が Notion の保存先ページと親ページの共有設定を確認/);
+  assert.match(copy,/Google ログインは所有者の本人確認だけ/);
+  assert.match(copy,/直近 30 日分の日付別の記録/); assert.match(copy,/それ以前の履歴も含む集計・件数/);
+  assert.match(copy,/Notion の表示内容そのものではなく/);
+  assert.match(copy,/STAGING（未完了）/); assert.match(copy,/COMPLETE（完了）/);
+  assert.match(copy,/ページ全体を一度に置き換える方式ではありません/);
+  assert.match(f.nodes.get('ps-consent-label').textContent,/Notion の保存先と親ページが非公開/);
+  assert.match(fs.readFileSync(new URL('../tracker.html',import.meta.url),'utf8'),/☁ Notion に進捗を同期/);
+});
+
+test('Notion snapshot limit blocks auto replay while rate limiting remains transient', async () => {
+  for(const [code,expected,blocking] of [['snapshot_limit','SNAPSHOT_LIMIT',true],['provider_rate_limited','RATE_LIMITED',false]]) {
+    const f=fixture(); await f.enable(); f.hook=async c=>c.action==='upload'?f.respond({error:code},429):undefined;
+    f.source.value=2; await f.client.localSaved('wt_records');
+    const state=f.client.getState(), pending=state.queue, count=f.calls.length;
+    assert.equal(state.error,expected); assert.equal(state.blocked,blocking?expected:null);
+    await f.client.resume(); assert.equal(f.calls.length===count,blocking);
+    assert.deepEqual(f.client.getState().queue,pending);
+    f.hook=null;
+    if(blocking) await f.client.retryPending({...f.client.pendingReview(),confirmed:true}); else await f.client.resume();
+    assert.equal(f.client.getState().queue,null);
+  }
+});
+test('UI coalesces rapid saved events and cross-tab changes into one foreground send', () => {
+  const f=uiFixture(), emit=key=>f.listeners.get('weekly:local-saved')({detail:{key}});
+  emit('wt_habits_v1'); emit('wt_records');
+  f.listeners.get('storage')({key:'wt_habits_v1'});
+  assert.equal(f.timers.size,1); assert.deepEqual(f.savedKeys,[]);
+  f.flush(); assert.deepEqual(f.savedKeys,['wt_habits_v1']);
+  emit('unrelated'); assert.equal(f.timers.size,0);
+});
+test('UI cancels debounce on hide/pagehide and refreshes persisted sources on next resume', () => {
+  for(const hide of ['hidden','pagehide']) {
+    const f=uiFixture(); f.listeners.get('weekly:local-saved')({detail:{key:'wt_records'}});
+    if(hide==='hidden'){f.document.hidden=true;f.listeners.get('document:visibilitychange')();}
+    else f.listeners.get('pagehide')();
+    assert.equal(f.timers.size,0); f.flush(); assert.deepEqual(f.savedKeys,[]);
+    const resumes=f.resumes();
+    f.document.hidden=false;
+    if(hide==='hidden') f.listeners.get('document:visibilitychange')(); else f.listeners.get('pageshow')();
+    assert.equal(f.resumes(),resumes+1);
+  }
+});
+test('UI suppresses hidden-save timers and cancels a pending debounce before online resume', () => {
+  const f=uiFixture(); f.document.hidden=true;
+  f.listeners.get('weekly:local-saved')({detail:{key:'wt_records'}}); assert.equal(f.timers.size,0);
+  f.document.hidden=false;f.listeners.get('weekly:local-saved')({detail:{key:'wt_records'}});
+  const count=f.resumes(); f.listeners.get('online')();
+  assert.equal(f.timers.size,0);assert.equal(f.resumes(),count+1);
+});
+
+test('same-day wallclock advances do not produce duplicate snapshots', async () => {
+  const f=fixture(); await f.enable(); const count=f.calls.length;
+  f.now='2026-10-18T19:59:59Z'; await f.client.resume(); await f.client.localSaved('wt_records');
+  assert.equal(f.calls.length,count); assert.equal(f.client.getState().queue,null);
 });

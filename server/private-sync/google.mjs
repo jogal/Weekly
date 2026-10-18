@@ -1,13 +1,7 @@
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import { SyncError, equals } from './security.mjs';
-import { MAX_PAYLOAD_BYTES } from '../../js/private-sync-protocol.mjs';
 
-export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
-const FIELDS = 'id,etag,mimeType,labels/trashed,shared,ownedByMe,driveId,appDataContents,md5Checksum';
-const API = 'https://www.googleapis.com/drive/v2/files';
-const UPLOAD = 'https://www.googleapis.com/upload/drive/v2/files';
-const MAX_MEDIA_BYTES = MAX_PAYLOAD_BYTES + 4 * 1024;
 
 async function readJSON(res, max = 65536) {
   if (Number(res.headers.get('content-length')) > max) throw new SyncError('provider_unavailable', 503);
@@ -20,15 +14,6 @@ async function readJSON(res, max = 65536) {
   try { return JSON.parse(Buffer.concat(chunks).toString('utf8')); }
   catch { throw new SyncError('provider_unavailable', 503); }
 }
-function privateMetadata(data, fileId) {
-  if (data.id !== fileId || data.mimeType !== 'application/json' || data.shared !== false ||
-      data.ownedByMe !== true || data.labels?.trashed !== false || data.driveId || data.appDataContents === true ||
-      typeof data.etag !== 'string' || !/^"[^\r\n"]{1,300}"$/.test(data.etag)) {
-    throw new SyncError('external_change', 409);
-  }
-  return data;
-}
-
 export function createGoogle(config, fetcher = globalThis.fetch, now = Date.now) {
   async function request(url, options = {}) {
     try {
@@ -81,81 +66,24 @@ export function createGoogle(config, fetcher = globalThis.fetch, now = Date.now)
       throw new SyncError('owner_forbidden', 403);
     }
   }
-  async function metadata(accessToken, fileId) {
-    const res = await request(`${API}/${encodeURIComponent(fileId)}?fields=${encodeURIComponent(FIELDS)}`, {
-      headers: { Authorization: `Bearer ${accessToken}` } });
-    if (res.status === 404) return null;
-    if (res.status === 401) throw new SyncError('auth_required', 401);
-    if (!res.ok) throw new SyncError('provider_unavailable', 503);
-    return privateMetadata(await readJSON(res), fileId);
-  }
   return {
     authorizationURL(state, challenge, nonce) {
       const query = new URLSearchParams({ client_id: config.clientId, redirect_uri: config.callback,
-        response_type: 'code', scope: `openid email ${DRIVE_SCOPE}`, access_type: 'offline',
-        prompt: 'consent select_account', include_granted_scopes: 'false', state,
+        response_type: 'code', scope: 'openid email', access_type: 'online',
+        prompt: 'select_account', include_granted_scopes: 'false', state,
         code_challenge: challenge, code_challenge_method: 'S256', nonce });
       return `https://accounts.google.com/o/oauth2/v2/auth?${query}`;
     },
     async exchange(code, verifier, nonce) {
       const result = await tokenRequest({ grant_type: 'authorization_code', redirect_uri: config.callback, code, code_verifier: verifier });
       const scopes = new Set(String(result.scope || '').split(' '));
-      const allowed = new Set([DRIVE_SCOPE, 'openid', 'email', 'https://www.googleapis.com/auth/userinfo.email']);
-      if (!scopes.has(DRIVE_SCOPE) || !scopes.has('openid') ||
+      const allowed = new Set(['openid', 'email', 'https://www.googleapis.com/auth/userinfo.email']);
+      if (!scopes.has('openid') ||
           !(scopes.has('email') || scopes.has('https://www.googleapis.com/auth/userinfo.email')) ||
-          [...scopes].some(scope => !allowed.has(scope)) || typeof result.refresh_token !== 'string' ||
-          result.refresh_token.length < 1 || result.refresh_token.length > 8192) throw new SyncError('auth_required', 401);
+          [...scopes].some(scope => !allowed.has(scope))) throw new SyncError('auth_required', 401);
       await verifyIdentity(result.id_token, result.access_token, nonce);
-      return { accessToken: result.access_token, refreshToken: result.refresh_token, expiresAt: now() + result.expires_in * 1000 };
-    },
-    async refresh(credentials) {
-      const result = await tokenRequest({ grant_type: 'refresh_token', refresh_token: credentials.refreshToken });
-      return { accessToken: result.access_token, refreshToken: result.refresh_token || credentials.refreshToken,
-        expiresAt: now() + result.expires_in * 1000 };
-    },
-    async reserveId(accessToken) {
-      const res = await request(`${API}/generateIds?maxResults=1&space=drive`, { headers: { Authorization: `Bearer ${accessToken}` } });
-      if (res.status === 401) throw new SyncError('auth_required', 401);
-      if (!res.ok) throw new SyncError('provider_unavailable', 503);
-      const value = await readJSON(res);
-      if (!Array.isArray(value.ids) || !/^[A-Za-z0-9_-]{1,200}$/.test(value.ids[0] || '')) throw new SyncError('provider_unavailable', 503);
-      return value.ids[0];
-    },
-    async inspect(accessToken, fileId) {
-      const before = await metadata(accessToken, fileId);
-      if (!before) return null;
-      // v3 media retrieval is used with the stable v2 File resource ETag for writes.
-      const res = await request(`https://www.googleapis.com/drive/v3/files/${encodeURIComponent(fileId)}?alt=media`, {
-        headers: { Authorization: `Bearer ${accessToken}` } });
-      if (res.status === 401) throw new SyncError('auth_required', 401);
-      if (!res.ok) throw new SyncError('provider_unavailable', 503);
-      const content = await readJSON(res, MAX_MEDIA_BYTES);
-      const after = await metadata(accessToken, fileId);
-      if (!after || before.etag !== after.etag) throw new SyncError('external_change', 409);
-      return { etag: after.etag, content };
-    },
-    async write(accessToken, fileId, envelope, etag) {
-      const media = JSON.stringify(envelope);
-      let url; let body; let contentType; let method;
-      if (etag) {
-        url = `${UPLOAD}/${encodeURIComponent(fileId)}?uploadType=media&fields=${encodeURIComponent(FIELDS)}`;
-        method = 'PUT'; body = media; contentType = 'application/json; charset=UTF-8';
-      } else {
-        // A generated ID makes even a timed-out insert safe to retry: Drive rejects
-        // the second insert with 409 instead of creating a duplicate.
-        url = `${UPLOAD}?uploadType=multipart&visibility=PRIVATE&convert=false&fields=${encodeURIComponent(FIELDS)}`;
-        const boundary = `weekly_${createHash('sha256').update(media).digest('hex')}`;
-        const meta = JSON.stringify({ id: fileId, title: 'Weekly private progress.json', mimeType: 'application/json', parents: [{ id: 'root' }] });
-        body = `--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${meta}\r\n--${boundary}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${media}\r\n--${boundary}--\r\n`;
-        method = 'POST'; contentType = `multipart/related; boundary=${boundary}`;
-      }
-      const res = await request(url, { method, headers: { Authorization: `Bearer ${accessToken}`, 'Content-Type': contentType,
-        ...(etag ? { 'If-Match': etag } : {}) }, body });
-      if ([409, 412].includes(res.status)) return false; // caller reconciles this exact pending operation
-      if (res.status === 401) throw new SyncError('auth_required', 401);
-      if (!res.ok) throw new SyncError('provider_unavailable', 503);
-      privateMetadata(await readJSON(res), fileId);
-      return true;
+      // Identity-only sign-in: never persist Google access or refresh tokens.
+      return { identityVerified: true };
     },
   };
 }

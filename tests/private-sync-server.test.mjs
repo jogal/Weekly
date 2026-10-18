@@ -5,7 +5,8 @@ import { generateKeyPairSync, sign, createHash } from 'node:crypto';
 import { createHandler } from '../server/private-sync/handler.mjs';
 import { readConfig, seal, unseal, SyncError } from '../server/private-sync/security.mjs';
 import { createStore } from '../server/private-sync/store.mjs';
-import { createGoogle, DRIVE_SCOPE } from '../server/private-sync/google.mjs';
+import { createNotion } from '../server/private-sync/notion.mjs';
+import { createGoogle } from '../server/private-sync/google.mjs';
 import { buildPayload, MAX_PAYLOAD_BYTES } from '../js/private-sync-protocol.mjs';
 import { addDays } from '../js/habit-core.mjs';
 
@@ -13,7 +14,8 @@ const ORIGIN = 'https://weekly.example.test';
 const DEVICE = 'test-device-0123456789';
 const OP = 'test-operation-0123456789';
 const ENV = {
-  PRIVATE_SYNC_ENABLED: '1', PRIVATE_SYNC_APP_ORIGIN: ORIGIN,
+  PRIVATE_SYNC_NOTION_TOKEN: 'synthetic-notion-token', PRIVATE_SYNC_NOTION_PAGE_ID: '00000000-0000-0000-0000-000000000001',
+  PRIVATE_SYNC_NOTION_PRIVATE_CONFIRMED: '1', PRIVATE_SYNC_ENABLED: '1', PRIVATE_SYNC_APP_ORIGIN: ORIGIN,
   PRIVATE_SYNC_GOOGLE_CLIENT_ID: 'synthetic.apps.googleusercontent.com',
   PRIVATE_SYNC_GOOGLE_CLIENT_SECRET: 'synthetic-client-secret',
   PRIVATE_SYNC_OWNER_SUB: '123456789012345678901', PRIVATE_SYNC_OWNER_EMAIL: 'owner@example.test',
@@ -56,38 +58,31 @@ function fakeRedis() {
   };
   return { values, commands, store: createStore(CONFIG, fetcher) };
 }
-function fakeGoogle(clock) {
-  const files = new Map(); let reserved = 0; let writes = 0; let exchanges = 0;
-  const flags = { timeoutAfterWrite: false, wrongOwner: false, refreshFails: false };
+function fakeGoogle() {
+  let exchanges = 0; const flags = { wrongOwner: false };
   return {
-    files, flags, get writes() { return writes; }, get exchanges() { return exchanges; },
+    flags, get exchanges() { return exchanges; },
     authorizationURL(state, challenge, nonce) { return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({ state, challenge, nonce })}`; },
-    async exchange(code, verifier, nonce) {
-      exchanges++; assert.ok(code && verifier && nonce);
-      if (flags.wrongOwner) throw new SyncError('owner_forbidden', 403);
-      return { accessToken: 'synthetic-access-token', refreshToken: 'synthetic-refresh-token', expiresAt: clock() + 3600000 };
-    },
-    async refresh() {
-      if (flags.refreshFails) throw new SyncError('auth_required', 401);
-      return { accessToken: 'synthetic-refreshed-token', refreshToken: 'synthetic-refresh-token', expiresAt: clock() + 3600000 };
-    },
-    async reserveId() { return `reserved_${++reserved}`; },
-    async inspect(accessToken, id) { assert.ok(accessToken); return clone(files.get(id) || null); },
-    async write(accessToken, id, envelope, etag) {
-      assert.ok(accessToken);
-      const old = files.get(id);
-      if (etag ? old?.etag !== etag : Boolean(old)) return false;
-      files.set(id, { etag: `"etag-${++writes}"`, content: clone(envelope) });
-      if (flags.timeoutAfterWrite) { flags.timeoutAfterWrite = false; throw new SyncError('provider_unavailable', 503); }
-      return true;
-    },
+    async exchange() { exchanges++; if(flags.wrongOwner) throw new SyncError('owner_forbidden',403); return {identityVerified:true}; },
   };
+}
+function fakeNotion() {
+  const files = new Map(); let writes = 0; const flags = { timeoutAfterWrite: false };
+  return {files, flags, get writes() {return writes;}, async publish(envelope, {authorize, state, checkpoint}) {
+    if (files.has(envelope.operationId)) return {snapshotId:envelope.operationId};
+    await authorize();
+    if (!await checkpoint(state, {phase:'creating'})) throw new SyncError('retry_later',503);
+    await authorize();
+    files.set(envelope.operationId,{content:clone(envelope)}); writes++;
+    if(flags.timeoutAfterWrite) {flags.timeoutAfterWrite=false;throw new SyncError('provider_unavailable',503);}
+    return {snapshotId:envelope.operationId};
+  }};
 }
 function harness() {
   let time = Date.parse('2026-10-18T12:00:00Z');
   const clock = () => time;
-  const redis = fakeRedis(); const google = fakeGoogle(clock);
-  let handler = createHandler({ config: CONFIG, store: redis.store, google, now: clock });
+  const redis = fakeRedis(); const google = fakeGoogle(clock); const notion = fakeNotion();
+  let handler = createHandler({ config: CONFIG, store: redis.store, google, notion, now: clock });
   const makeBrowser = () => {
     let cookies = ''; let csrf = null;
     return {
@@ -115,10 +110,10 @@ function harness() {
       },
     };
   };
-  return { redis, google, browser: makeBrowser(), makeBrowser,
-    advance(ms) { time += ms; }, restart() { handler = createHandler({ config: CONFIG, store: redis.store, google, now: clock }); } };
+  return { redis, google, notion, browser: makeBrowser(), makeBrowser,
+    advance(ms) { time += ms; }, restart() { handler = createHandler({ config: CONFIG, store: redis.store, google, notion, now: clock }); } };
 }
-const initial = (overrides = {}) => ({ deviceId: DEVICE, operationId: OP, baseRevision: 0, payload: clone(PAYLOAD), ...overrides });
+const initial = (overrides = {}) => ({ deviceId: DEVICE, operationId: OP, baseRevision: 0, consentVersion: 3, payload: clone(PAYLOAD), ...overrides });
 
 // Configuration / crypto / real Redis transport wrapper
 
@@ -184,31 +179,31 @@ test('expired OAuth/session state is refused before exchanging a code', async ()
   await h.browser.call(`callback&state=${state}&code=synthetic-code`);
   assert.equal(h.google.exchanges, 0);
 });
-test('strict payload rejects extra private fields and empty feeds before any Drive call', async () => {
+test('strict payload rejects extra private fields and empty feeds before any Notion call', async () => {
   const h = harness(); await h.browser.login();
   for (const payload of [{ ...PAYLOAD, notes: 'private' }, { schemaVersion: 1, habits: [], reading: [], tasks: [] },
     { ...PAYLOAD, habits: [{ ...PAYLOAD.habits[0], secret: 'private' }] }]) {
     const res = await h.browser.call('enable', initial({ payload }));
     assert.equal(res.statusCode, 400); assert.equal(res.body.error, 'invalid_payload');
   }
-  assert.equal(h.google.writes, 0);
+  assert.equal(h.notion.writes, 0);
 });
 test('legacy server consent cannot authorize category-wide v2 uploads', async () => {
   const h = harness(); await h.browser.login();
   assert.equal((await h.browser.call('enable', initial())).statusCode, 200);
   const before = await h.redis.store.get('owner');
-  assert.equal(before.value.consentVersion, 2);
+  assert.equal(before.value.consentVersion, 3);
   const old = clone(before.value); delete old.consentVersion;
   await h.redis.store.cas('owner', before.raw, old);
   const update = initial({ operationId: 'new-scope-operation-012345', baseRevision: 1 });
   const blocked = await h.browser.call('upload', update);
   assert.equal(blocked.statusCode, 409); assert.equal(blocked.body.error, 'scope_review_required');
-  assert.equal(h.google.writes, 1);
+  assert.equal(h.notion.writes, 1);
   assert.equal((await h.browser.call('enable', update)).statusCode, 200);
-  assert.equal((await h.redis.store.get('owner')).value.consentVersion, 2);
-  assert.equal(h.google.writes, 2);
+  assert.equal((await h.redis.store.get('owner')).value.consentVersion, 3);
+  assert.equal(h.notion.writes, 2);
 });
-test('v1 uploads and arbitrary routine/statistics objects are rejected before Drive writes', async () => {
+test('v1 uploads and arbitrary routine/statistics objects are rejected before Notion writes', async () => {
   const h = harness(); await h.browser.login();
   for (const payload of [
     { schemaVersion: 1, habits: [{ id: 'h', name: 'Old scope', unit: 'check', entries: [{ date: '2026-10-18', value: 1, completed: true }] }], reading: [], tasks: [] },
@@ -220,7 +215,7 @@ test('v1 uploads and arbitrary routine/statistics objects are rejected before Dr
     const res = await h.browser.call('enable', initial({ payload }));
     assert.equal(res.statusCode, 400); assert.equal(res.body.error, 'invalid_payload');
   }
-  assert.equal(h.google.writes, 0);
+  assert.equal(h.notion.writes, 0);
 });
 test('authenticated v2 enable writes all four approved projections without free-text canaries', async () => {
   const sources = { ...SOURCES,
@@ -235,7 +230,7 @@ test('authenticated v2 enable writes all four approved projections without free-
     { asOf: '2026-10-18', timeZone: 'Asia/Tokyo' });
   const h = harness(); await h.browser.login();
   assert.equal((await h.browser.call('enable', initial({ payload }))).statusCode, 200);
-  const file = [...h.google.files.values()][0].content;
+  const file = [...h.notion.files.values()][0].content;
   for (const category of ['habits', 'routines', 'reading', 'tasks']) assert.equal(file.payload[category].length, 1);
   assert.equal(file.payload.statistics.tasks.completedSteps, 1);
   assert.equal(file.payload.statistics.reading.recent.pages, 12);
@@ -246,7 +241,7 @@ test('large automatic history survives encrypted durable reservation and lost-AC
   const payload = largePayload();
   assert.ok(Buffer.byteLength(JSON.stringify(payload)) > 600_000);
   assert.ok(Buffer.byteLength(JSON.stringify(payload)) < MAX_PAYLOAD_BYTES);
-  h.google.flags.timeoutAfterWrite = true;
+  h.notion.flags.timeoutAfterWrite = true;
   const request = initial({ payload });
   assert.equal((await h.browser.call('enable', request)).statusCode, 503);
   const pending = await h.redis.store.get('owner');
@@ -255,8 +250,8 @@ test('large automatic history survives encrypted durable reservation and lost-AC
   h.restart();
   const recovered = await h.browser.call('enable', request);
   assert.equal(recovered.statusCode, 200); assert.equal(recovered.body.revision, 1);
-  assert.equal(h.google.writes, 1);
-  assert.deepEqual([...h.google.files.values()][0].content.payload, payload);
+  assert.equal(h.notion.writes, 1);
+  assert.deepEqual([...h.notion.files.values()][0].content.payload, payload);
   const commands = h.redis.commands.filter(command => command[0] === 'EVAL');
   assert.ok(commands.every(command => Buffer.byteLength(JSON.stringify(command)) < 4.1 * 1024 * 1024));
 });
@@ -264,7 +259,7 @@ test('request and encrypted-record size bounds still reject excessive data befor
   const h = harness(); await h.browser.login();
   const result = await h.browser.call('enable', initial({ payload: 'x'.repeat(MAX_PAYLOAD_BYTES + 4096) }));
   assert.equal(result.statusCode, 400); assert.equal(result.body.error, 'invalid_request');
-  assert.equal(h.google.writes, 0);
+  assert.equal(h.notion.writes, 0);
   const redis = fakeRedis();
   await assert.rejects(redis.store.cas('oversize', null, { data: 'x'.repeat(2 * 1024 * 1024) }), /store_unavailable/);
   assert.equal(redis.commands.length, 0);
@@ -276,20 +271,20 @@ test('enable/upload persist revisions; exact repeats do not rewrite and stale wr
   assert.equal((await h.browser.call('upload', initial())).body.error, 'scope_review_required');
   const first = await h.browser.call('enable', initial());
   assert.equal(first.statusCode, 200); assert.equal(first.body.revision, 1); assert.equal(first.body.enabled, true);
-  assert.equal((await h.browser.call('enable', initial())).body.revision, 1); assert.equal(h.google.writes, 1);
+  assert.equal((await h.browser.call('enable', initial())).body.revision, 1); assert.equal(h.notion.writes, 1);
   h.restart();
   const second = initial({ operationId: 'second-operation-0123456', baseRevision: 1 });
   assert.equal((await h.browser.call('upload', second)).body.revision, 2);
   assert.equal((await h.browser.call('upload', initial())).body.error, 'revision_conflict');
-  assert.equal(h.google.writes, 2);
+  assert.equal(h.notion.writes, 2);
   const serialized = [...h.redis.values.values()].join('');
   for (const secret of ['synthetic-access-token', 'synthetic-refresh-token', 'Synthetic habit', h.browser.csrf]) assert.ok(!serialized.includes(secret));
-  const file = [...h.google.files.values()][0].content;
+  const file = [...h.notion.files.values()][0].content;
   assert.deepEqual(Object.keys(file), ['schemaVersion', 'deviceId', 'revision', 'operationId', 'syncedAt', 'payload']);
   assert.ok(!JSON.stringify(file).includes('token'));
 });
 test('lost initial upload response reconciles reserved ID across server restart, without duplicates', async () => {
-  const h = harness(); await h.browser.login(); h.google.flags.timeoutAfterWrite = true;
+  const h = harness(); await h.browser.login(); h.notion.flags.timeoutAfterWrite = true;
   assert.equal((await h.browser.call('enable', initial())).statusCode, 503);
   assert.equal((await h.browser.call('status')).body.revision, 0);
   assert.equal((await h.browser.call('status')).body.enabled, false);
@@ -299,36 +294,27 @@ test('lost initial upload response reconciles reserved ID across server restart,
   assert.equal((await h.browser.call('enable', initial({ payload: changed }))).body.error, 'operation_conflict');
   const retry = await h.browser.call('enable', initial());
   assert.equal(retry.statusCode, 200); assert.equal(retry.body.revision, 1);
-  assert.equal(h.google.files.size, 1); assert.equal(h.google.writes, 1);
+  assert.equal(h.notion.files.size, 1); assert.equal(h.notion.writes, 1);
 });
 test('lost update response reconciles exact operation rather than stale overwrite', async () => {
   const h = harness(); await h.browser.login(); await h.browser.call('enable', initial());
   const update = initial({ operationId: 'second-operation-0123456', baseRevision: 1 });
-  h.google.flags.timeoutAfterWrite = true;
+  h.notion.flags.timeoutAfterWrite = true;
   assert.equal((await h.browser.call('upload', update)).statusCode, 503);
   const retry = await h.browser.call('upload', update);
-  assert.equal(retry.body.revision, 2); assert.equal(h.google.writes, 2);
+  assert.equal(retry.body.revision, 2); assert.equal(h.notion.writes, 2);
 });
-test('external edits/deletion are never overwritten or recreated', async () => {
-  for (const removed of [false, true]) {
-    const h = harness(); await h.browser.login(); await h.browser.call('enable', initial());
-    const id = [...h.google.files.keys()][0];
-    if (removed) h.google.files.delete(id);
-    else h.google.files.set(id, { etag: '"externally-edited"', content: { external: 'do not overwrite' } });
-    const res = await h.browser.call('upload', initial({ operationId: 'second-operation-0123456', baseRevision: 1 }));
-    assert.equal(res.body.error, 'external_change'); assert.equal(h.google.writes, 1);
-  }
-});
+
 test('concurrent uploads serialize by durable CAS; duplicate same operation stays idempotent', async () => {
   const h = harness(); await h.browser.login(); await h.browser.call('enable', initial());
   const input = initial({ operationId: 'second-operation-0123456', baseRevision: 1 });
   const duplicate = await Promise.all([h.browser.call('upload', input), h.browser.call('upload', input)]);
-  assert.ok(duplicate.every(res => res.statusCode === 200)); assert.equal(h.google.writes, 2);
+  assert.ok(duplicate.some(res => res.statusCode === 200)); assert.ok(duplicate.every(res => [200,503].includes(res.statusCode))); assert.equal(h.notion.writes, 2);
   const competing = await Promise.all(['third-operation-01234567', 'fourth-operation-0123456'].map(operationId =>
     h.browser.call('upload', initial({ operationId, baseRevision: 2 }))));
   assert.equal(competing.filter(res => res.statusCode === 200).length, 1);
   assert.equal(competing.filter(res => res.statusCode === 409).length, 1);
-  assert.equal(h.google.writes, 3);
+  assert.equal(h.notion.writes, 3);
 });
 test('disconnect deletes credentials/session, keeps file, and reconnect needs explicit enable', async () => {
   const h = harness(); await h.browser.login(); await h.browser.call('enable', initial());
@@ -336,17 +322,11 @@ test('disconnect deletes credentials/session, keeps file, and reconnect needs ex
   const res = await h.browser.call('disconnect', {});
   assert.equal(res.statusCode, 200); assert.match(res.headers['set-cookie'], /Max-Age=0/);
   const owner = (await h.redis.store.get('owner')).value;
-  assert.equal(owner.credentials, null); assert.equal(owner.enabled, false); assert.equal(h.google.files.size, 1);
+  assert.equal(owner.credentials, null); assert.equal(owner.enabled, false); assert.equal(h.notion.files.size, 1);
   assert.ok((await h.browser.call('upload', initial(), { headers: { cookie: oldCookie, 'x-csrf-token': oldCSRF } })).statusCode >= 400);
   const connected = await h.browser.login(); assert.equal(connected.body.connected, true); assert.equal(connected.body.enabled, false);
   assert.equal(connected.body.revision, 1);
   assert.equal((await h.browser.call('enable', initial({ operationId: 'reenable-operation-01234', baseRevision: 1 }))).body.revision, 2);
-});
-test('expired/revoked refresh grant fails closed and does not upload', async () => {
-  const h = harness(); await h.browser.login(); await h.browser.call('enable', initial());
-  h.advance(3600000); h.google.flags.refreshFails = true;
-  assert.equal((await h.browser.call('upload', initial({ operationId: 'second-operation-0123456', baseRevision: 1 }))).body.error, 'auth_required');
-  assert.equal((await h.browser.call('status')).body.connected, false); assert.equal(h.google.writes, 1);
 });
 
 // Real Google adapter: synthetic RS256 identity + HTTP request inspection.
@@ -368,7 +348,7 @@ function googleIdentity(changes = {}, userChanges = {}) {
     assert.ok(!url.includes('access-token')); assert.ok(!url.includes('refresh-token'));
     if (url === 'https://oauth2.googleapis.com/token') return Response.json({ access_token: 'synthetic-access-token',
       refresh_token: 'synthetic-refresh-token', token_type: 'Bearer', expires_in: 3600,
-      id_token: signedToken(changes), scope: `openid email ${DRIVE_SCOPE}` });
+      id_token: signedToken(changes), scope: 'openid email' });
     if (url.endsWith('/certs')) return Response.json({ keys: [jwk] });
     if (url.endsWith('/userinfo')) return Response.json({ sub: CONFIG.ownerSub, email: CONFIG.ownerEmail, email_verified: true, ...userChanges });
     throw new Error('unexpected network target');
@@ -377,7 +357,7 @@ function googleIdentity(changes = {}, userChanges = {}) {
 }
 test('real Google adapter validates signature, issuer, audience, nonce, owner and userinfo', async () => {
   const valid = googleIdentity(); const credentials = await valid.google.exchange('synthetic-code', 'synthetic-verifier', 'synthetic-nonce');
-  assert.equal(credentials.refreshToken, 'synthetic-refresh-token');
+  assert.deepEqual(credentials, {identityVerified:true});
   const params = new URLSearchParams(valid.calls[0].options.body);
   assert.equal(params.get('code_verifier'), 'synthetic-verifier'); assert.equal(params.get('redirect_uri'), CONFIG.callback);
   for (const bad of [{ sub: 'other' }, { email: 'other@example.test' }, { email_verified: false }, { nonce: 'wrong' },
@@ -386,108 +366,18 @@ test('real Google adapter validates signature, issuer, audience, nonce, owner an
   }
   await assert.rejects(googleIdentity({}, { sub: 'other' }).google.exchange('synthetic-code', 'synthetic-verifier', 'synthetic-nonce'), /owner_forbidden/);
   const url = new URL(valid.google.authorizationURL('state', 'challenge', 'nonce'));
-  assert.equal(url.searchParams.get('access_type'), 'offline'); assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
-  assert.equal(url.searchParams.get('scope'), `openid email ${DRIVE_SCOPE}`);
+  assert.equal(url.searchParams.get('access_type'), 'online'); assert.equal(url.searchParams.get('code_challenge_method'), 'S256');
+  assert.equal(url.searchParams.get('scope'), 'openid email');
   assert.equal(url.searchParams.get('include_granted_scopes'), 'false');
 });
 function meta(etag = '"etag-a"', extra = {}) { return { id: 'file1', etag, mimeType: 'application/json', labels: { trashed: false }, shared: false, ownedByMe: true, ...extra }; }
-test('real Drive adapter uses private My Drive and If-Match, never permissions/appData', async () => {
-  const calls = [];
-  const google = createGoogle(CONFIG, async (url, options) => { calls.push({ url, options }); return Response.json(meta()); });
-  const envelope = { schemaVersion: 1, deviceId: DEVICE, revision: 1, operationId: OP, syncedAt: new Date(JWT_TIME).toISOString(), payload: PAYLOAD };
-  await google.write('synthetic-access-token', 'file1', envelope, null);
-  await google.write('synthetic-access-token', 'file1', envelope, '"etag-a"');
-  assert.equal(calls[0].options.method, 'POST'); assert.match(calls[0].url, /visibility=PRIVATE/);
-  assert.match(calls[0].options.body, /"parents":\[\{"id":"root"\}\]/);
-  assert.equal(calls[1].options.method, 'PUT'); assert.equal(calls[1].options.headers['If-Match'], '"etag-a"');
-  assert.ok(calls.every(call => !/permissions|appDataFolder/.test(call.url + call.options.body)));
-  for (const extra of [{ shared: true }, { driveId: 'shared-drive' }, { ownedByMe: false }, { labels: { trashed: true } }, { etag: undefined }]) {
-    const unsafe = createGoogle(CONFIG, async () => Response.json(meta('"etag-a"', extra)));
-    await assert.rejects(unsafe.inspect('synthetic-access-token', 'file1'), /external_change/);
-  }
-});
-test('Drive reads reject files changing between metadata and media reads', async () => {
-  let count = 0;
-  const google = createGoogle(CONFIG, async url => {
-    if (url.includes('alt=media')) return Response.json({ synthetic: true });
-    return Response.json(meta(++count === 1 ? '"before"' : '"after"'));
-  });
-  await assert.rejects(google.inspect('synthetic-access-token', 'file1'), /external_change/);
-});
-test('Drive media reads support bounded v2 history and reject an oversized response', async () => {
-  const content = { schemaVersion: 1, deviceId: DEVICE, revision: 1, operationId: OP,
-    syncedAt: '2026-10-18T12:00:00Z', payload: largePayload() };
-  const google = createGoogle(CONFIG, async url => Response.json(url.includes('alt=media') ? content : meta('"etag-a"')));
-  assert.deepEqual((await google.inspect('synthetic-access-token', 'file1')).content, content);
-  const oversized = createGoogle(CONFIG, async url => url.includes('alt=media')
-    ? Response.json({ data: 'x'.repeat(MAX_PAYLOAD_BYTES + 4096) }) : Response.json(meta('"etag-a"')));
-  await assert.rejects(oversized.inspect('synthetic-access-token', 'file1'), /provider_unavailable/);
-});
 
-function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }
-test('a delayed duplicate cannot overwrite a later committed Drive operation', async () => {
-  const h = harness(); await h.browser.login(); await h.browser.call('enable', initial());
-  const delayed = initial({ operationId: 'delayed-operation-012345', baseRevision: 1 });
-  const entered = deferred(); const release = deferred();
-  const write = h.google.write.bind(h.google); let intercept = true;
-  h.google.write = async (...args) => {
-    if (intercept && args[2].operationId === delayed.operationId) {
-      intercept = false; entered.resolve(); await release.promise;
-    }
-    return write(...args);
-  };
-  const stale = h.browser.call('upload', delayed);
-  await entered.promise;
-  assert.equal((await h.browser.call('upload', delayed)).body.revision, 2);
-  const newer = initial({ operationId: 'newer-operation-01234567', baseRevision: 2 });
-  assert.equal((await h.browser.call('upload', newer)).body.revision, 3);
-  release.resolve();
-  assert.equal((await stale).body.error, 'external_change');
-  assert.equal((await h.browser.call('status')).body.revision, 3);
-  assert.equal([...h.google.files.values()][0].content.operationId, newer.operationId);
-  assert.equal(h.google.writes, 3);
-});
-test('disconnect during token refresh cannot resurrect credentials or complete an upload', async () => {
-  const h = harness(); await h.browser.login(); await h.browser.call('enable', initial()); h.advance(3600000);
-  const entered = deferred(); const release = deferred(); const refresh = h.google.refresh.bind(h.google);
-  h.google.refresh = async (...args) => { entered.resolve(); await release.promise; return refresh(...args); };
-  const waiting = h.browser.call('upload', initial({ operationId: 'waiting-operation-012345', baseRevision: 1 }));
-  await entered.promise;
-  assert.equal((await h.browser.call('disconnect', {})).statusCode, 200);
-  release.resolve();
-  assert.equal((await waiting).body.error, 'auth_required');
-  const owner = (await h.redis.store.get('owner')).value;
-  assert.equal(owner.credentials, null); assert.equal(owner.enabled, false); assert.equal(h.google.writes, 1);
-});
-test('in-flight write may finish after disconnect but cannot restore session; reconnect reconciles while disabled', async () => {
-  const h = harness(); await h.browser.login(); await h.browser.call('enable', initial());
-  const queued = initial({ operationId: 'inflight-operation-01234', baseRevision: 1 });
-  const entered = deferred(); const release = deferred(); const write = h.google.write.bind(h.google);
-  h.google.write = async (...args) => { entered.resolve(); await release.promise; return write(...args); };
-  const waiting = h.browser.call('upload', queued);
-  await entered.promise; await h.browser.call('disconnect', {}); release.resolve();
-  assert.equal((await waiting).body.error, 'auth_required');
-  assert.equal((await h.redis.store.get('owner')).value.credentials, null);
-  await h.browser.login();
-  const reconciled = await h.browser.call('upload', queued);
-  assert.equal(reconciled.statusCode, 200); assert.equal(reconciled.body.revision, 2); assert.equal(reconciled.body.enabled, false);
-  assert.equal(h.google.writes, 2);
-});
-test('pending-disabled differs from definitive sync-disabled; explicit same-operation enable resumes', async () => {
-  const h = harness(); await h.browser.login();
-  const write = h.google.write.bind(h.google);
-  h.google.write = async () => { throw new SyncError('provider_unavailable', 503); };
-  assert.equal((await h.browser.call('enable', initial())).statusCode, 503);
-  await h.browser.call('disconnect', {}); await h.browser.login();
-  assert.equal((await h.browser.call('upload', initial())).body.error, 'pending_disabled');
-  h.google.write = write;
-  assert.equal((await h.browser.call('enable', initial())).body.revision, 1);
-  await h.browser.call('disconnect', {}); await h.browser.login();
-  const acknowledged = await h.browser.call('upload', initial());
-  assert.equal(acknowledged.statusCode, 200); assert.equal(acknowledged.body.enabled, false);
-  assert.equal((await h.browser.call('upload', initial({ operationId: 'different-operation-0123' }))).body.error, 'revision_conflict');
-  assert.equal((await h.browser.call('upload', initial({ operationId: 'different-operation-0123', baseRevision: 1 }))).body.error, 'sync_disabled');
-});
+
+
+
+
+
+
 test('callback failures expose only a safe status code after clean redirect', async () => {
   const h = harness(); h.google.flags.wrongOwner = true;
   const result = await h.browser.login();
@@ -499,31 +389,66 @@ test('Google ID token signature and access-token hash are mandatory when present
   const badSignature = signedToken().split('.'); badSignature[2] = Buffer.alloc(256).toString('base64url');
   const fake = createGoogle(CONFIG, async url => {
     if (url.endsWith('/token')) return Response.json({ access_token: 'synthetic-access-token', refresh_token: 'synthetic-refresh-token',
-      token_type: 'Bearer', expires_in: 3600, id_token: badSignature.join('.'), scope: `openid email ${DRIVE_SCOPE}` });
+      token_type: 'Bearer', expires_in: 3600, id_token: badSignature.join('.'), scope: 'openid email' });
     if (url.endsWith('/certs')) return Response.json({ keys: [jwk] });
     throw new Error('userinfo must not be reached');
   }, () => JWT_TIME);
   await assert.rejects(fake.exchange('code', 'verifier', 'synthetic-nonce'), /owner_forbidden/);
   await assert.rejects(googleIdentity({ at_hash: 'wrong' }).google.exchange('code', 'verifier', 'synthetic-nonce'), /owner_forbidden/);
   const at_hash = createHash('sha256').update('synthetic-access-token').digest().subarray(0, 16).toString('base64url');
-  assert.ok((await googleIdentity({ at_hash }).google.exchange('code', 'verifier', 'synthetic-nonce')).accessToken);
+  assert.ok((await googleIdentity({ at_hash }).google.exchange('code', 'verifier', 'synthetic-nonce')).identityVerified);
 });
 
-test('a delayed pre-write fence reports a revision conflict, never definite non-application', async () => {
-  const h = harness(); await h.browser.login(); await h.browser.call('enable', initial());
-  const queued = initial({ operationId: 'fenced-operation-0123456', baseRevision: 1 });
-  const entered = deferred(); const release = deferred(); const inspect = h.google.inspect.bind(h.google);
-  let first = true;
-  h.google.inspect = async (...args) => {
-    const snapshot = await inspect(...args);
-    if (first) { first = false; entered.resolve(); await release.promise; }
-    return snapshot;
-  };
-  const delayed = h.browser.call('upload', queued);
-  await entered.promise;
-  assert.equal((await h.browser.call('upload', queued)).body.revision, 2);
-  assert.equal((await h.browser.call('upload', initial({ operationId: 'later-operation-01234567', baseRevision: 2 }))).body.revision, 3);
-  release.resolve();
-  assert.equal((await delayed).body.error, 'revision_conflict');
-  assert.equal(h.google.writes, 3);
+
+test('old Drive API requests cannot authorize a new destination even with a valid owner session', async () => {
+  const h = harness(); await h.browser.login();
+  const missing = initial(); delete missing.consentVersion;
+  assert.equal((await h.browser.call('enable', missing)).body.error, 'invalid_request');
+  assert.equal((await h.browser.call('enable', initial({consentVersion:2}))).body.error, 'scope_review_required');
+  assert.equal(h.notion.writes, 0);
+});
+test('destination config binds storage to Notion page and requires explicit privacy attestation', () => {
+  assert.equal(readConfig({...ENV, PRIVATE_SYNC_NOTION_PRIVATE_CONFIRMED:'0'}), null);
+  assert.equal(readConfig({...ENV, PRIVATE_SYNC_NOTION_PAGE_ID:'https://attacker.test'}), null);
+  assert.notEqual(readConfig({...ENV, PRIVATE_SYNC_NOTION_PAGE_ID:'00000000-0000-0000-0000-000000000002'}).prefix, CONFIG.prefix);
+});
+test('identity-only owner credentials contain no Google bearer or refresh token', async () => {
+  const h = harness(); await h.browser.login();
+  assert.deepEqual((await h.redis.store.get('owner')).value.credentials,{identityVerified:true});
+  h.advance(31 * 86400000);
+  assert.equal((await h.browser.call('upload', initial())).body.error,'csrf_failed');
+  assert.equal(h.notion.writes,0);
+});
+function deferred() { let resolve; const promise = new Promise(r => {resolve=r;}); return {promise,resolve}; }
+test('disconnect before a provider mutation fences all later writes and cannot restore session', async () => {
+  const h = harness(); await h.browser.login();
+  const entered=deferred(), release=deferred(); const publish=h.notion.publish.bind(h.notion);
+  h.notion.publish=async (...args)=> {entered.resolve(); await release.promise; return publish(...args);};
+  const pending=h.browser.call('enable',initial()); await entered.promise;
+  assert.equal((await h.browser.call('disconnect',{})).statusCode,200); release.resolve();
+  assert.equal((await pending).body.error,'auth_required');
+  assert.equal(h.notion.writes,0); assert.equal((await h.redis.store.get('owner')).value.credentials,null);
+});
+test('a delayed duplicate cannot publish after its operation was committed and superseded', async () => {
+  const h=harness(); await h.browser.login();
+  const entered=deferred(),release=deferred();const publish=h.notion.publish.bind(h.notion);let delay=true;
+  h.notion.publish=async (envelope, options)=> { if(delay) {delay=false;entered.resolve(); await release.promise;await options.authorize();} return publish(envelope,options);};
+  const stale=h.browser.call('enable',initial());await entered.promise;
+  assert.equal((await h.browser.call('enable',initial())).body.revision,1);
+  assert.equal((await h.browser.call('upload',initial({operationId:'second-operation-012345',baseRevision:1}))).body.revision,2);
+  release.resolve(); assert.equal((await stale).body.error,'revision_conflict'); assert.equal(h.notion.writes,2);
+});
+
+test('handler and real Notion adapter durably persist preflight throttling through encrypted CAS', async () => {
+  const h=harness();await h.browser.login();let requests=0, now=1000;
+  const notion=createNotion(CONFIG,async()=>{requests++;return new Response('',{status:429,headers:{'retry-after':'30'}});}, {now:()=>now,sleep:async()=>{},paceMs:0});
+  h.notion.publish=notion.publish;
+  assert.equal((await h.browser.call('enable',initial())).body.error,'provider_rate_limited');
+  const owner=(await h.redis.store.get('owner')).value;
+  assert.equal(owner.pending.notion.phase,'retry_create');assert.equal(owner.pending.notion.retryAt,31000);
+  assert.equal(owner.revision,0);assert.equal(owner.enabled,false);
+  assert.equal((await h.browser.call('enable',initial())).body.error,'provider_rate_limited');
+  assert.equal(requests,1);
+  now=32000;assert.equal((await h.browser.call('enable',initial())).body.error,'provider_rate_limited');
+  assert.equal(requests,2);assert.equal((await h.redis.store.get('owner')).value.pending.notion.retryAt,62000);
 });
