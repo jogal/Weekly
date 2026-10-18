@@ -5,13 +5,13 @@ import { readFileSync } from 'node:fs';
 
 const code = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
 function worker() {
-  const events = {}, cacheNames = new Map(), reads = [], writes = [], fetches = [];
+  const events = {}, cacheNames = new Map(), reads = [], writes = [], fetches = [], precache = [];
   let response = { ok: true, redirected: false, headers: new Headers(), clone() { return this; } };
   const makeCache = name => {
     if (!cacheNames.has(name)) cacheNames.set(name, new Map());
     const cache = cacheNames.get(name);
     return {
-      addAll: async () => {}, keys: async () => [...cache.keys()].map(url => ({ url })),
+      addAll: async assets => { precache.push(...assets); }, keys: async () => [...cache.keys()].map(url => ({ url })),
       delete: async req => cache.delete(req.url), put: async (req, res) => { writes.push(req.url); cache.set(req.url, res); },
     };
   };
@@ -21,7 +21,7 @@ function worker() {
   };
   vm.runInNewContext(code, { URL, caches, fetch: async req => { fetches.push(req.url); return response; },
     self: { location: { origin: 'https://weekly.test' }, clients: { claim: async () => {} }, skipWaiting: async () => {}, addEventListener: (name, fn) => events[name] = fn } });
-  return { events, cacheNames, reads, writes, fetches, setResponse: r => { response = r; } };
+  return { events, cacheNames, reads, writes, fetches, precache, setResponse: r => { response = r; } };
 }
 async function dispatch(w, url, method = 'GET') {
   let result;
@@ -38,6 +38,16 @@ test('all private API/auth GET routes bypass cache lookup even with old cached d
     assert.equal(await dispatch(w, 'https://weekly.test' + path), undefined);
   }
   assert.deepEqual(w.reads, []); assert.deepEqual(w.writes, []); assert.deepEqual(w.fetches, []);
+});
+
+test('installation precaches the complete v2 preview and statistics module graph', async () => {
+  const w = worker();
+  let done; w.events.install({ waitUntil: p => { done = p; } }); await done;
+  for (const file of ['private-sync-client.mjs', 'private-sync-ui.mjs', 'private-sync-protocol.mjs',
+    'private-sync-stats.mjs', 'habit-core.mjs', 'todo-core.mjs', 'reading-core.mjs']) {
+    assert.ok(w.precache.includes('./js/' + file), file);
+  }
+  assert.ok(!w.precache.some(path => /(?:api|auth)\//.test(path)));
 });
 
 test('activation deletes old caches and scrubs private entries from current cache', async () => {

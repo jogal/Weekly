@@ -1,9 +1,10 @@
-const CACHE = "weekly-quest-v80";
+const CACHE = "weekly-quest-v81";
 const ASSETS = [
   "./tracker.html",
   "./css/private-sync.css",
   "./js/private-sync-client.mjs",
   "./js/private-sync-protocol.mjs",
+  "./js/private-sync-stats.mjs",
   "./js/private-sync-ui.mjs",
   "./gym.html",
   "./css/gym-quest.css",

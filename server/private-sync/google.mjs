@@ -1,12 +1,13 @@
 import { createHash, createPublicKey, verify } from 'node:crypto';
 import { SyncError, equals } from './security.mjs';
+import { MAX_PAYLOAD_BYTES } from '../../js/private-sync-protocol.mjs';
 
 export const DRIVE_SCOPE = 'https://www.googleapis.com/auth/drive.file';
 const TOKEN_URL = 'https://oauth2.googleapis.com/token';
 const FIELDS = 'id,etag,mimeType,labels/trashed,shared,ownedByMe,driveId,appDataContents,md5Checksum';
 const API = 'https://www.googleapis.com/drive/v2/files';
 const UPLOAD = 'https://www.googleapis.com/upload/drive/v2/files';
-const MAX_MEDIA_BYTES = 132 * 1024;
+const MAX_MEDIA_BYTES = MAX_PAYLOAD_BYTES + 4 * 1024;
 
 async function readJSON(res, max = 65536) {
   if (Number(res.headers.get('content-length')) > max) throw new SyncError('provider_unavailable', 503);

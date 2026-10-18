@@ -3,14 +3,14 @@
 export const SYNC_KEY = "wt_private_sync_v1";
 export const STOP_KEY = "wt_private_sync_stop_v1";
 export const SOURCE_KEYS = new Set(["wt_records", "wt_habits_v1", "wt_habit_log_v1", "wt_todo_v1", "wt_reading_v1"]);
-const EMPTY_SELECTION = () => ({ habitIds: [], readingIds: [], taskIds: [] });
+export const CONSENT_VERSION = 2;
 const clone = value => JSON.parse(JSON.stringify(value));
 const err = code => Object.assign(new Error(code), { code });
-const BLOCKING = new Set(["CONFLICT", "DEVICE_MISMATCH", "RECONNECT_REQUIRED", "UNAUTHENTICATED", "REVIEW_REQUIRED", "INVALID_LOCAL_DATA", "NOT_CONFIGURED", "SYNC_DISABLED", "PENDING_DISABLED"]);
+const BLOCKING = new Set(["CONFLICT", "DEVICE_MISMATCH", "RECONNECT_REQUIRED", "UNAUTHENTICATED", "REVIEW_REQUIRED", "INVALID_LOCAL_DATA", "NOT_CONFIGURED", "SYNC_DISABLED", "PENDING_DISABLED", "SCOPE_REVIEW_REQUIRED", "LEGACY_PENDING_REVIEW_REQUIRED", "PAYLOAD_TOO_LARGE"]);
 const ERROR_CODES = { not_configured: "NOT_CONFIGURED", auth_required: "UNAUTHENTICATED", reconnect_required: "RECONNECT_REQUIRED",
   device_conflict: "DEVICE_MISMATCH", revision_conflict: "CONFLICT", operation_conflict: "CONFLICT", pending_operation: "CONFLICT",
   external_change: "CONFLICT", sync_disabled: "SYNC_DISABLED", pending_disabled: "PENDING_DISABLED", csrf_failed: "UNAUTHENTICATED", owner_forbidden: "OWNER_FORBIDDEN",
-  invalid_payload: "INVALID_LOCAL_DATA", invalid_request: "INVALID_REQUEST", store_unavailable: "SERVER_ERROR",
+  scope_review_required: "SCOPE_REVIEW_REQUIRED", invalid_payload: "INVALID_LOCAL_DATA", invalid_request: "INVALID_REQUEST", store_unavailable: "SERVER_ERROR",
   provider_unavailable: "SERVER_ERROR", retry_later: "SERVER_ERROR", origin_forbidden: "ORIGIN_FORBIDDEN" };
 const codeOf = e => ERROR_CODES[e?.code] || e?.code || (e?.name === "AbortError" ? "PAUSED" : "NETWORK_ERROR");
 
@@ -56,25 +56,37 @@ export async function ensurePrivateSyncTransport({ serviceWorker = globalThis.na
   if (serviceWorker.controller !== controller || latest.some((registration, i) => registration?.active !== active[i])) throw err("UPDATE_REQUIRED");
 }
 
-export function createPrivateSyncClient({ storage, fetch: request, buildPayload, listSelectableItems,
-  validatePayload = () => {}, online = () => navigator.onLine, visible = () => !document.hidden,
-  uuid = () => crypto.randomUUID(), now = () => new Date().toISOString(), onChange = () => {},
+export function createPrivateSyncClient({ storage, fetch: request, buildPayload, uiConsentVersion,
+  validatePayload = () => {}, validateLegacyPayload = () => {}, online = () => navigator.onLine, visible = () => !document.hidden,
+  uuid = () => crypto.randomUUID(), now = () => new Date().toISOString(),
+  timeZone = () => Intl.DateTimeFormat().resolvedOptions().timeZone, onChange = () => {},
   endpoint = "/api/private-sync", ensureTransport = ensurePrivateSyncTransport, withLock = run => {
     if (!globalThis.navigator?.locks?.request) throw err("LOCK_UNAVAILABLE");
     return navigator.locks.request("weekly-private-sync-v1", { mode: "exclusive" }, run);
   } }) {
-  const defaults = () => ({ version: 1, deviceId: null, enabled: false, selection: EMPTY_SELECTION(),
-    approvedNames: null, consentToken: null, revision: 0, lastSyncedAt: null, lastPayload: null, queue: null, blocked: null });
+  // Keep the storage/lock/stop-marker identities stable across upgrades. An old
+  // tab and a new tab must never become independent uploaders for this device.
+  const defaults = () => ({ version: 2, deviceId: null, enabled: false, consentVersion: null,
+    consentToken: null, revision: 0, lastSyncedAt: null, lastPayload: null, queue: null, blocked: null });
+  const assertInterface = () => { if (uiConsentVersion !== CONSENT_VERSION) throw err("UPDATE_REQUIRED"); };
+  const legacyPending = state => !!state.queue && (state.version !== 2 || state.queue.payload?.schemaVersion !== 2);
   function decode(saved) {
     if (!saved) return defaults();
     const m = JSON.parse(saved);
-    if (m?.version !== 1 || typeof m.enabled !== "boolean" || !m.selection ||
-      !["habitIds", "readingIds", "taskIds"].every(k => Array.isArray(m.selection[k]) && m.selection[k].every(id => typeof id === "string")) ||
-      !Number.isInteger(m.revision) || m.revision < 0 || (m.enabled && (!m.deviceId || !m.approvedNames)) ||
+    if (![1, 2].includes(m?.version) || typeof m.enabled !== "boolean" ||
+      !Number.isInteger(m.revision) || m.revision < 0 || (m.enabled && !m.deviceId) ||
       (m.queue && (!["upload", "enable"].includes(m.queue.action) || typeof m.queue.operationId !== "string" ||
         !Number.isInteger(m.queue.baseRevision) || m.queue.baseRevision < 0 || !m.queue.payload))) throw err("LOCAL_STATE_INVALID");
-    if (m.queue) validatePayload(m.queue.payload);
-    return Object.fromEntries(Object.entries(defaults()).map(([key, fallback]) => [key, m[key] ?? fallback]));
+    if (m.queue) {
+      if (legacyPending(m)) validateLegacyPayload(m.queue.payload);
+      else validatePayload(m.queue.payload);
+    }
+    const next = Object.fromEntries(Object.entries(defaults()).map(([key, fallback]) => [key, m[key] ?? fallback]));
+    if (legacyPending(next)) { next.enabled = false; next.blocked = "LEGACY_PENDING_REVIEW_REQUIRED"; }
+    else if (next.version !== 2 || (next.enabled && next.consentVersion !== CONSENT_VERSION)) {
+      next.enabled = false; next.blocked = "SCOPE_REVIEW_REQUIRED";
+    }
+    return next;
   }
   let meta = defaults(), localError = null, storedRaw = null, epoch = 0, observedStop = null;
   try {
@@ -82,7 +94,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
     if (!meta.consentToken || meta.consentToken !== observedStop) meta.enabled = false;
   }
   catch { localError = "LOCAL_STATE_INVALID"; }
-  let session = null, busy = false, flight = null, controller = null, localSavedAt = null, lastError = localError;
+  let session = null, busy = false, flight = null, controller = null, localSavedAt = null, lastError = localError || (uiConsentVersion !== CONSENT_VERSION ? "UPDATE_REQUIRED" : null);
   const emit = () => onChange(getState());
   function syncExternal() {
     let raw;
@@ -92,13 +104,21 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
     const stopped = stop !== observedStop;
     if (raw === storedRaw && !stopped) return false;
     epoch++; controller?.abort(); storedRaw = raw; observedStop = stop;
-    try { meta = decode(raw); if (!meta.consentToken || meta.consentToken !== stop) meta.enabled = false; lastError = null; }
-    catch { meta = defaults(); lastError = "LOCAL_STATE_INVALID"; }
+    try { meta = decode(raw); if (!meta.consentToken || meta.consentToken !== stop) meta.enabled = false; localError = null; lastError = null; }
+    catch { meta = defaults(); localError = lastError = "LOCAL_STATE_INVALID"; }
     emit(); return true;
   }
+  function assertWritable() {
+    // Never overwrite unreadable state or an incompatible uncertain operation.
+    // The original stored bytes remain available for explicit owner recovery.
+    if (localError) throw err(localError);
+    if (legacyPending(meta)) throw err("LEGACY_PENDING_REVIEW_REQUIRED");
+  }
   const persist = next => {
+    assertWritable();
     // Detect another tab's opt-out or queue change before overwriting shared metadata.
     if (syncExternal()) throw err("STATE_CHANGED");
+    assertWritable();
     // Never send a snapshot that was not durably queued. Keep the old state on quota/error.
     const raw = JSON.stringify(next);
     try { storage.setItem(SYNC_KEY, raw); }
@@ -106,42 +126,45 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
     storedRaw = raw; meta = next; emit();
   };
   function getState() {
-    return clone({ ...meta, busy, localSavedAt, error: lastError, online: online(),
+    return clone({ ...meta, enabled: meta.enabled && uiConsentVersion === CONSENT_VERSION, legacyPending: legacyPending(meta), busy, localSavedAt, error: lastError, online: online(),
       configured: session?.configured ?? null, connected: session?.connected ?? false,
       serverDeviceId: session?.deviceId ?? null, serverRevision: session?.revision ?? null });
   }
   const available = () => online() && visible();
-  const namesFor = selection => {
-    const items = listSelectableItems(storage);
-    return Object.fromEntries([["habitIds", "habits"], ["readingIds", "reading"], ["taskIds", "tasks"]].map(([key, group]) => [key,
-      selection[key].map(id => { const item = items[group].find(item => item.id === id); if (!item) throw err("REVIEW_REQUIRED"); return { id, name: item.name }; })]));
-  };
-  function review(selection) {
-    const chosen = Object.fromEntries(Object.keys(EMPTY_SELECTION()).map(k => [k, [...new Set(selection[k] || [])].sort()]));
+  function review() {
+    assertInterface();
     try {
-      const payload = buildPayload(storage, chosen);
+      const zone = typeof timeZone === "function" ? timeZone() : timeZone;
+      const parts = new Intl.DateTimeFormat("en-US", { timeZone: zone, year: "numeric", month: "2-digit", day: "2-digit" })
+        .formatToParts(new Date(now()));
+      const date = Object.fromEntries(parts.map(part => [part.type, part.value]));
+      const payload = buildPayload(storage, { asOf: `${date.year}-${date.month}-${date.day}`, timeZone: zone });
+      if (payload?.schemaVersion !== 2) throw err("INVALID_LOCAL_DATA");
       validatePayload(payload);
-      return { selection: chosen, payload, json: JSON.stringify(payload, null, 2), names: namesFor(chosen) };
-    } catch (e) { throw err(["SELECTION_CHANGED", "REVIEW_REQUIRED"].includes(e?.code) ? "REVIEW_REQUIRED" : "INVALID_LOCAL_DATA"); }
+      return { consentVersion: CONSENT_VERSION, payload, json: JSON.stringify(payload, null, 2) };
+    } catch (e) { throw err(e?.code === "PAYLOAD_TOO_LARGE" ? "PAYLOAD_TOO_LARGE" : "INVALID_LOCAL_DATA"); }
   }
   function pendingReview() {
     if (!meta.queue) throw err("NO_PENDING_OPERATION");
-    validatePayload(meta.queue.payload);
-    return { kind: "pending", operationId: meta.queue.operationId, payload: clone(meta.queue.payload),
+    if (legacyPending(meta)) validateLegacyPayload(meta.queue.payload);
+    else validatePayload(meta.queue.payload);
+    return { kind: "pending", incompatible: legacyPending(meta), operationId: meta.queue.operationId, payload: clone(meta.queue.payload),
       json: JSON.stringify(meta.queue.payload, null, 2) };
   }
   function assertPending(approved) {
     const current = pendingReview();
+    if (current.incompatible) throw err("LEGACY_PENDING_REVIEW_REQUIRED");
     if (!approved?.confirmed || approved.operationId !== current.operationId || approved.json !== current.json) throw err("REVIEW_REQUIRED");
     return current;
   }
   function assertReview(approved) {
-    if (!approved || approved.confirmed !== true) throw err("REVIEW_REQUIRED");
-    const current = review(approved.selection);
-    if (current.json !== approved.json || JSON.stringify(current.names) !== JSON.stringify(approved.names)) throw err("REVIEW_REQUIRED");
+    if (!approved || approved.confirmed !== true || approved.consentVersion !== CONSENT_VERSION) throw err("REVIEW_REQUIRED");
+    const current = review();
+    if (current.json !== approved.json) throw err("REVIEW_REQUIRED");
     return current;
   }
   async function api(action, body) {
+    assertInterface();
     if (syncExternal()) throw err("STATE_CHANGED");
     const requestEpoch = epoch;
     await ensureTransport();
@@ -175,17 +198,19 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
     emit();
   }
   function queueCurrent() {
-    if (!meta.enabled || meta.blocked || meta.queue) return;
+    if (!meta.enabled || meta.consentVersion !== CONSENT_VERSION || meta.blocked || meta.queue) return;
     let current;
     try {
-      current = review(meta.selection);
-      if (JSON.stringify(current.names) !== JSON.stringify(meta.approvedNames)) throw err("REVIEW_REQUIRED");
+      current = review();
     } catch (e) { recordError(e); return; }
     if (JSON.stringify(current.payload) === meta.lastPayload) return;
     persist({ ...meta, queue: { action: "upload", operationId: uuid(), baseRevision: meta.revision, payload: current.payload } });
   }
   async function sendQueue() {
+    assertWritable();
     const queued = meta.queue;
+    if (queued?.payload?.schemaVersion !== 2) throw err("LEGACY_PENDING_REVIEW_REQUIRED");
+    validatePayload(queued.payload);
     const response = await api(queued.action, { deviceId: meta.deviceId, baseRevision: queued.baseRevision,
       operationId: queued.operationId, payload: queued.payload });
     if (response.deviceId !== meta.deviceId || !Number.isInteger(response.revision) || response.revision <= queued.baseRevision ||
@@ -200,7 +225,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
   function attempt() {
     try { syncExternal(); } catch (e) { recordError(e); return Promise.resolve(); }
     if (flight) return flight;
-    if (!meta.enabled || meta.blocked || !available()) { emit(); return Promise.resolve(); }
+    if (!meta.enabled || meta.consentVersion !== CONSENT_VERSION || meta.blocked || !available()) { emit(); return Promise.resolve(); }
     flight = Promise.resolve().then(async () => {
       busy = true; emit();
       try {
@@ -212,8 +237,8 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
           if (!meta.queue || meta.blocked) break;
           // Initial activation is always an explicit owner action, never a launch/resume side effect.
           if (meta.queue.action !== "upload") break;
-          // Renames/deletions require a fresh preview, even if another snapshot is already queued.
-          if (JSON.stringify(namesFor(meta.selection)) !== JSON.stringify(meta.approvedNames)) throw err("REVIEW_REQUIRED");
+          // Category-wide consent covers new items and renames. Preserve the
+          // durable queued snapshot until its exact acknowledgment arrives.
           await sendQueue();
         }
       } catch (e) { recordError(e); }
@@ -223,12 +248,12 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
   }
   async function connect(approved) {
     if (busy) throw err("BUSY");
-    syncExternal();
+    assertInterface(); syncExternal();
     const actionEpoch = ++epoch;
-    const current = approved?.kind === "pending"
-      ? (assertPending(approved), { selection: meta.selection, names: meta.approvedNames }) : assertReview(approved);
+    assertWritable();
+    if (approved?.kind === "pending") assertPending(approved); else assertReview(approved);
     // Returning from OAuth must not automatically enable uploads.
-    persist({ ...meta, deviceId: meta.deviceId || uuid(), enabled: false, selection: current.selection, approvedNames: current.names });
+    persist({ ...meta, version: 2, deviceId: meta.deviceId || uuid(), enabled: false });
     busy = true; emit();
     try {
       await refreshStatus();
@@ -253,7 +278,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
   }
   async function enable(approved) {
     if (busy) throw err("BUSY");
-    syncExternal(); ensureStopMarker();
+    assertInterface(); syncExternal(); assertWritable(); ensureStopMarker();
     const actionEpoch = ++epoch, actionStop = observedStop;
     const current = assertReview(approved);
     busy = true; emit();
@@ -266,7 +291,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
       // The dedicated previous-send review can recover it even if local data changed.
       if (meta.queue) throw err("PENDING_REVIEW_REQUIRED");
       const queue = { action: "enable", operationId: uuid(), baseRevision: session.revision, payload: current.payload };
-      persist({ ...meta, enabled: false, selection: current.selection, approvedNames: current.names, blocked: null, queue });
+      persist({ ...meta, version: 2, consentVersion: CONSENT_VERSION, enabled: false, blocked: null, queue });
       const activation = await sendQueue();
       if (epoch !== actionEpoch) throw err("STATE_CHANGED");
       if (!activation.enabled) throw err("REVIEW_REQUIRED");
@@ -280,7 +305,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
   }
   async function retryPending(approved) {
     if (busy) throw err("BUSY");
-    syncExternal(); const actionEpoch = ++epoch;
+    assertInterface(); syncExternal(); assertWritable(); const actionEpoch = ++epoch;
     assertPending(approved);
     busy = true; emit();
     try {
@@ -321,6 +346,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
   }
   function flushDisabled() {
     syncExternal();
+    if (legacyPending(meta) || localError) return;
     if (meta.consentToken !== observedStop) {
       try { persist({ ...meta, enabled: false }); }
       catch (e) {
@@ -340,7 +366,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
       await refreshStatus();
       await api("disconnect", {});
       session = null;
-      persist({ ...meta, enabled: false, blocked: null });
+      if (!legacyPending(meta) && !localError) persist({ ...meta, enabled: false, blocked: null });
       lastError = null;
     } catch (e) { recordError(e); throw e; }
     finally { busy = false; controller = null; emit(); }
@@ -361,13 +387,17 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
   }
   function pause() { epoch++; controller?.abort(); emit(); }
   const exclusive = action => async (...args) => {
-    try { return await withLock(() => action(...args)); }
+    const requestedEpoch = epoch;
+    try { return await withLock(() => {
+      if (action !== flushDisabled && requestedEpoch !== epoch) throw err("STATE_CHANGED");
+      return action(...args);
+    }); }
     catch (e) { lastError = codeOf(e); emit(); throw e; }
   };
   const passive = action => async (...args) => {
     // No lock or backend work while off, including unsupported/older browsers.
     try {
-      syncExternal();
+      assertInterface(); syncExternal();
       if (!meta.enabled) {
         if (action === localSaved && SOURCE_KEYS.has(args[0])) { localSavedAt = now(); emit(); }
         return;

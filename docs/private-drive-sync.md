@@ -8,41 +8,41 @@ The proposed durable backend is an **Upstash Redis REST database**, accessed wit
 
 Before setting `PRIVATE_SYNC_ENABLED=1`, the owner/admin must configure and verify hosting-layer request-rate and abuse limits for `/api/private-sync`, especially anonymous `status`/`connect` requests. These routes can allocate encrypted Redis session/state records before Google owner authentication; CSRF and owner checks do not prevent a direct public request flood. This code has no built-in anonymous per-IP rate limiter and offers no quota/cost guarantee. Choose an approved platform protection, test its limits, and configure budget/quota alerts before activation. No rate-limit service or platform setting is provisioned by this change.
 
-The client must show the selected per-item preview and obtain explicit confirmation before initial enable. A successful Google connection alone leaves uploads disabled. Only the one configured Google owner and the first registered browser/device can enable uploads. Every reconnect leaves uploads disabled until another explicit enable. There is no multi-device merge or restore/download-to-local path.
+The client must show the complete four-category payload preview and obtain explicit category-wide confirmation before initial enable. There is no per-item selector: every eligible active item, including future additions and renames, is included after opt-in. A successful Google connection alone leaves uploads disabled. Only the one configured Google owner and the first registered browser/device can enable uploads. Every reconnect leaves uploads disabled until another explicit enable. There is no multi-device merge or restore/download-to-local path.
 
 ## Export boundary
 
 One ordinary, private JSON file named `Weekly private progress.json` is created at the owner's My Drive root. It is not in `appDataFolder`, a shared drive, or a public link. The app never invokes a permissions API. The create call explicitly requests `visibility=PRIVATE`; existing file metadata must remain unshared, owner-owned, non-trashed, and ordinary JSON.
 
-Only individually selected records are exported, through the shared strict allowlist validator in `js/private-sync-protocol.mjs`:
+The schema-v2 feed includes **all active items** in four categories. Fields are constructed individually by `js/private-sync-protocol.mjs` and checked again on the server; localStorage objects are never copied wholesale.
 
-- Habits: ID, name, unit, and dated values/completion
-- Books: ID, title, total/current pages, status, finish date, and dated page progress
-- Large tasks: ID, name, due/completion dates, and step counts
+- Habits: ID, name, unit, target/frequency settings, start date, and dated value/completion/rest records
+- Daily routines: ID, name, creation date, do/avoid mode, and dated occurrence/completion records
+- Books: ID, title, total/current pages, status, finish date, dated page progress, and the record-only flag used by the app's reading-habit calculation
+- Large tasks: ID, name, creation/due/completion dates, step totals and completion counts grouped by date; no step names
+- Bounded, record-based statistics recomputed from those validated fields, with a reference date and IANA timezone
 
-No routines, authors, task step names, notes, book reviews, gym records, archives, OAuth tokens, credentials, or arbitrary localStorage fields are included. Names and titles are included deliberately and need owner review. Editing a selected name/title requires another review in the client.
+The built-in **workout habit** is included at habit-summary level. Its value is a completion flag or aggregate count derived from the existing weekly `workout_*` activity records. The raw body-part keys and their records are never transmitted. The separate Gym app's `gym_*` stores, exercises, weights, sets, bodyweight/pain fields, and training assessments are never read by this feed. A workout-derived count uses the app's existing count meaning; it is not a count of sets, reps, or sessions.
 
-The payload is schema version 1, at most **128 KiB UTF-8**, at most **100 items per category**, and at most **1,500 dated entries per item**. Unknown fields, invalid dates/types, an empty selection, and a selection without a concrete progress/task source are rejected. The app refuses oversized data rather than silently truncating it. Dates are local calendar dates (`YYYY-MM-DD`); `syncedAt` is UTC.
+No notes, descriptions, book reviews, authors, step names, reward/gold fields, archived music/location stores, OAuth tokens, credentials, or arbitrary localStorage fields are included. Names, titles, and routine labels are included deliberately; personal or health-related text contained in those names is not automatically detected or removed. This is not permission to add separate health-detail fields.
 
-The Drive file envelope is:
+Currently active items retain their available historical records. Archived/deleted items are excluded from subsequent snapshots; local history is never purged. No explicit hidden/archive store is imported. If the final active item is removed, the client refuses an empty upload, leaving the last Drive snapshot intact until separately approved owner/admin cleanup. A pending operation retains its exact older snapshot until reconciled before a newer snapshot can be sent.
 
-```json
-{
-  "schemaVersion": 1,
-  "deviceId": "browser-generated-random-id",
-  "revision": 1,
-  "operationId": "browser-generated-idempotency-id",
-  "syncedAt": "2026-10-18T12:00:00.000Z",
-  "payload": {
-    "schemaVersion": 1,
-    "habits": [],
-    "reading": [],
-    "tasks": []
-  }
-}
-```
+The payload is schema version **2**, at most **1 MiB UTF-8**, at most **100 items per category**, and at most **1,500 dated entries per item**. These bounds apply to the whole automatic feed; all-history data may exceed them. Oversized data stops with an explicit size-limit error rather than silently selecting a subset or truncating history. The HTTP/Drive envelope allows only 4 KiB additional overhead, and encrypted durable records are capped at 2 MiB and complete Redis commands at 4 MiB + 16 KiB. Legacy v1 outboxes retain their original 128 KiB inspection bound. When all definition stores are absent, the source is uninitialized and fails closed. Missing optional category/log stores are treated as empty when other valid definitions exist. Valid active definitions with zero progress can be included; a feed with zero active items is refused.
 
-The empty lists above illustrate shape only; an actually empty upload is refused. This file is a selected progress snapshot, not a full backup. Keep the app's existing local backup/export workflow.
+`asOf` and activity dates are local calendar dates (`YYYY-MM-DD`), and `timeZone` identifies the device's IANA timezone for the snapshot. `syncedAt` is a server UTC timestamp. Historical dates stay as recorded; changing timezone does not reinterpret old entries as instants. The Drive envelope retains version 1 (`schemaVersion`, `deviceId`, `revision`, `operationId`, `syncedAt`, `payload`), while its nested payload is version 2. The outer version describes the transport, not permission to use the former selected-item payload.
+
+### Statistics and interpretation
+
+Statistics have a fixed schema and are recomputed from the validated projected records. Client-supplied extra fields or fabricated totals are rejected. The feed includes explicit 30-day and 365-day observation windows and bounded record-based streak/rate definitions. It does **not** read the reward store, include gold, or apply the app's shield/freeze benefits. These values must not be presented as the reward-adjusted official UI streak.
+
+For ordinary habits and routines, a missing record means **unrecorded**, not evidence that the activity did not happen. Achievement ratios describe the app's recorded data and schedule. Avoidance routines are a documented exception: their explicit logged days mean a lapse; the app treats other active calendar days as no recorded lapse. Consumers must retain that distinction and not describe an avoidance log as a completed positive routine. Creation dates and observation windows limit calculations; no pre-creation success is invented. Goal, unit, and frequency describe the current item settings, as in the app; the source does not retain a dated settings history. Historical targets or unit changes cannot be reconstructed, so consumers must not treat these settings as proof of which goal/unit applied on every past date.
+
+### Consent migration from version 1
+
+The category-wide policy is a new consent version. A v2 UI/client handshake also refuses mixed cached modules that still show the old selective-consent wording. Saved selected-item consent never enables version 2 automatically. A fresh preview and confirmation is required, and the backend requires a successful version-2 `enable` before accepting new automatic snapshots. Exact pending/applied operation identities can still be reconciled without widening consent. Newly added items and changed names then join the feed under the category-wide consent without repeated selection.
+
+An old uncertain outbox is preserved byte-for-byte and blocks new uploads. It can be inspected, but this version does not send or rewrite version-1 payloads. Unexpected legacy pending state requires owner/admin review of the old operation and Drive state; there is no automatic discard, schema conversion, overwrite, or reset. Existing source records and full backup/export remain unchanged.
 
 ## Server configuration (placeholders only)
 
@@ -111,7 +111,8 @@ Important error codes:
 - `revision_conflict`, `operation_conflict`, `pending_operation`, `external_change`: stop automatic writes; preserve local data and pending operation
 - `pending_disabled`: a pending operation exists but uploads are disabled and it has not yet been reconciled as accepted; keep it unchanged. A separately confirmed enable may retry the exact same operation/payload/base
 - `sync_disabled`: no matching pending/applied operation exists and the submitted base equals the current revision; this particular operation was not applied. A queued operation at an older base instead gets `revision_conflict`
-- `invalid_payload`, `invalid_request`: correct the selected data/request; do not bypass validation or silently truncate
+- `scope_review_required`: old consent does not authorize automatic v2 uploads; show a new global preview/consent without changing any pending operation
+- `invalid_payload`, `invalid_request`: correct the source data/request; do not bypass validation or silently truncate
 
 ## Ordering, retry, and conflict safety
 
@@ -123,7 +124,7 @@ Important error codes:
 
 Drive v2's explicit File `etag` is used for conditional updates; media is read through Drive v3. This choice is deliberate because v3 does not expose the v2 ETag field in its File JSON. If an ETag is unavailable or the conditional-write contract cannot be verified, the app stops rather than doing an unconditional write. Live conditional-write behavior still requires the separately approved integration test below.
 
-An accepted operation can be acknowledged after reconnect while keeping uploads disabled. An unapplied/uncertain pending operation needs its exact saved preview and explicit enable to resume. New selections cannot silently replace uncertain old operations.
+An accepted operation can be acknowledged after reconnect while keeping uploads disabled. An unapplied/uncertain pending operation needs its exact saved preview and explicit enable to resume. A newly generated all-items snapshot cannot silently replace an uncertain old operation.
 
 An external edit, sharing/move to a shared drive, deletion, missing durable state, or conflicting device/revision is **not automatically repaired**. There is no force-overwrite, automatic new-file creation, Drive-to-local merge, or reset button. Re-review/reconnect alone does not resolve an external-change block. Keep the local queue and Drive file untouched. The owner/admin must review the existing Drive version and durable pending operation, establish that old requests have finished, and approve a specific recovery/migration plan. Any adoption of external content, intentional overwrite, replacement file, namespace reset, or second device registration is outside this implementation and requires separate work/approval.
 
@@ -133,7 +134,7 @@ Disconnect disables future uploads, removes server-side OAuth credentials, inval
 
 The app deliberately does not call Google's revoke endpoint: revocation can affect grants shared by other integrations of the same OAuth client. The owner can separately remove the grant in [Google Account connections](https://myaccount.google.com/connections). A Drive request already in flight when disconnect happens may finish; no transaction can atomically cancel an already-sent request across Google and Redis. Such a request cannot restore removed credentials or reactivate the session.
 
-Safe cross-tab outbox coordination requires Web Locks in a modern secure-context browser. If that API is unavailable, sync fails closed with an update-browser message; ordinary local records and export remain usable. `wt_private_sync_v1` stores only approved selection/outbox metadata. `wt_private_sync_stop_v1` is a separate atomic stop marker, so a late response or another tab cannot undo an opt-out. Neither key stores OAuth/session tokens or CSRF tokens. Disconnect retains uncertain client outbox contents until explicitly reviewed recovery; it does not silently replace them with a new operation.
+Safe cross-tab outbox coordination requires Web Locks in a modern secure-context browser. If that API is unavailable, sync fails closed with an update-browser message; ordinary local records and export remain usable. `wt_private_sync_v1` retains its storage key for cross-version locking but now stores version-2 category-consent/outbox metadata. `wt_private_sync_stop_v1` is a separate atomic stop marker, so a late response or another tab cannot undo an opt-out. Neither key stores OAuth/session tokens or CSRF tokens. Disconnect retains uncertain client outbox contents until explicitly reviewed recovery; it does not silently replace them with a new operation.
 
 The client can upload while the PWA is open, after local edits, on an online event, or when it returns to the foreground. **There is no guarantee of synchronization while an iPhone is locked or the PWA is closed.** Background delivery and timing depend on iOS/browser behavior. The local queue remains the source for retries. Offline app use must continue normally.
 
@@ -150,13 +151,15 @@ node --test tests/*.test.mjs
 
 The server tests cover encrypted CAS, mandatory configuration/CSRF/origin, browser-bound one-use state, owner/device rejection, expiration/revocation, strict payload rejection, revision and operation idempotency, durable recovery after lost creation/update ACK, competing requests, external edits/deletion, disconnect/reconnect, Google ID-token signature/claim checks with synthetic keys, private file metadata, and conditional-write request construction.
 
+Client/protocol tests cover all four categories, future additions/renames, date/timezone rollover, legacy consent/outbox preservation, mixed-cache rejection, exclusion canaries, recomputed statistics, and larger bounded history. A small DOM adapter executes the real settings module to check category counts, the single global consent checkbox, text-only exact JSON preview, and cancellation of late OAuth navigation. It is not a real-browser rendering, layout, accessibility, or iPhone test. Service-worker tests separately verify private API/auth cache exclusion and the complete offline module graph.
+
 Before activation, a separately authorized E2E review must still verify:
 
 1. Actual Vercel function tracing/runtime/duration, encrypted durable store access, and verified platform request-rate/abuse protection and budget/quota alerts, especially for anonymous session creation
 2. Actual Google consent, owner identity, refresh behavior, and wrong-account denial
 3. Private My Drive creation with the reserved ID; true v2 ETag `If-Match` refusal after an external edit; no duplicate after simulated lost response
 4. iPhone home-screen PWA OAuth round trip, Secure cookie persistence, foreground/offline/online retry, reopen after lost ACK, and repeated/interrupting clicks
-5. Individual selection/name-change preview and no sensitive unselected fields in the Drive bytes
+5. Category-wide preview; new and renamed items included; notes, detailed gym and other excluded fields absent from Drive bytes; statistics agree with the documented record-based definitions
 6. Disconnect while requests are idle and in flight, existing file retention, no credential resurrection
 7. Owner's Drive connector finding and reading the exact private JSON without publishing/sharing it
 
