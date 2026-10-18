@@ -53,7 +53,7 @@ export function questLines(habits = []) {
 export function questId(line, tierIdx) { return `${line.id}:${tierIdx}`; }
 
 // ── 進捗の集計(記録から毎回数える) ────────────────────────────────────────
-// reading: 読書の集計 { booksDone, pagesRead }(reading-core の questStats)
+// reading: 読書の集計 { booksDone, pagesRead }(reading-core の questStats)と、習慣「読書」用の { pagesOn(key), firstDay }
 export function questMetrics({ records = {}, log = {}, habits = [], reward = null, reading = null, today }) {
   const m = { track: {}, part: {}, minutes: {}, habit: {}, activeDays: 0, habitTotal: 0, perfectDays: 0, medals: 0,
     booksDone: reading?.booksDone || 0, pagesRead: reading?.pagesRead || 0 };
@@ -75,8 +75,9 @@ export function questMetrics({ records = {}, log = {}, habits = [], reward = nul
       }
     });
   }
-  const ctx = { records, log, freezes: reward?.freezes || {}, today };
+  const ctx = { records, log, freezes: reward?.freezes || {}, today, readPages: reading?.pagesOn };
   ctx.floorKey = H.dataFloor(records, log);
+  if (reading?.firstDay && (!ctx.floorKey || reading.firstDay < ctx.floorKey)) ctx.floorKey = reading.firstDay;
   let from = ctx.floorKey;
   if (from) {
     const oldest = H.addDays(today, -MAX_HISTORY_DAYS);

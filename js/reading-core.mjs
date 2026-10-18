@@ -169,6 +169,17 @@ export function dayGoldItems(books, day) {
   return out;
 }
 
+// 習慣「読書」の進み具合: その日に全部の本で進んだページ数(読了で登録しただけの本は数えない)
+export function pagesOnDay(books, day) {
+  return books.reduce((a, b) => a + (b.recordOnly ? 0 : readOn(b, day)), 0);
+}
+// いちばん古い読書の記録日(なければ null)
+export function firstLogDay(books) {
+  let first = null;
+  books.forEach(b => Object.keys(b.log).forEach(k => { if (!first || k < first) first = k; }));
+  return first;
+}
+
 // クエスト掲示板(quest-core)に渡す読書の集計。読了で登録しただけの本は数えない
 export function questStats(books, today) {
   let booksDone = 0, pagesRead = 0;

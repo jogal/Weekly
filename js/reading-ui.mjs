@@ -323,6 +323,6 @@ export function renderReadingStats(wrap, range, mode) {
   wrap.appendChild(card);
 }
 
-window.ReadingUI = { renderTodayBooks, renderReadingStats, openShelf, openBook, openPage };
+window.ReadingUI = { renderTodayBooks, renderReadingStats, openShelf, openBook, openPage, openEditor };
 document.getElementById("rd-open")?.addEventListener("click", () => openShelf());
 window.addEventListener("storage", e => { if (e.key === R.KEY) refresh(); });
