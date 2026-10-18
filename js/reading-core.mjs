@@ -167,6 +167,17 @@ export function dayGoldItems(books, day) {
   return out;
 }
 
+// クエスト掲示板(quest-core)に渡す読書の集計。読了で登録しただけの本は数えない
+export function questStats(books, today) {
+  let booksDone = 0, pagesRead = 0;
+  books.forEach(b => {
+    if (b.recordOnly) return;
+    if (b.status === "done" && b.finishedOn <= today) booksDone++;
+    Object.keys(b.log).forEach(k => { if (k <= today) pagesRead += readOn(b, k); });
+  });
+  return { booksDone, pagesRead };
+}
+
 // ── 統計 ─────────────────────────────────────────────────────────────────────
 // from〜to(どちらも YYYY-MM-DD、両端を含む)の読書のまとめ
 export function periodStats(books, from, to) {

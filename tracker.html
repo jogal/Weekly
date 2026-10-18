@@ -2690,7 +2690,8 @@ function renderRewardCard(wrap) {
 
 // ── クエスト掲示板 ─────────────────────────────────────────────────────────
 function questBoardOf(s) {
-  const m = Q.questMetrics({ records, log: s.log, habits: s.habits, reward: s.reward, today: s.today });
+  const reading = RC.questStats(RC.normalize(read(RC.KEY), s.today).books, s.today);
+  const m = Q.questMetrics({ records, log: s.log, habits: s.habits, reward: s.reward, reading, today: s.today });
   return Q.questBoard(m, s.reward, s.habits);
 }
 function updateQuestBadge(board) {

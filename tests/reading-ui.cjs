@@ -105,6 +105,8 @@ const server = http.createServer((req, res) => {
   // 翌日以降の今日タブには出ない
   await p.reload(); await p.waitForSelector('#rd-today');
   assert.equal(await balance(), g0 + 600, 'gold survives reload');
+  // 読書のクエスト「本の虫 I」(1冊読了)が受け取れる
+  assert.ok(await p.locator('.tab-btn[data-tab="status"]').evaluate(e => e.classList.contains('has-badge')), 'quest badge');
 
   // 7) 統計: 月・年の読書まとめ
   await p.locator('[data-tab="stats"]').click();

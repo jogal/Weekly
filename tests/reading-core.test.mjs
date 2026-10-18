@@ -111,3 +111,17 @@ test('loopholes: record-only finish, one bonus per book, undo and finish-date mo
   c = R.setStatus(c, 'done', TODAY, TODAY);
   assert.equal(R.bookDayGold(c, TODAY).bonus, 0);
 });
+
+test('questStats feeds the reading quests (record-only books do not count)', async () => {
+  const Q = await import('../js/quest-core.mjs');
+  const a = R.setStatus(R.setPage(book({ id: 'a' }), '2026-10-10', 100), 'done', '2026-10-12', TODAY);
+  const c = R.setPage(book({ id: 'c' }), TODAY, 40);
+  const r = R.normalizeBook({ id: 'r', title: 'x', pages: 500, status: 'done', recordOnly: true }, TODAY);
+  const st = R.questStats([a, c, r], TODAY);
+  assert.deepEqual(st, { booksDone: 1, pagesRead: 340 });
+  const board = Q.questBoard(Q.questMetrics({ reading: st, today: TODAY }), null, []);
+  const books = board.find(q => q.line.id === 'books_done'), pages = board.find(q => q.line.id === 'pages_read');
+  assert.equal(books.claimable, true);
+  assert.equal(Q.progressText(pages), '340/500ページ');
+  assert.equal(Q.questDesc(books), '本を1冊読み終える');
+});
