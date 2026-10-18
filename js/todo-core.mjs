@@ -20,7 +20,8 @@ export const GOLD_T = {
   routine: 2,      // 日課1つ
   routineCap: 10,  // 日課で1日にもらえる上限(毎日必ずやることでゴールドが余らないように)
   step: 5,         // タスクのステップ1つ
-  task: 30,        // タスクを完了した日
+  task: 30,        // タスクを完了した日(タスクごとに変えられる。これは初期値)
+  taskMax: 9999,
 };
 const NAME_MAX = 40, STEP_MAX = 30;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -56,7 +57,13 @@ export function normalizeTask(t, today) {
     steps,
     createdOn: isDate(t?.createdOn) ? t.createdOn : today,
     doneOn: isDate(t?.doneOn) ? t.doneOn : null,
+    reward: taskReward(t),
   };
+}
+// 完了したときのゴールド。未設定(古いデータ)なら初期値
+export function taskReward(t) {
+  const n = Math.round(Number(t?.reward));
+  return Number.isFinite(n) && t?.reward !== null && t?.reward !== undefined && t?.reward !== "" ? Math.max(0, Math.min(GOLD_T.taskMax, n)) : GOLD_T.task;
 }
 export function normalizeTodo(raw, today) {
   const rlog = {};
@@ -184,7 +191,7 @@ export function dayGoldItems(state, key) {
   if (n) items["todo:routines"] = { g: Math.min(GOLD_T.routineCap, n * GOLD_T.routine), n };
   state.tasks.forEach(t => {
     const steps = t.steps.filter(s => s.doneOn === key).length;
-    const g = steps * GOLD_T.step + (t.doneOn === key ? GOLD_T.task : 0);
+    const g = steps * GOLD_T.step + (t.doneOn === key ? taskReward(t) : 0);
     if (g) items["todo:" + t.id] = { g };
   });
   return items;

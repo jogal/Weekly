@@ -82,6 +82,10 @@ const server = http.createServer((req, res) => {
   await p.locator('#hb-sheet input.field-input').first().fill('症例報告');
   await p.locator('#hb-sheet input[type="date"]').fill('2026-10-21');
   await p.locator('#hb-sheet textarea').fill('文献を読む\n図1を作る\n\n考察を書く');
+  // 完了したときのゴールドはタスクごとに決める(初期値30G)
+  assert.equal(await p.locator('#hb-sheet .hb-step input').inputValue(), '30');
+  await p.locator('#hb-sheet .hb-step input').fill('80');
+  await p.locator('#hb-sheet .hb-step input').dispatchEvent('change');
   await p.locator('#hb-sheet .btn-primary', { hasText: '追加' }).click();
   const box = p.locator('.td-tbox', { hasText: '症例報告' });
   assert.equal(await box.locator('.td-step').count(), 3);
@@ -119,9 +123,15 @@ const server = http.createServer((req, res) => {
   assert.deepEqual(await card.locator('.td-stname').evaluateAll(es => es.map(e => e.firstElementChild.textContent)), ['文献を読む', '図1を作る', '指導医に見せる', '考察を書く']);
   assert.equal((await todo()).tasks[0].steps[0].doneOn, '2026-10-18', 'saving the edit keeps step records');
 
-  // 6) 完了にする(+30G) → 今日の一覧に完了として残り、完了したタスクに入る
+  assert.match(await card.innerText(), /🪙80G/);
+
+  // 6) 完了にする(+80G) → 演出が出る。今日の一覧に完了として残り、完了したタスクに入る
   await card.locator('.td-tbtn', { hasText: '完了にする' }).click();
-  assert.equal(await balance(), g0 + 4 + 5 + 30);
+  await p.waitForSelector('.td-celebrate');
+  assert.match(await p.locator('.td-celebrate').innerText(), /タスク完了！[\s\S]*症例報告を書く[\s\S]*\+80G/);
+  if (shots) await p.screenshot({ path: path.join(shots, 'todo-task-clear.png') });
+  await p.locator('.td-celebrate').click();
+  assert.equal(await balance(), g0 + 4 + 5 + 80);
   assert.ok(await p.locator('.td-task', { hasText: '症例報告' }).evaluate(e => e.classList.contains('done')));
   await p.locator('.td-donelink').click();
   assert.match(await p.locator('#hb-sheet').innerText(), /症例報告[\s\S]*今日に完了/);

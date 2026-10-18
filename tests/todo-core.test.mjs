@@ -96,3 +96,14 @@ test('settle: todo gold is recalculated like habit gold and settles after 7 days
   assert.equal(H.balance(r2), T.GOLD_T.step);
   assert.deepEqual(H.medals(r2), []);
 });
+
+test('tasks: completion gold can be set per task (old data uses the default)', () => {
+  assert.equal(T.normalizeTask({ name: 'x' }, TODAY).reward, T.GOLD_T.task);
+  assert.equal(T.normalizeTask({ name: 'x', reward: 0 }, TODAY).reward, 0);
+  assert.equal(T.normalizeTask({ name: 'x', reward: '120' }, TODAY).reward, 120);
+  assert.equal(T.normalizeTask({ name: 'x', reward: 99999 }, TODAY).reward, T.GOLD_T.taskMax);
+  assert.equal(T.normalizeTask({ name: 'x', reward: -5 }, TODAY).reward, 0);
+  let s = T.saveTask(empty(), { id: 'big', name: '専門医試験の出願', reward: 200 }, TODAY);
+  s = T.setTaskDone(s, 'big', TODAY);
+  assert.deepEqual(T.dayGoldItems(s, TODAY), { 'todo:big': { g: 200 } });
+});

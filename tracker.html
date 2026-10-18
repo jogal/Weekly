@@ -1846,6 +1846,16 @@ function dayLabel(k, today) {
 }
 const totalXP = () => Object.values(computeXP()).reduce((a, b) => a + b, 0);
 
+// 区切りのあるリング: 達成した習慣をそれぞれの色で先頭から並べ、残りは薄い線
+function segRingSvg(size, sw, segs, track = "#ffffff1f") {
+  const r = (size - sw) / 2, c = 2 * Math.PI * r, n = segs.length;
+  if (!n) return ringSvg(size, sw, 0, "#000", track);
+  const gap = n > 1 ? Math.min(3, c / n / 3) : 0, len = c / n - gap;
+  const sorted = [...segs.filter(x => x.done), ...segs.filter(x => !x.done)];
+  return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">${sorted.map((x, i) =>
+    `<circle cx="${size / 2}" cy="${size / 2}" r="${r}" fill="none" stroke="${x.done ? x.color : track}" stroke-width="${sw}"
+      ${x.done ? 'class="seg-on"' : ""} stroke-dasharray="${len.toFixed(2)} ${(c - len).toFixed(2)}" stroke-dashoffset="${(-(i * c / n) - gap / 2).toFixed(2)}"/>`).join("")}</svg>`;
+}
 function ringSvg(size, sw, ratio, color, track = "#ffffff1f") {
   const r = (size - sw) / 2, c = 2 * Math.PI * r, f = Math.max(0, Math.min(1, ratio));
   return `<svg width="${size}" height="${size}" viewBox="0 0 ${size} ${size}" aria-hidden="true">
@@ -1954,7 +1964,7 @@ function renderToday() {
     b.setAttribute("aria-label", `${dayLabel(k, s.today)} ${dc.done}/${dc.due}達成`);
     if (k === day) b.setAttribute("aria-current", "date");
     b.innerHTML = `<span class="hb-dow">${H.WEEKDAY_LABELS[H.weekdayIdx(k)]}</span>
-      <span class="hb-dnum">${ringSvg(36, 3, dc.due ? dc.done / dc.due : 0, "#dfbd7c")}${Number(k.slice(8))}</span>`;
+      <span class="hb-dnum">${segRingSvg(36, 3, H.daySegments(active, k, ctx))}${Number(k.slice(8))}</span>`;
     b.onclick = () => { selDay = k; renderToday(); };
     return b;
   };
@@ -1977,8 +1987,7 @@ function renderToday() {
   const dc = H.dayCompletion(shown, day, ctx);
   const g = H.goldOn(s.reward, day);
   const sum = el("div", "hb-sum");
-  sum.innerHTML = `<span>達成 <b>${dc.done}/${dc.due}</b></span>${g ? `<span>この日 <b>+${g}G</b></span>` : ""}`
-    + (day < H.addDays(s.today, -(H.SETTLE_WINDOW - 1)) ? `<span>${H.SETTLE_WINDOW}日以上前の記録はゴールドには入りません（XP・統計・クエストには反映）</span>` : "");
+  sum.innerHTML = `<span>達成 <b>${dc.done}/${dc.due}</b></span>${g ? `<span>この日 <b>+${g}G</b></span>` : ""}`;
   v.appendChild(sum);
 
   renderTasks(v, s, day);
@@ -2328,7 +2337,7 @@ function openAddChooser() {
     box.appendChild(el("h3", "modal-title", "何を追加しますか？"));
     [["✨", "習慣", "続けたいこと。連続記録とメダル、ゴールド", () => openEditor(null)],
      ["🪥", "日課", `歯みがき・薬など毎日の小さなこと。1つ${T.GOLD_T.routine}G`, () => openRoutineEditor(null)],
-     ["📝", "大きなタスク", `期限と小さなステップで進めること。ステップ${T.GOLD_T.step}G・完了${T.GOLD_T.task}G`, () => openTaskCreate()],
+     ["📝", "大きなタスク", `期限と小さなステップで進めること。ステップ${T.GOLD_T.step}G・完了ごほうびは自分で決める`, () => openTaskCreate()],
     ].forEach(([ic, title, desc, fn]) => {
       const b = btn("", "td-choice", fn);
       b.innerHTML = `<span class="hb-icon" aria-hidden="true">${ic}</span><span class="hb-main"><span class="hb-name">${title}</span><span class="hb-sub">${esc(desc)}</span></span>`;
@@ -2432,6 +2441,7 @@ function renderTasks(v, s, day) {
 function taskSub(t, today) {
   const p = T.taskProgress(t), di = !t.doneOn && T.dueInfo(t, today);
   return [di ? `<span class="td-due ${di.level}">${di.label}</span>` : "",
+    t.doneOn ? "" : `🪙${t.reward}G`,
     t.doneOn ? `✓ ${esc(dayLabel(t.doneOn, today))}に完了` : "",
     p.total ? `ステップ ${p.done}/${p.total}` : "ステップなし"].filter(Boolean).join(" · ");
 }
@@ -2487,18 +2497,18 @@ function taskBox(t, s, day) {
   foot.appendChild(btn("✏️ 編集", "td-tbtn", () => openTaskEdit(t.id)));
   foot.appendChild(t.doneOn
     ? btn("未完了に戻す", "td-tbtn", () => changeTodo(x => T.setTaskDone(x, t.id, null), "未完了に戻しました"))
-    : btn("🎉 完了にする", "td-tbtn primary", () => { openTaskIds.delete(t.id); changeTodo(x => T.setTaskDone(x, t.id, mark), `🎉 「${t.name}」完了！`); }));
+    : btn("🎉 完了にする", "td-tbtn primary", () => completeTask(t, mark)));
   body.appendChild(foot);
   wrap.appendChild(body);
   return wrap;
 }
 
 function openTaskCreate() {
-  const draft = { name: "", icon: T.TASK_ICONS[0], due: "", steps: "" };
+  const draft = { name: "", icon: T.TASK_ICONS[0], due: "", steps: "", reward: T.GOLD_T.task };
   let msg = "";
   const draw = () => sheet(box => {
     box.appendChild(el("h3", "modal-title", "大きなタスクを追加"));
-    box.appendChild(el("p", "modal-sub", `時間のかかることを小さなステップに分けて進めます。ステップ1つ${T.GOLD_T.step}G、完了で${T.GOLD_T.task}G。期限を過ぎても減点はありません。`));
+    box.appendChild(el("p", "modal-sub", `時間のかかることを小さなステップに分けて進めます。ステップ1つ${T.GOLD_T.step}G、完了したら下で決めたゴールド。期限を過ぎても減点はありません。`));
     taskFields(box, draft, draw);
     box.appendChild(el("span", "field-label", "ステップ（1行に1つ・あとから足せます）"));
     const st = el("textarea", "field-input"); st.value = draft.steps; st.placeholder = "例：\n文献を3本読む\n図1を作る\n考察を書く";
@@ -2513,14 +2523,34 @@ function openTaskCreate() {
       const steps = draft.steps.split("\n").map(x => x.trim()).filter(Boolean).map(x => ({ name: x }));
       openTaskIds.add(id);
       closeSheet();
-      changeTodo((t, s) => T.saveTask(t, { id, name: draft.name.trim(), icon: draft.icon, due: draft.due || null, steps }, s.today),
+      changeTodo((t, s) => T.saveTask(t, { id, name: draft.name.trim(), icon: draft.icon, due: draft.due || null, steps, reward: draft.reward }, s.today),
         `📝 「${draft.name.trim()}」を追加しました`);
     }));
     box.appendChild(row);
   });
   draw();
 }
-// 名前・アイコン・期限の入力欄(追加と編集で共通)
+// タスク完了: 保存してから演出を出す(ゴールドは実際に増えた分。8日以上前の日なら入らない)
+function completeTask(t, mark) {
+  const before = H.balance(loadState().reward);
+  openTaskIds.delete(t.id);
+  saveTodo(T.setTaskDone(loadState().todo, t.id, mark));
+  render();
+  const gained = H.balance(loadState().reward) - before;
+  const p = T.taskProgress(t);
+  const o = document.createElement("div");
+  o.className = "hb-celebrate td-celebrate";
+  o.innerHTML = `<div class="hb-celebrate-box" role="dialog" aria-label="タスク完了">
+    <div class="hb-celebrate-ico">🏆</div>
+    <div class="hb-celebrate-title">タスク完了！</div>
+    <div class="hb-celebrate-sub">${esc(t.icon)} ${esc(t.name)}${p.total ? `<br>ステップ ${p.total}つを乗り越えました` : ""}</div>
+    ${gained > 0 ? `<div class="hb-celebrate-gold">+${gained}G</div>` : ""}
+    <div class="hb-celebrate-sub" style="margin-top:12px">タップして閉じる</div></div>`;
+  o.onclick = () => o.remove();
+  document.body.appendChild(o);
+  if (navigator.vibrate) navigator.vibrate([30, 40, 60]);
+}
+// 名前・アイコン・期限・完了ゴールドの入力欄(追加と編集で共通)
 function taskFields(box, draft, draw) {
   box.appendChild(el("span", "field-label", "名前"));
   const name = el("input", "field-input"); name.value = draft.name; name.maxLength = 40; name.placeholder = "例：症例報告を書く";
@@ -2537,6 +2567,9 @@ function taskFields(box, draft, draw) {
   dr.appendChild(due);
   if (draft.due) dr.appendChild(btn("期限なし", "btn btn-secondary", () => { draft.due = ""; draw(); }));
   box.appendChild(dr);
+  box.appendChild(el("span", "field-label", "完了したときのゴールド"));
+  box.appendChild(stepper(draft.reward, 0, T.GOLD_T.taskMax, "G", n => { draft.reward = n; }, 10));
+  box.appendChild(el("p", "hb-note td-reward-note", "大きさに合わせて。目安：数日で終わるもの 30〜50G、何週間もかかるもの 100〜300G"));
 }
 
 // 編集画面: 名前・アイコン・期限と、ステップの並べ替え・削除。保存するまで反映しない
