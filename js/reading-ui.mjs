@@ -235,7 +235,7 @@ export function openEditor(id, opts = {}) {
       box.appendChild(sg);
     }
     if (msg) box.appendChild(h("p", "hb-note rd-warn", esc(msg)));
-    box.appendChild(h("p", "hb-note", `読み進めた1ページごとに ${R.GOLD_PER_PAGE}G、読了した日に ${R.FINISH_BONUS}G のボーナス。`));
+    box.appendChild(h("p", "hb-note", `読み進めた1ページごとに ${R.GOLD_PER_PAGE}G、読了した日に全ページ数×1/2のボーナス${draft.pages > 0 ? `（${R.finishBonus(draft)}G）` : ""}。`));
     const list = [];
     if (orig) list.push(button("削除", "btn btn-secondary", () => {
       if (!confirm(`「${orig.title}」と、その読書記録を消しますか？`)) return;

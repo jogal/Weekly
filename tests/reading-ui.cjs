@@ -87,7 +87,7 @@ const server = http.createServer((req, res) => {
   await p.getByLabel('感想').fill('局在診断の考え方が整理できた');
   await p.getByLabel('感想').blur();
   await p.locator('#rd-sheet button', { hasText: '閉じる' }).click();
-  assert.equal(await balance(), g0 + 400 + 100);
+  assert.equal(await balance(), g0 + 400 + 200);
   assert.match(await p.locator('#rd-today .rd-book').innerText(), /読了/);
   d = await saved();
   assert.equal(d.books[0].status, 'done');
@@ -104,7 +104,7 @@ const server = http.createServer((req, res) => {
   await p.locator('#rd-sheet button', { hasText: '閉じる' }).click();
   // 翌日以降の今日タブには出ない
   await p.reload(); await p.waitForSelector('#rd-today');
-  assert.equal(await balance(), g0 + 500, 'gold survives reload');
+  assert.equal(await balance(), g0 + 600, 'gold survives reload');
 
   // 7) 統計: 月・年の読書まとめ
   await p.locator('[data-tab="stats"]').click();

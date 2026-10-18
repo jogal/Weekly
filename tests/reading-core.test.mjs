@@ -42,7 +42,8 @@ test('gold: 1G per page read, finish bonus once on the finish day', () => {
   b = R.setStatus(b, 'done', TODAY);
   assert.equal(b.finishedOn, TODAY);
   assert.equal(b.log[TODAY].page, 300, 'finishing fills the rest of the pages');
-  assert.equal(R.bookDayGold(b, TODAY).g, 20 + R.FINISH_BONUS);
+  assert.equal(R.bookDayGold(b, TODAY).g, 20 + 150, 'bonus is half the total pages');
+  assert.equal(R.finishBonus({ pages: 301 }), 150, 'rounded down');
   assert.deepEqual(Object.keys(R.dayGoldItems([b], TODAY)), ['book:b1']);
   b = R.setStatus(b, 'reading', TODAY);
   assert.equal(b.finishedOn, null);

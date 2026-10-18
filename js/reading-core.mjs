@@ -5,7 +5,8 @@ export const KEY = "wt_reading_v1";
 export const STATUSES = ["reading", "want", "done"];
 export const STATUS_LABEL = { want: "読みたい", reading: "読書中", done: "読了" };
 export const GOLD_PER_PAGE = 1;   // 進んだ1ページごと
-export const FINISH_BONUS = 100;  // 読了した日に1回
+export const FINISH_BONUS_RATE = 0.5; // 読了した日に1回、全ページ数×1/2(端数切り捨て)
+export const finishBonus = book => Math.floor(book.pages * FINISH_BONUS_RATE);
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const int = (v, lo = 0, hi = 20000) => { const n = Math.round(Number(v)); return Number.isFinite(n) ? Math.min(hi, Math.max(lo, n)) : 0; };
@@ -114,7 +115,7 @@ export function booksOn(books, day) {
 
 // ── ゴールド ─────────────────────────────────────────────────────────────────
 export function bookDayGold(book, day) {
-  const pages = readOn(book, day), bonus = book.status === "done" && book.finishedOn === day ? FINISH_BONUS : 0;
+  const pages = readOn(book, day), bonus = book.status === "done" && book.finishedOn === day ? finishBonus(book) : 0;
   const g = pages * GOLD_PER_PAGE + bonus;
   return g ? { g, streak: 0, unit: "d", ms: 0, pages, bonus } : null;
 }
