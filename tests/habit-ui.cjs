@@ -185,25 +185,46 @@ function seedRecords() {
   assert.equal(await studyCal.locator('.td-rcal-wk').count(), 9, 'header + 8 weeks');
   assert.ok(await studyCal.locator('.td-rcal-day.done').count() >= 1);
   assert.match(await studyCal.locator('.td-rcal-sub').innerText(), /🔥\d+日連続|連続なし/);
-  assert.notEqual(await studyCal.locator('.td-rcal-day.done').first().evaluate(e => getComputedStyle(e).backgroundColor), 'rgba(0, 0, 0, 0)');
+  assert.notEqual(await studyCal.locator('.td-rcal-day.done i').first().evaluate(e => getComputedStyle(e).backgroundColor), 'rgba(0, 0, 0, 0)');
+  assert.ok(await studyCal.locator('.td-rcal-day.done.j').count() >= 1, 'consecutive days are joined');
   const medicineCount = await p.locator('.stats-card').filter({ hasText: '専門医勉強' }).filter({ hasText: '合計' }).innerText();
   assert.match(medicineCount, /7回/);
   if (shots) { await p.locator('.hs-cal').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'habit-stats.png') }); }
 
   assert.equal(await p.locator('#stats-view').innerText().then(t => t.includes('平均評価')), false);
 
-  // 10) 統計: 週間=日ごと、月間=週ごとのまとめ。ヒートマップの日から今日タブのその日へ
+  // 10) 統計の上の部分: 習慣の選択・丸カレンダー・記録・1週間・1年のドット・達成率
+  assert.equal(await p.locator('.so-pick-v').innerText(), 'すべての習慣 ›');
+  assert.equal(await p.locator('.so-cal .so-d').count(), 35, 'Oct 2026 = 5 weeks from Monday 9/28');
+  assert.match(await p.locator('.so-rec-card').innerText(), /いまの連続[\s\S]*最長連続[\s\S]*完了数[\s\S]*成功率/);
+  assert.match(await p.locator('.so-rec-card .so-note').innerText(), /この期間の記録 \d+件 ・ 活動 \d+日/);
+  assert.equal(await p.locator('.so-wk .so-wk-n', { hasText: '専門医勉強' }).count(), 1);
+  assert.equal(await p.locator('.so-yr-g i:not(.pad)').count(), 365);
+  // 1つの習慣を選ぶと、カレンダーと記録がその習慣だけになる。専門医は10/12〜18の7日連続
+  const studyId = await p.locator('.so-pick select option', { hasText: '専門医勉強' }).getAttribute('value');
+  await p.selectOption('.so-pick select', studyId);
+  assert.equal(await p.locator('.so-pick-v').innerText(), '専門医勉強 ›');
+  for (const d of ['13', '14', '15', '16', '17', '18']) assert.match(await p.locator(`.so-d[data-key="2026-10-${d}"]`).getAttribute('class'), /done jl/);
+  assert.match(await p.locator('.so-rec').nth(0).innerText(), /7日/);
+  await p.locator('.so-d[data-key="2026-10-13"]').click();
+  assert.match(await p.locator('.so-cal-card .so-info').innerText(), /10\/13\(火\) 🧠専門医勉強：達成/);
+  if (shots) { await p.locator('.so-pick').scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'habit-stats-top.png') }); }
+  await p.selectOption('.so-pick select', 'all');
+  // 達成率の棒: 週間=日ごと、月間=週ごと。棒をタップすると件数と時間
   await p.locator('.mode-toggle button', { hasText: '週間' }).click();
   assert.equal(await p.locator('.period-label').innerText(), '10/12 〜 10/18');
-  assert.equal(await p.locator('.tr-row').count(), 7);
-  assert.match(await p.locator('.tr-row', { hasText: '10/13(火)' }).innerText(), /2件 · 30分/);
+  assert.equal(await p.locator('.so-bar').count(), 7);
+  await p.locator('.so-bar').nth(1).click();
+  assert.match(await p.locator('.so-prog .so-info').innerText(), /10\/13\(火\) .*記録 2件 ・ 30分/);
   assert.equal(await p.locator('.period-nav button').last().isDisabled(), true);
   await p.locator('.period-nav button').first().click();
   assert.equal(await p.locator('.period-label').innerText(), '10/5 〜 10/11');
   await p.locator('.mode-toggle button', { hasText: '月間' }).click();
-  assert.match(await p.locator('.section-label', { hasText: 'まとめ' }).innerText(), /週ごと/);
-  assert.match(await p.locator('.tr-row', { hasText: '10/12〜' }).innerText(), /7日/);
-  if (shots) { await p.locator('.tr-row').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'habit-stats-trend.png') }); }
+  assert.match(await p.locator('.section-label', { hasText: '達成率' }).innerText(), /週ごと/);
+  assert.equal(await p.locator('.so-bar').count(), 5);
+  await p.locator('.so-bar', { hasText: '10/12〜' }).click();
+  assert.match(await p.locator('.so-prog .so-info').innerText(), /活動 7日/);
+  if (shots) { await p.locator('.so-prog').scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'habit-stats-trend.png') }); }
   // 年間: 習慣ごとのカードも1年ぶんのヒートマップ(2026年は木曜はじまり → 空き3つ)
   await p.locator('.mode-toggle button', { hasText: '年間' }).click();
   const yStudy = p.locator('.hs-cal.td-ryear', { hasText: '専門医勉強' });
@@ -211,8 +232,8 @@ function seedRecords() {
   assert.ok(await yStudy.locator('.hm-ycell.done').count() >= 1);
   if (shots) { await yStudy.scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'habit-stats-year.png') }); }
   await p.locator('.mode-toggle button', { hasText: '月間' }).click();
-  await p.locator('.hm-cell', { hasText: /^14/ }).first().click();
-  await p.locator('.hm-jump').click();
+  await p.locator('.so-d[data-key="2026-10-14"]').click();
+  await p.locator('.so-cal-card .so-jump').click();
   assert.equal(await p.locator('.tab-btn.active').getAttribute('data-tab'), 'today');
   assert.equal(await p.locator('.hb-top h1').innerText(), '10/14(水)');
 
