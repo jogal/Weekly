@@ -162,6 +162,17 @@ export function routineWeeks(state, id, today, weeks = 8) {
   });
 }
 
+// from〜to(両端含む)の日ごとの状態。年間ヒートマップ用。today より後は future
+export function routineDays(state, id, from, to, today) {
+  const r = state.routines.find(x => x.id === id);
+  const out = [];
+  for (let k = from; k <= to; k = addDays(k, 1)) {
+    const st = k > today ? "future" : !r || !routineActiveOn(r, k) ? "off" : isRoutineDone(state, k, id) ? "done" : "miss";
+    out.push({ key: k, state: st });
+  }
+  return out;
+}
+
 // ── タスク ───────────────────────────────────────────────────────────────────
 export function openTasks(state) {
   return state.tasks.filter(t => !t.doneOn).sort((a, b) =>

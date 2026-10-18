@@ -383,6 +383,10 @@ textarea.field-input { height:76px; resize:vertical; }
 .td-rcal-day.off, .td-rcal-day.future { background:none; }
 .td-rcal-day.off { border:1px dashed #ffffff10; }
 .td-rcal-day.today { outline:1.5px solid var(--gold); outline-offset:1px; }
+.td-ryear .hm-year-row { margin-top:2px; }
+.hm-ycell.td-ry { cursor:default; }
+.hm-ycell.td-ry.done { background:#a9c98f; border-color:#a9c98f; }
+.hm-ycell.td-ry.off, .hm-ycell.td-ry.future { background:none; border-color:#ffffff0a; }
 .td-ticon { position:relative; width:52px; height:52px; flex-shrink:0; display:grid; place-items:center; font-size:22px; }
 .td-ticon svg { position:absolute; inset:0; transform:rotate(-90deg); }
 .td-ticon span { width:38px; height:38px; display:grid; place-items:center; border-radius:50%; background:#0000002e; }
@@ -2454,11 +2458,7 @@ const CAL_WEEKS = 8;
 function routineCal(s, r, anchor = s.today) {
   const st = T.routineStreak(s.todo, r.id, s.today), best = T.routineBestStreak(s.todo, r.id);
   const rate = T.routineRate(s.todo, r.id, s.today, 30);
-  const wrap = el("div", "td-rcal");
-  wrap.dataset.rid = r.id;
-  wrap.innerHTML = `<div class="td-rcal-head"><span class="td-ico" aria-hidden="true">${esc(r.icon)}</span><b>${esc(r.name)}</b>
-      <span class="td-rcal-streak">${st ? `🔥${st}日連続` : "連続なし"}</span></div>
-    <div class="td-rcal-sub">最長 ${best}日 ・ 直近30日 ${rate.done}/${rate.total}日</div>`;
+  const wrap = routineCalCard(r, st, `最長 ${best}日 ・ 直近30日 ${rate.done}/${rate.total}日`);
   const grid = el("div", "td-rcal-grid");
   grid.setAttribute("role", "table");
   grid.setAttribute("aria-label", `${r.name}の${CAL_WEEKS}週間の記録`);
@@ -2475,6 +2475,49 @@ function routineCal(s, r, anchor = s.today) {
   wrap.appendChild(grid);
   return wrap;
 }
+function routineCalCard(r, st, sub) {
+  const wrap = el("div", "td-rcal");
+  wrap.dataset.rid = r.id;
+  wrap.innerHTML = `<div class="td-rcal-head"><span class="td-ico" aria-hidden="true">${esc(r.icon)}</span><b>${esc(r.name)}</b>
+      <span class="td-rcal-streak">${st ? `🔥${st}日連続` : "連続なし"}</span></div>
+    <div class="td-rcal-sub">${sub}</div>`;
+  return wrap;
+}
+// 年間表示: 習慣のヒートマップと同じ並び(列=週・月曜はじまり、横スクロール)で1年ぶん
+function routineYear(s, r, from, to) {
+  const days = T.routineDays(s.todo, r.id, from, to, s.today);
+  const active = days.filter(d => d.state === "done" || d.state === "miss");
+  const done = active.filter(d => d.state === "done").length;
+  const wrap = routineCalCard(r, T.routineStreak(s.todo, r.id, s.today),
+    `この年 ${done}/${active.length}日 ・ 最長 ${T.routineBestStreak(s.todo, r.id)}日`);
+  wrap.classList.add("td-ryear");
+  const row = el("div", "hm-year-row");
+  const labels = el("div", "hm-ylabels");
+  H.WEEKDAY_LABELS.forEach((d, i) => labels.appendChild(el("div", "", i % 2 === 0 ? d : "")));
+  row.appendChild(labels);
+  const scroll = el("div", "hm-year-wrap");
+  const months = el("div", "hm-months");
+  const grid = el("div", "hm-year");
+  grid.setAttribute("aria-label", `${r.name}の${from.slice(0, 4)}年の記録`);
+  const lead = (new Date(from + "T00:00").getDay() + 6) % 7; // 1/1 より前の月曜までの空き
+  for (let i = 0; i < lead; i++) grid.appendChild(el("div", "hm-ycell empty"));
+  let lastMonth = "";
+  days.forEach((d, i) => {
+    if (i === 0 || (i + lead) % 7 === 0) { // 週の列ごとに1つ、月が変わった列にだけ月名
+      const m = d.key.slice(5, 7), lbl = el("div", "");
+      if (m !== lastMonth) { lbl.textContent = `${+m}月`; lastMonth = m; }
+      months.appendChild(lbl);
+    }
+    const c = el("div", `hm-ycell td-ry ${d.state}${d.key === s.today ? " today" : ""}`);
+    c.title = `${d.key} ${{ done: "済み", miss: "未", off: "", future: "" }[d.state]}`;
+    grid.appendChild(c);
+  });
+  scroll.appendChild(months); scroll.appendChild(grid);
+  row.appendChild(scroll);
+  wrap.appendChild(row);
+  if (from <= s.today && s.today <= to) requestAnimationFrame(() => { scroll.scrollLeft = scroll.scrollWidth; });
+  return wrap;
+}
 function renderRoutineStats(wrap) {
   const s = loadState();
   const range = statsRange(), from = H.keyOfDate(range.from), to = H.keyOfDate(range.to);
@@ -2485,8 +2528,13 @@ function renderRoutineStats(wrap) {
   if (!list.length) return;
   wrap.appendChild(el("p", "section-label", "日課の連続達成"));
   const box = el("div", "td-rstats");
-  box.appendChild(el("p", "hb-note td-rstats-note", `${+end.slice(5, 7)}/${+end.slice(8)}までの${CAL_WEEKS}週間。色のついた日がやった日です。`));
-  list.forEach(r => box.appendChild(routineCal(s, r, end)));
+  if (statsMode === "year") {
+    box.appendChild(el("p", "hb-note td-rstats-note", `${from.slice(0, 4)}年の1年間。色のついた日がやった日です。`));
+    list.forEach(r => box.appendChild(routineYear(s, r, from, to)));
+  } else {
+    box.appendChild(el("p", "hb-note td-rstats-note", `${+end.slice(5, 7)}/${+end.slice(8)}までの${CAL_WEEKS}週間。色のついた日がやった日です。`));
+    list.forEach(r => box.appendChild(routineCal(s, r, end)));
+  }
   wrap.appendChild(box);
 }
 
