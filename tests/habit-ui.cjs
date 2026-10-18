@@ -70,6 +70,7 @@ function seedRecords() {
 
   // 3) 習慣を追加: ストレッチ・時間5分・毎日 → リング1タップで目標まで記録
   await p.locator('.hb-add').click();
+  await p.locator('#hb-sheet .td-choice', { hasText: '習慣' }).click();
   await p.locator('#hb-sheet input.field-input').first().fill('ストレッチ');
   await p.locator('#hb-sheet .hb-chip', { hasText: '🧘' }).click();
   await p.locator('#hb-sheet .hb-seg button', { hasText: '時間' }).click();
@@ -104,8 +105,14 @@ function seedRecords() {
   assert.match(await p.locator('.hb-card', { hasText: '筋トレ' }).innerText(), /今週 3\/4/);
 
   // 6) 日付ストリップで昨日を選ぶ → 昨日の記録が見える
+  const navH = await p.locator('.hb-weeknav').evaluate(e => e.getBoundingClientRect().height);
   await p.locator('.hb-day[data-day="2026-10-17"]').click();
   assert.equal(await p.locator('.hb-top h1').innerText(), '昨日');
+  assert.equal(await p.locator('.hb-weeknav .back').count(), 1);
+  // 日付のリングは達成した習慣ごとに色分けした区切り。8日以上前の注意書きは出さない
+  assert.ok(await p.locator('.hb-day[data-day="2026-10-17"] circle.seg-on').count() >= 1);
+  assert.doesNotMatch(await p.locator('.hb-sum').innerText(), /ゴールドには入りません/);
+  assert.equal(await p.locator('.hb-weeknav').evaluate(e => e.getBoundingClientRect().height), navH, 'the 今日へ button does not shift the page');
   assert.ok(await p.locator('.hb-card', { hasText: '専門医勉強' }).evaluate(e => e.classList.contains('done')));
   await p.locator('.hb-day[data-day="2026-10-18"]').click();
 
@@ -119,7 +126,7 @@ function seedRecords() {
   assert.equal(await p.locator('.hb-top h1').innerText(), '9/27(日)');
   assert.equal(await p.locator('.hb-weeknav span').innerText(), '9月');
   assert.ok(await p.locator('.hb-day.sel').evaluate(b => { const s = b.parentElement; return b.offsetLeft >= s.scrollLeft && b.offsetLeft + b.offsetWidth <= s.scrollLeft + s.clientWidth; }), 'selected day stays in view');
-  assert.match(await p.locator('.hb-sum').innerText(), /ゴールドには入りません/);
+  assert.doesNotMatch(await p.locator('.hb-sum').innerText(), /ゴールドには入りません/, 'no note for old days');
   const oldGold = await balance();
   await p.locator('.hb-card', { hasText: '自炊' }).locator('.hb-ring').click();
   assert.equal(await balance(), oldGold);

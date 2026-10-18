@@ -219,6 +219,17 @@ export function habitRate(h, from, to, today, ctx) {
   return { due, ok, rate: due ? ok / due : null };
 }
 // 日付ストリップのリング用: その日に予定のある習慣のうち達成した数
+// 日付ストリップのリング用: dayCompletion と同じ数え方で、1習慣ごとの {color, done}
+export function daySegments(habits, key, ctx) {
+  const out = [];
+  for (const h of habits) {
+    if (!isActiveOn(h, key)) continue;
+    const ach = isAchieved(h, key, ctx);
+    if ((h.freq.type === "weekly" || !isDue(h, key) || isRest(h, key, ctx)) && !ach) continue;
+    out.push({ id: h.id, color: h.color, done: ach });
+  }
+  return out;
+}
 export function dayCompletion(habits, key, ctx) {
   let due = 0, done = 0;
   for (const h of habits) {
@@ -363,6 +374,8 @@ export function settle(reward, habits, ctx, today) {
     if (k < today) applyShields(r, habits, k, c);
     const items = {};
     for (const h of habits) { const e = habitDayGold(h, k, c); if (e) items[h.id] = e; }
+    // 日課・タスクなど習慣以外のゴールド(ctx.extraGold(k) → {id:{g}})
+    if (ctx.extraGold) Object.assign(items, ctx.extraGold(k));
     const perfect = perfectGold(habits, k, c);
     if (Object.keys(items).length || perfect) r.days[k] = { items, perfect }; else delete r.days[k];
   }
