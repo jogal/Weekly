@@ -2,6 +2,7 @@
 // DOMにもlocalStorageにも触らない。保存先は wt_todo_v1 の1つで、中身は
 //   routines … 日課(歯みがき・薬など毎日の小さなこと)。連続記録の対象外でゴールドは少なめ
 //   rlog     … 日課をやった日 {"YYYY-MM-DD": {routineId: 1}}
+//              avoid(やめたいこと)の日課では「やってしまった日」。ゴールドは付かず減りもしない
 //   tasks    … 大きなタスク(期限と小さなステップ付き)。ステップ・完了した日にゴールド
 // ゴールドは習慣と同じく記録から日ごとに計算し直す(habit-core の settle に dayGoldItems を渡す)。
 // だからチェックを外せばゴールドも戻り、直近7日より前は確定する。HPのような罰はない。
@@ -37,6 +38,7 @@ export function normalizeRoutine(r, today) {
     icon: String(r?.icon || "✅").slice(0, 8),
     slot: SLOTS.some(s => s.id === r?.slot) ? r.slot : "any",
     createdOn: isDate(r?.createdOn) ? r.createdOn : today,
+    ...(r?.avoid ? { avoid: true } : {}),
     ...(isDate(r?.archivedOn) ? { archivedOn: r.archivedOn } : {}),
   };
 }
@@ -91,6 +93,8 @@ export function routineActiveOn(r, key) {
 }
 export function routinesOn(state, key) { return state.routines.filter(r => routineActiveOn(r, key)); }
 export function isRoutineDone(state, key, id) { return !!state.rlog[key]?.[id]; }
+// その日が「できた」か: やること=やった日、やめたいこと=やってしまわなかった日
+export function routineOk(state, r, key) { return !!r.avoid !== isRoutineDone(state, key, r.id); }
 export function toggleRoutine(state, key, id) {
   const n = clone(state);
   const day = n.rlog[key] || {};
@@ -115,23 +119,33 @@ export function archiveRoutine(state, id, today) {
   }
   return n;
 }
+// 今日タブの「日課 3/5」。やめたいことは数えない
 export function routineCount(state, key) {
-  const list = routinesOn(state, key);
+  const list = routinesOn(state, key).filter(r => !r.avoid);
   return { done: list.filter(r => isRoutineDone(state, key, r.id)).length, total: list.length };
 }
 
 // 連続達成(見るだけ。ゴールドやメダルは付けない)。今日まだなら昨日までで数える
+// やめたいことは「守れた日」の連続。今日やってしまうまでは今日も守れた日に入れる
 export function routineStreak(state, id, today) {
   const r = state.routines.find(x => x.id === id);
   if (!r) return 0;
-  let k = isRoutineDone(state, today, id) ? today : addDays(today, -1), n = 0;
-  while (routineActiveOn(r, k) && isRoutineDone(state, k, id)) { n++; k = addDays(k, -1); }
+  let k = r.avoid || isRoutineDone(state, today, id) ? today : addDays(today, -1), n = 0;
+  while (routineActiveOn(r, k) && routineOk(state, r, k)) { n++; k = addDays(k, -1); }
   return n;
 }
-export function routineBestStreak(state, id) {
+export function routineBestStreak(state, id, today) {
   const r = state.routines.find(x => x.id === id);
   if (!r) return 0;
-  const days = Object.keys(state.rlog).filter(k => state.rlog[k][id] && routineActiveOn(r, k)).sort();
+  let days;
+  if (r.avoid) {
+    // 作った日から今日(消したなら消した前日)まで、やってしまわなかった日
+    const last = r.archivedOn && addDays(r.archivedOn, -1) < today ? addDays(r.archivedOn, -1) : today;
+    days = [];
+    for (let k = r.createdOn; k <= last; k = addDays(k, 1)) if (!isRoutineDone(state, k, id)) days.push(k);
+  } else {
+    days = Object.keys(state.rlog).filter(k => state.rlog[k][id] && routineActiveOn(r, k)).sort();
+  }
   let best = 0, run = 0, prev = null;
   days.forEach(k => { run = prev && addDays(prev, 1) === k ? run + 1 : 1; best = Math.max(best, run); prev = k; });
   return best;
@@ -144,11 +158,12 @@ export function routineRate(state, id, today, n = 30) {
   for (let i = 0; i < n; i++) {
     const k = addDays(today, -i);
     if (!routineActiveOn(r, k)) continue;
-    total++; if (isRoutineDone(state, k, id)) done++;
+    total++; if (routineOk(state, r, k)) done++;
   }
   return { done, total };
 }
 // 週ごとのカレンダー: 新しい週が上。各日は done / miss / off(表示していない日) / future
+// やめたいことは 守れた日=done、やってしまった日=slip
 export function routineWeeks(state, id, today, weeks = 8) {
   const r = state.routines.find(x => x.id === id);
   const mon = mondayOf(today);
@@ -156,18 +171,23 @@ export function routineWeeks(state, id, today, weeks = 8) {
     const m = addDays(mon, -7 * w);
     return { monday: m, days: Array.from({ length: 7 }, (_, d) => {
       const k = addDays(m, d);
-      const st = k > today ? "future" : !r || !routineActiveOn(r, k) ? "off" : isRoutineDone(state, k, id) ? "done" : "miss";
+      const st = dayState(state, r, k, today);
       return { key: k, state: st };
     }) };
   });
 }
 
+function dayState(state, r, k, today) {
+  if (k > today) return "future";
+  if (!r || !routineActiveOn(r, k)) return "off";
+  return routineOk(state, r, k) ? "done" : r.avoid ? "slip" : "miss";
+}
 // from〜to(両端含む)の日ごとの状態。年間ヒートマップ用。today より後は future
 export function routineDays(state, id, from, to, today) {
   const r = state.routines.find(x => x.id === id);
   const out = [];
   for (let k = from; k <= to; k = addDays(k, 1)) {
-    const st = k > today ? "future" : !r || !routineActiveOn(r, k) ? "off" : isRoutineDone(state, k, id) ? "done" : "miss";
+    const st = dayState(state, r, k, today);
     out.push({ key: k, state: st });
   }
   return out;
@@ -240,7 +260,7 @@ export function setTaskDone(state, taskId, key) {
 // その日にもらえるゴールドを habit-core の day.items と同じ形 {id: {g}} で返す
 export function dayGoldItems(state, key) {
   const items = {};
-  const n = routinesOn(state, key).filter(r => isRoutineDone(state, key, r.id)).length;
+  const n = routinesOn(state, key).filter(r => !r.avoid && isRoutineDone(state, key, r.id)).length;
   if (n) items["todo:routines"] = { g: Math.min(GOLD_T.routineCap, n * GOLD_T.routine), n };
   state.tasks.forEach(t => {
     const steps = t.steps.filter(s => s.doneOn === key).length;

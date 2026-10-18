@@ -129,3 +129,23 @@ test('routines: streaks, rate and weekly calendar (view only, no gold)', () => {
   assert.equal(y.find(d => d.key === '2026-10-19').state, 'future');
   assert.equal(y.filter(d => d.state === 'done').length, 8);
 });
+
+test('avoid routines: slips are logged, kept days and streaks are counted, no gold', () => {
+  let s = T.saveRoutine(empty(), { id: 'a', name: '夜中のスマホ', avoid: true, createdOn: '2026-10-10' }, TODAY);
+  s = T.saveRoutine(s, { id: 'r', name: '薬', createdOn: '2026-10-10' }, TODAY);
+  assert.equal(s.routines[0].avoid, true);
+  assert.equal(s.routines[1].avoid, undefined);
+  ['2026-10-12', '2026-10-15'].forEach(k => { s = T.toggleRoutine(s, k, 'a'); });
+  assert.equal(T.routineStreak(s, 'a', TODAY), 3, '10/16, 10/17 and today (not slipped yet)');
+  assert.equal(T.routineBestStreak(s, 'a', TODAY), 3);
+  assert.deepEqual(T.routineRate(s, 'a', TODAY, 30), { done: 7, total: 9 });
+  const w = T.routineWeeks(s, 'a', TODAY, 1)[0].days.map(d => d.state);
+  assert.deepEqual(w, ['slip', 'done', 'done', 'slip', 'done', 'done', 'done']);
+  s = T.toggleRoutine(s, TODAY, 'a');
+  assert.equal(T.routineStreak(s, 'a', TODAY), 0, 'slipped today');
+  assert.deepEqual(T.dayGoldItems(s, TODAY), {}, 'a slip neither earns nor costs gold');
+  assert.deepEqual(T.routineCount(s, TODAY), { done: 0, total: 1 }, 'only normal routines are counted');
+  s = T.toggleRoutine(s, TODAY, 'r');
+  assert.deepEqual(T.dayGoldItems(s, TODAY), { 'todo:routines': { g: T.GOLD_T.routine, n: 1 } });
+  assert.equal(T.normalizeTodo(JSON.parse(JSON.stringify(s)), TODAY).routines[0].avoid, true, 'survives a save/load');
+});
