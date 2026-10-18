@@ -363,6 +363,8 @@ export function settle(reward, habits, ctx, today) {
     if (k < today) applyShields(r, habits, k, c);
     const items = {};
     for (const h of habits) { const e = habitDayGold(h, k, c); if (e) items[h.id] = e; }
+    // 日課・タスクなど習慣以外のゴールド(ctx.extraGold(k) → {id:{g}})
+    if (ctx.extraGold) Object.assign(items, ctx.extraGold(k));
     const perfect = perfectGold(habits, k, c);
     if (Object.keys(items).length || perfect) r.days[k] = { items, perfect }; else delete r.days[k];
   }

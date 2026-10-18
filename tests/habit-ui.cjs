@@ -70,6 +70,7 @@ function seedRecords() {
 
   // 3) 習慣を追加: ストレッチ・時間5分・毎日 → リング1タップで目標まで記録
   await p.locator('.hb-add').click();
+  await p.locator('#hb-sheet .td-choice', { hasText: '習慣' }).click();
   await p.locator('#hb-sheet input.field-input').first().fill('ストレッチ');
   await p.locator('#hb-sheet .hb-chip', { hasText: '🧘' }).click();
   await p.locator('#hb-sheet .hb-seg button', { hasText: '時間' }).click();

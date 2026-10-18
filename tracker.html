@@ -353,6 +353,42 @@ textarea.field-input { height:76px; resize:vertical; }
 .hb-link { background:none; border:0; color:var(--dim); font-size:11px; text-decoration:underline; cursor:pointer;
   display:block; margin:16px auto 0; padding:8px; }
 .hb-hint { font-size:10px; color:var(--faint); text-align:center; margin-top:10px; line-height:1.8; }
+/* 日課・大きなタスク */
+.td-head { display:flex; align-items:center; justify-content:space-between; margin:18px 2px 8px; }
+.td-head .hb-group { margin:0; }
+.td-plus { width:32px; height:32px; border-radius:50%; border:1px solid #3a3528; background:none; color:var(--gold); font-size:18px; line-height:1; cursor:pointer; }
+.td-empty { font-size:11px; color:var(--faint); margin:0 2px 8px; line-height:1.7; }
+.td-routines { border:1px solid #2a2c32; background:#121418; border-radius:18px; padding:4px 10px 8px; margin-bottom:10px; }
+.td-slot { font:500 10px var(--cond); letter-spacing:.14em; color:var(--faint); margin:8px 2px 2px; }
+.td-routine { display:flex; align-items:center; gap:10px; width:100%; min-height:44px; padding:4px 2px; border:0; background:none;
+  color:var(--txt); font-size:14px; text-align:left; cursor:pointer; touch-action:manipulation; -webkit-touch-callout:none; user-select:none; }
+.td-check { width:26px; height:26px; flex-shrink:0; border-radius:8px; border:1.5px solid #4a4d55; background:none; color:#16140f;
+  display:grid; place-items:center; font-size:15px; font-weight:800; padding:0; cursor:pointer; }
+.td-routine.done .td-check, .td-step.done .td-check { background:#a9c98f; border-color:#a9c98f; }
+.td-routine.done .td-rname { color:var(--dim); text-decoration:line-through; text-decoration-color:#ffffff40; }
+.td-ico { font-size:18px; width:22px; text-align:center; }
+.td-rname { flex:1; min-width:0; overflow-wrap:anywhere; }
+.td-task { min-height:68px; }
+.td-go { color:var(--dim); font-size:20px; padding:0 4px; }
+.td-due { font-weight:600; color:var(--dim); }
+.td-due.soon { color:#f0c27a; }
+.td-due.over { color:#ef8a7a; }
+.td-donelink { margin-top:4px; }
+.td-choice { display:flex; align-items:center; gap:12px; width:100%; padding:12px; margin-bottom:8px; border-radius:16px;
+  border:1px solid var(--line); background:#ffffff05; color:var(--txt); text-align:left; cursor:pointer; }
+.td-choice .hb-sub { display:block; }
+.td-steps { margin-bottom:8px; }
+.td-step { display:flex; align-items:center; gap:8px; padding:6px 0; border-bottom:1px solid var(--line); }
+.td-stname { flex:1; min-width:0; font-size:14px; overflow-wrap:anywhere; cursor:pointer; }
+.td-stname > span { display:block; }
+.td-stname small, .td-donedate { display:block; font-size:10px; color:var(--faint); }
+.td-step.done .td-stname > span { color:var(--dim); text-decoration:line-through; text-decoration-color:#ffffff40; }
+.td-mini { width:32px; height:32px; flex-shrink:0; border-radius:8px; border:1px solid var(--line); background:none; color:var(--dim); cursor:pointer; padding:0; }
+.td-mini:disabled { opacity:.3; cursor:default; }
+.td-addstep { display:flex; gap:8px; align-items:center; margin-bottom:8px; }
+.td-addstep .field-input { flex:1; margin:0; }
+.td-addstep .btn { flex:0 0 auto; width:auto; padding:0 14px; }
+.td-sheet-sub .td-due { font-weight:600; }
 /* sheets */
 .hb-sheet-head { display:flex; align-items:center; gap:10px; margin-bottom:6px; }
 .hb-sheet-head .hb-icon { background:#ffffff08; }
@@ -1491,7 +1527,7 @@ document.getElementById("menu-modal").addEventListener("click",e=>{
 const ARCHIVED_KEYS=["mus_logs","mus_custom","spot_logs","spot_cats"];
 document.getElementById("export-btn").onclick=()=>{
   const habitData={};
-  ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1"].forEach(k=>{try{const v=JSON.parse(localStorage.getItem(k));if(v!==null)habitData[k]=v;}catch(e){}});
+  ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1","wt_todo_v1"].forEach(k=>{try{const v=JSON.parse(localStorage.getItem(k));if(v!==null)habitData[k]=v;}catch(e){}});
   const archivedData={};
   ARCHIVED_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v!==null)archivedData[k]=v;});
   const out={records,habitData};
@@ -1505,7 +1541,7 @@ document.getElementById("import-btn").onclick=()=>{
         if(!d.records)throw new Error("bad format");
         records=d.records;
         if(d.habitData&&typeof d.habitData==="object")
-          ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1"].forEach(k=>{if(d.habitData[k]!==undefined)localStorage.setItem(k,JSON.stringify(d.habitData[k]));});
+          ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1","wt_todo_v1"].forEach(k=>{if(d.habitData[k]!==undefined)localStorage.setItem(k,JSON.stringify(d.habitData[k]));});
         if(d.archivedData&&typeof d.archivedData==="object")
           ARCHIVED_KEYS.forEach(k=>{if(typeof d.archivedData[k]==="string")localStorage.setItem(k,d.archivedData[k]);});
         persist();render();showToast("✅ 復元しました");
@@ -1526,7 +1562,7 @@ function reloadFromStorage(){
   render();
 }
 window.addEventListener("storage",e=>{
-  if(["wt_records","wt_habits_v1","wt_habit_log_v1","wt_reward_v1"].includes(e.key))reloadFromStorage();
+  if(["wt_records","wt_habits_v1","wt_habit_log_v1","wt_reward_v1","wt_todo_v1"].includes(e.key))reloadFromStorage();
 });
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)reloadFromStorage();});
 window.addEventListener("pageshow",e=>{if(e.persisted)reloadFromStorage();});
@@ -1756,6 +1792,7 @@ handleQuestParam();
 <script type="module">
 import * as H from "./js/habit-core.mjs";
 import * as Q from "./js/quest-core.mjs";
+import * as T from "./js/todo-core.mjs";
 
 const read = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
 const write = (k, v) => localStorage.setItem(k, JSON.stringify(v));
@@ -1768,7 +1805,8 @@ let stripDays = 28, stripRight = 0, stripFocus = false; // 日付ストリップ
 
 // ── state ──────────────────────────────────────────────────────────────────
 function ctxOf(s) {
-  return { records, log: s.log, freezes: s.reward.freezes, floorKey: H.dataFloor(records, s.log), today: s.today };
+  return { records, log: s.log, freezes: s.reward.freezes, floorKey: H.dataFloor(records, s.log), today: s.today,
+    extraGold: k => T.dayGoldItems(s.todo, k) };
 }
 // 読み込みのたびに未確定日のゴールドを精算する(ジムやNeuro Learnの記録もここで反映)
 function loadState() {
@@ -1776,7 +1814,7 @@ function loadState() {
   const savedHabits = read(H.KEYS.habits);
   const hs = H.ensureHabits(savedHabits, today);
   if (!Array.isArray(savedHabits?.habits) || !savedHabits.habits.length) write(H.KEYS.habits, hs);
-  const s = { today, habits: hs.habits, log: read(H.KEYS.log) || {}, reward: null };
+  const s = { today, habits: hs.habits, log: read(H.KEYS.log) || {}, reward: null, todo: T.normalizeTodo(read(T.KEY), today) };
   const saved = read(H.KEYS.reward);
   s.reward = H.normalizeReward(saved, today);
   const settled = H.settle(s.reward, s.habits, ctxOf(s), today);
@@ -1785,6 +1823,7 @@ function loadState() {
   return s;
 }
 function saveHabits(list) { write(H.KEYS.habits, { habits: list }); }
+function saveTodo(t) { write(T.KEY, t); }
 function curDay(s) {
   if (lastToday !== s.today) { selDay = null; stripRight = 0; lastToday = s.today; }
   return selDay && selDay <= s.today ? selDay : s.today;
@@ -1885,11 +1924,11 @@ function renderToday() {
       <button type="button" class="hb-pill gold" aria-label="ゴールド ${fmt(H.balance(s.reward))}。ショップを開く">🪙 ${fmt(H.balance(s.reward))}</button>
       <span class="hb-pill shield" title="まもりの護符" aria-label="まもりの護符 ${H.shieldCount(s.reward)}個">🧿 ${H.shieldCount(s.reward)}</span>
       ${H.unusedTickets(s.reward).length ? `<button type="button" class="hb-pill tk" aria-label="未使用のごほうびチケット ${H.unusedTickets(s.reward).length}枚">🎟️ ${H.unusedTickets(s.reward).length}</button>` : ""}
-      <button type="button" class="hb-add" aria-label="習慣を追加">＋</button>
+      <button type="button" class="hb-add" aria-label="習慣・日課・タスクを追加">＋</button>
     </div>`;
   top.querySelector(".gold").onclick = () => openShop();
   top.querySelector(".tk")?.addEventListener("click", () => openTickets());
-  top.querySelector(".hb-add").onclick = () => openEditor(null);
+  top.querySelector(".hb-add").onclick = () => openAddChooser();
   top.querySelector(".hb-pick input").onchange = e => { if (e.target.value) showDay(e.target.value, s.today); };
   v.appendChild(top);
 
@@ -1957,7 +1996,9 @@ function renderToday() {
     v.appendChild(el("p", "hb-group", "予定外の習慣"));
     off.forEach(h => v.appendChild(habitCard(h, day, ctx, true)));
   }
-  v.appendChild(el("p", "hb-hint", "リングをタップで記録 ・ 長押しで休息日<br>カードをタップすると細かく記録・編集できます"));
+  renderRoutines(v, s, day);
+  renderTasks(v, s, day);
+  v.appendChild(el("p", "hb-hint", "リングをタップで記録 ・ 長押しで休息日<br>カードをタップすると細かく記録・編集できます<br>日課はタップで済み ・ 長押しで編集"));
   const archived = s.habits.filter(h => h.archived);
   if (archived.length) {
     const a = el("button", "hb-link", `アーカイブした習慣（${archived.length}）`); a.type = "button";
@@ -2083,7 +2124,7 @@ function openDetail(hid, day) {
     head.appendChild(btn("編集", "hb-chip", () => openEditor(h.id)));
     box.appendChild(head);
     box.appendChild(el("p", "modal-sub", esc(`${dayLabel(day, s.today)} · ${H.freqLabel(h)} · ${goalText(h)}`
-      + (h.link ? ` · 記録タブの「${H.LINKS[h.link].label}」と連動` : ""))));
+      + (h.link ? ` · 「${H.LINKS[h.link].label}」の記録と連動` : ""))));
     box.appendChild(el("div", "hb-big", h.goal.type === "check"
       ? (ach ? "✓ 達成" : "未達成") : `${p}<small>/ ${t}${H.unitLabel(h)}</small>`));
 
@@ -2153,7 +2194,7 @@ function openEditor(hid) {
   const draw = () => sheet(box => {
     box.appendChild(el("h3", "modal-title", orig ? "習慣を編集" : "習慣を追加"));
     if (!orig) {
-      box.appendChild(el("span", "field-label", "記録タブと連動（任意）"));
+      box.appendChild(el("span", "field-label", "ほかの記録と連動（任意）"));
       const lc = el("div", "hb-chips");
       [[null, "なし"], ...Object.entries(H.LINKS).map(([k, L]) => [k, L.icon + " " + L.label])].forEach(([k, label]) => {
         const b = btn(label, "hb-chip" + (draft.link === k ? " on" : ""), () => {
@@ -2168,7 +2209,7 @@ function openEditor(hid) {
       });
       box.appendChild(lc);
     } else if (orig.link) {
-      box.appendChild(el("p", "modal-sub", `記録タブの「${H.LINKS[orig.link].label}」と連動しています。ここで記録すると記録タブ・XPにも反映されます。`));
+      box.appendChild(el("p", "modal-sub", `「${H.LINKS[orig.link].label}」の記録と連動しています。ここで記録するとXP・統計にも反映されます。`));
     }
 
     box.appendChild(el("span", "field-label", "名前"));
@@ -2275,6 +2316,266 @@ function move(id, dir) {
   [list[a], list[b]] = [list[b], list[a]];
   saveHabits(list); render(); showToast(dir < 0 ? "上へ移動しました" : "下へ移動しました");
 }
+// ── 日課・大きなタスク(ロジックは js/todo-core.mjs) ──────────────────────
+// 変更を保存して描き直し、増えた/減ったゴールドを知らせる
+function changeTodo(fn, msg, after) {
+  const s0 = loadState(), before = H.balance(s0.reward);
+  saveTodo(fn(s0.todo, s0));
+  render();
+  if (after) after();
+  const d = H.balance(loadState().reward) - before;
+  if (msg || d) showToast([msg, d ? `${d > 0 ? "+" : ""}${d}G` : ""].filter(Boolean).join(" "));
+}
+// 未来の日には記録しない
+const markDay = (s, day) => day > s.today ? s.today : day;
+
+function openAddChooser() {
+  sheet(box => {
+    box.appendChild(el("h3", "modal-title", "何を追加しますか？"));
+    [["✨", "習慣", "続けたいこと。連続記録とメダル、ゴールド", () => openEditor(null)],
+     ["🪥", "日課", `歯みがき・薬など毎日の小さなこと。1つ${T.GOLD_T.routine}G`, () => openRoutineEditor(null)],
+     ["📝", "大きなタスク", `期限と小さなステップで進めること。ステップ${T.GOLD_T.step}G・完了${T.GOLD_T.task}G`, () => openTaskCreate()],
+    ].forEach(([ic, title, desc, fn]) => {
+      const b = btn("", "td-choice", fn);
+      b.innerHTML = `<span class="hb-icon" aria-hidden="true">${ic}</span><span class="hb-main"><span class="hb-name">${title}</span><span class="hb-sub">${esc(desc)}</span></span>`;
+      box.appendChild(b);
+    });
+    box.appendChild(closeRow());
+  });
+}
+
+function sectionHead(title, addLabel, onAdd) {
+  const head = el("div", "td-head");
+  head.appendChild(el("p", "hb-group", title));
+  head.appendChild(btn("＋", "td-plus", onAdd, { "aria-label": addLabel }));
+  return head;
+}
+
+function renderRoutines(v, s, day) {
+  const list = T.routinesOn(s.todo, day), cnt = T.routineCount(s.todo, day);
+  v.appendChild(sectionHead(list.length ? `日課 ${cnt.done}/${cnt.total}` : "日課", "日課を追加", () => openRoutineEditor(null)));
+  if (!list.length) { v.appendChild(el("p", "td-empty", "歯みがき・薬など、毎日の小さなことをここに。")); return; }
+  const box = el("div", "td-routines");
+  T.SLOTS.forEach(sl => {
+    const rs = list.filter(r => r.slot === sl.id);
+    if (!rs.length) return;
+    box.appendChild(el("p", "td-slot", `${sl.icon} ${sl.label}`));
+    rs.forEach(r => {
+      const done = T.isRoutineDone(s.todo, day, r.id);
+      const b = el("button", "td-routine" + (done ? " done" : ""));
+      b.type = "button";
+      b.dataset.rid = r.id;
+      b.setAttribute("aria-pressed", String(done));
+      b.setAttribute("aria-label", `${r.name}${done ? "（済み）" : ""}。長押しで編集`);
+      b.innerHTML = `<span class="td-check" aria-hidden="true">${done ? "✓" : ""}</span>
+        <span class="td-ico" aria-hidden="true">${esc(r.icon)}</span><span class="td-rname">${esc(r.name)}</span>`;
+      bindRing(b, () => changeTodo(t => T.toggleRoutine(t, day, r.id)), () => openRoutineEditor(r.id));
+      box.appendChild(b);
+    });
+  });
+  v.appendChild(box);
+}
+
+function openRoutineEditor(rid) {
+  const s = loadState(), day = curDay(s);
+  const orig = rid ? s.todo.routines.find(r => r.id === rid) : null;
+  // 過去の日を見ながら追加したら、その日から表示する
+  const draft = orig ? { ...orig } : { name: "", icon: T.ROUTINE_ICONS[0], slot: "any", createdOn: day };
+  let msg = "";
+  const draw = () => sheet(box => {
+    box.appendChild(el("h3", "modal-title", orig ? "日課を編集" : "日課を追加"));
+    box.appendChild(el("p", "modal-sub", `毎日の小さなこと。1つ${T.GOLD_T.routine}G（1日${T.GOLD_T.routineCap}Gまで）で、連続記録はつきません。`));
+    box.appendChild(el("span", "field-label", "名前"));
+    const name = el("input", "field-input"); name.value = draft.name; name.maxLength = 40; name.placeholder = "例：歯みがき";
+    name.oninput = () => { draft.name = name.value; };
+    box.appendChild(name);
+    box.appendChild(el("span", "field-label", "アイコン"));
+    const ir = el("div", "hb-chips");
+    const icon = el("input", "field-input"); icon.value = draft.icon; icon.maxLength = 8; icon.style.width = "64px"; icon.style.textAlign = "center";
+    icon.setAttribute("aria-label", "アイコン（絵文字）");
+    icon.oninput = () => { draft.icon = icon.value || "✅"; };
+    ir.appendChild(icon);
+    T.ROUTINE_ICONS.forEach(ic => ir.appendChild(btn(ic, "hb-chip" + (draft.icon === ic ? " on" : ""), () => { draft.icon = ic; draw(); })));
+    box.appendChild(ir);
+    box.appendChild(el("span", "field-label", "時間帯"));
+    const seg = el("div", "hb-seg");
+    T.SLOTS.forEach(sl => seg.appendChild(btn(`${sl.icon} ${sl.label}`, draft.slot === sl.id ? "on" : "", () => { draft.slot = sl.id; draw(); })));
+    box.appendChild(seg);
+    if (msg) box.appendChild(el("p", "hb-note", esc(msg)));
+    const row = el("div", "btn-row");
+    if (orig) row.appendChild(btn("削除", "btn btn-secondary", () => {
+      if (!confirm(`「${orig.name}」を消しますか？これまでの記録とゴールドは残ります。`)) return;
+      closeSheet();
+      changeTodo((t, st) => T.archiveRoutine(t, orig.id, st.today), "日課を消しました");
+    }));
+    row.appendChild(btn("キャンセル", "btn btn-secondary", closeSheet));
+    row.appendChild(btn("保存", "btn btn-primary", () => {
+      if (!draft.name.trim()) { msg = "名前を入れてください"; draw(); return; }
+      closeSheet();
+      changeTodo((t, st) => T.saveRoutine(t, { ...draft, name: draft.name.trim() }, st.today),
+        orig ? "✅ 日課を更新しました" : `🪥 「${draft.name.trim()}」を日課に追加しました`);
+    }));
+    box.appendChild(row);
+  });
+  draw();
+}
+
+function renderTasks(v, s, day) {
+  const open = T.openTasks(s.todo), done = T.doneTasks(s.todo);
+  v.appendChild(sectionHead("大きなタスク", "大きなタスクを追加", () => openTaskCreate()));
+  const list = [...open, ...done.filter(t => t.doneOn === day)];
+  if (!list.length) v.appendChild(el("p", "td-empty", "論文・申告など時間のかかることを、小さなステップに分けて進めましょう。"));
+  list.forEach(t => v.appendChild(taskCard(t, s.today)));
+  if (done.length) {
+    const a = btn(`完了したタスク（${done.length}）`, "hb-link", openDoneTasks);
+    a.classList.add("td-donelink");
+    v.appendChild(a);
+  }
+}
+function taskSub(t, today) {
+  const p = T.taskProgress(t), di = !t.doneOn && T.dueInfo(t, today);
+  return [di ? `<span class="td-due ${di.level}">${di.label}</span>` : "",
+    t.doneOn ? `✓ ${esc(dayLabel(t.doneOn, today))}に完了` : "",
+    p.total ? `ステップ ${p.done}/${p.total}` : "ステップなし"].filter(Boolean).join(" · ");
+}
+function taskCard(t, today) {
+  const p = T.taskProgress(t);
+  const c = el("div", "hb-card td-task" + (t.doneOn ? " done" : ""));
+  c.dataset.tid = t.id;
+  c.style.setProperty("--c", "#8fb3d9");
+  c.style.setProperty("--p", t.doneOn ? "1" : p.total ? (p.done / p.total).toFixed(3) : "0");
+  c.tabIndex = 0;
+  c.setAttribute("role", "button");
+  c.setAttribute("aria-label", `${t.name}の詳細`);
+  c.innerHTML = `<div class="hb-fill"></div>
+    <div class="hb-icon" aria-hidden="true">${esc(t.icon)}</div>
+    <div class="hb-main"><div class="hb-name">${esc(t.name)}</div><div class="hb-sub">${taskSub(t, today)}</div></div>
+    <span class="td-go" aria-hidden="true">${t.doneOn ? "✓" : "›"}</span>`;
+  c.onclick = () => openTaskSheet(t.id);
+  c.onkeydown = e => { if (e.target === c && (e.key === "Enter" || e.key === " ")) { e.preventDefault(); openTaskSheet(t.id); } };
+  return c;
+}
+
+function openTaskCreate() {
+  const draft = { name: "", icon: T.TASK_ICONS[0], due: "", steps: "" };
+  let msg = "";
+  const draw = () => sheet(box => {
+    box.appendChild(el("h3", "modal-title", "大きなタスクを追加"));
+    box.appendChild(el("p", "modal-sub", `時間のかかることを小さなステップに分けて進めます。ステップ1つ${T.GOLD_T.step}G、完了で${T.GOLD_T.task}G。期限を過ぎても減点はありません。`));
+    box.appendChild(el("span", "field-label", "名前"));
+    const name = el("input", "field-input"); name.value = draft.name; name.maxLength = 40; name.placeholder = "例：症例報告を書く";
+    name.oninput = () => { draft.name = name.value; };
+    box.appendChild(name);
+    box.appendChild(el("span", "field-label", "アイコン"));
+    const ir = el("div", "hb-chips");
+    T.TASK_ICONS.forEach(ic => ir.appendChild(btn(ic, "hb-chip" + (draft.icon === ic ? " on" : ""), () => { draft.icon = ic; draw(); })));
+    box.appendChild(ir);
+    box.appendChild(el("span", "field-label", "期限（任意）"));
+    const due = el("input", "field-input"); due.type = "date"; due.value = draft.due;
+    due.onchange = () => { draft.due = due.value; };
+    box.appendChild(due);
+    box.appendChild(el("span", "field-label", "ステップ（1行に1つ・あとから足せます）"));
+    const st = el("textarea", "field-input"); st.value = draft.steps; st.placeholder = "例：\n文献を3本読む\n図1を作る\n考察を書く";
+    st.oninput = () => { draft.steps = st.value; };
+    box.appendChild(st);
+    if (msg) box.appendChild(el("p", "hb-note", esc(msg)));
+    const row = el("div", "btn-row");
+    row.appendChild(btn("キャンセル", "btn btn-secondary", closeSheet));
+    row.appendChild(btn("追加", "btn btn-primary", () => {
+      if (!draft.name.trim()) { msg = "名前を入れてください"; draw(); return; }
+      const id = "t_" + Date.now().toString(36);
+      const steps = draft.steps.split("\n").map(x => x.trim()).filter(Boolean).map(x => ({ name: x }));
+      changeTodo((t, s) => T.saveTask(t, { id, name: draft.name.trim(), icon: draft.icon, due: draft.due || null, steps }, s.today),
+        `📝 「${draft.name.trim()}」を追加しました`, () => openTaskSheet(id));
+    }));
+    box.appendChild(row);
+  });
+  draw();
+}
+
+function openTaskSheet(tid, focusAdd = false) {
+  const s = loadState(), day = curDay(s), mark = markDay(s, day);
+  const t = s.todo.tasks.find(x => x.id === tid);
+  if (!t) return closeSheet();
+  const upd = (fn, msg) => changeTodo(fn, msg, () => openTaskSheet(tid));
+  sheet(box => {
+    const head = el("div", "hb-sheet-head");
+    head.innerHTML = `<div class="hb-icon" aria-hidden="true">${esc(t.icon)}</div><h3 class="modal-title">${esc(t.name)}</h3>`;
+    box.appendChild(head);
+    box.appendChild(el("p", "modal-sub td-sheet-sub", taskSub(t, s.today)));
+
+    box.appendChild(el("span", "field-label", "ステップ"));
+    const ul = el("div", "td-steps");
+    if (!t.steps.length) ul.appendChild(el("p", "hb-note", "ステップを足すと、1つ進むごとにゴールドがもらえます。"));
+    t.steps.forEach((st, i) => {
+      const r = el("div", "td-step" + (st.doneOn ? " done" : ""));
+      const ck = btn(st.doneOn ? "✓" : "", "td-check", () => upd(x => T.toggleStep(x, tid, st.id, mark)),
+        { "aria-label": `${st.name}${st.doneOn ? "（済み）" : ""}`, "aria-pressed": String(!!st.doneOn) });
+      r.appendChild(ck);
+      const nm = el("span", "td-stname", `<span>${esc(st.name)}</span>` + (st.doneOn ? `<small>${esc(dayLabel(st.doneOn, s.today))}</small>` : ""));
+      nm.onclick = () => ck.click();
+      r.appendChild(nm);
+      r.appendChild(btn("↑", "td-mini", () => upd(x => T.moveStep(x, tid, st.id, -1)), { "aria-label": "上へ", ...(i ? {} : { disabled: "" }) }));
+      r.appendChild(btn("↓", "td-mini", () => upd(x => T.moveStep(x, tid, st.id, 1)), { "aria-label": "下へ", ...(i < t.steps.length - 1 ? {} : { disabled: "" }) }));
+      r.appendChild(btn("✕", "td-mini", () => upd(x => T.deleteStep(x, tid, st.id)), { "aria-label": `${st.name}を削除` }));
+      ul.appendChild(r);
+    });
+    box.appendChild(ul);
+    const add = el("div", "td-addstep");
+    const inp = el("input", "field-input"); inp.maxLength = 40; inp.placeholder = "ステップを追加"; inp.setAttribute("aria-label", "新しいステップ");
+    const doAdd = () => { if (inp.value.trim()) changeTodo(x => T.addStep(x, tid, inp.value), "", () => openTaskSheet(tid, true)); };
+    inp.onkeydown = e => { if (e.key === "Enter" && !e.isComposing) { e.preventDefault(); doAdd(); } };
+    add.appendChild(inp);
+    add.appendChild(btn("追加", "btn btn-secondary", doAdd));
+    box.appendChild(add);
+    if (mark !== s.today) box.appendChild(el("p", "hb-note", `チェックすると ${esc(dayLabel(mark, s.today))} に済ませたことになります。`));
+
+    box.appendChild(el("span", "field-label", "名前・アイコン・期限"));
+    const name = el("input", "field-input"); name.value = t.name; name.maxLength = 40; name.setAttribute("aria-label", "タスクの名前");
+    name.onchange = () => { if (name.value.trim()) upd((x, st) => T.saveTask(x, { ...t, ...x.tasks.find(y => y.id === tid), name: name.value.trim() }, st.today)); };
+    box.appendChild(name);
+    const ir = el("div", "hb-chips");
+    T.TASK_ICONS.forEach(ic => ir.appendChild(btn(ic, "hb-chip" + (t.icon === ic ? " on" : ""),
+      () => upd((x, st) => T.saveTask(x, { ...x.tasks.find(y => y.id === tid), icon: ic }, st.today)))));
+    box.appendChild(ir);
+    const dr = el("div", "td-addstep");
+    const due = el("input", "field-input"); due.type = "date"; due.value = t.due || ""; due.setAttribute("aria-label", "期限");
+    due.onchange = () => upd((x, st) => T.saveTask(x, { ...x.tasks.find(y => y.id === tid), due: due.value || null }, st.today));
+    dr.appendChild(due);
+    if (t.due) dr.appendChild(btn("期限なし", "btn btn-secondary", () => upd((x, st) => T.saveTask(x, { ...x.tasks.find(y => y.id === tid), due: null }, st.today))));
+    box.appendChild(dr);
+
+    const row = el("div", "btn-row");
+    row.appendChild(btn("削除", "btn btn-secondary", () => {
+      if (!confirm(`「${t.name}」を削除しますか？このタスクでもらったゴールドも（確定前の分は）なくなります。`)) return;
+      closeSheet();
+      changeTodo(x => T.deleteTask(x, tid), "タスクを削除しました");
+    }));
+    row.appendChild(t.doneOn
+      ? btn("戻す", "btn btn-secondary", () => upd(x => T.setTaskDone(x, tid, null), "未完了に戻しました"))
+      : btn("完了", "btn btn-primary", () => { closeSheet(); changeTodo(x => T.setTaskDone(x, tid, mark), `🎉 「${t.name}」完了！`); }));
+    row.appendChild(btn("閉じる", "btn btn-secondary", closeSheet));
+    box.appendChild(row);
+    if (focusAdd) setTimeout(() => inp.focus(), 0);
+  });
+}
+
+function openDoneTasks() {
+  const s = loadState(), list = T.doneTasks(s.todo);
+  if (!list.length) return closeSheet();
+  sheet(box => {
+    box.appendChild(el("h3", "modal-title", "完了したタスク"));
+    list.forEach(t => {
+      const r = el("div", "hb-archived-row");
+      r.innerHTML = `<div class="hb-icon" aria-hidden="true">${esc(t.icon)}</div><span>${esc(t.name)}<small class="td-donedate">${esc(dayLabel(t.doneOn, s.today))}に完了</small></span>`;
+      r.querySelector("span").onclick = () => openTaskSheet(t.id);
+      r.appendChild(btn("戻す", "hb-chip", () => changeTodo(x => T.setTaskDone(x, t.id, null), `「${t.name}」を未完了に戻しました`, openDoneTasks)));
+      box.appendChild(r);
+    });
+    box.appendChild(closeRow());
+  });
+}
+
 function openArchived() {
   sheet(box => {
     box.appendChild(el("h3", "modal-title", "アーカイブした習慣"));
