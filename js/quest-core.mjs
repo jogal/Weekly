@@ -13,6 +13,7 @@ const MAX_HISTORY_DAYS = 3650;
 //   minutes:<id> 完了した記録の累計分
 //   habit:<id>   自分で追加した習慣の目標を達成した日数
 //   activeDays / habitTotal / perfectDays / medals
+//   booksDone / pagesRead   読書(本棚)。読了した冊数と、読み進めたページの合計(読了で登録しただけの本は数えない)
 export const QUEST_LINES = [
   { id: "workout_days", icon: "💪", name: "鍛錬の道", metric: "track:workout", unit: "日", desc: "筋トレを{n}",
     tiers: [{ n: 10, g: 50 }, { n: 30, g: 150 }, { n: 100, g: 500 }, { n: 300, g: 1500 }] },
@@ -34,6 +35,10 @@ export const QUEST_LINES = [
     tiers: [{ n: 3, g: 80 }, { n: 10, g: 200 }, { n: 50, g: 800 }] },
   { id: "medals", icon: "🏅", name: "メダルコレクター", metric: "medals", unit: "個", desc: "連続記録のメダルを{n}集める",
     tiers: [{ n: 1, g: 50 }, { n: 3, g: 150 }, { n: 10, g: 600 }] },
+  { id: "books_done", icon: "📕", name: "本の虫", metric: "booksDone", unit: "冊", desc: "本を{n}読み終える",
+    tiers: [{ n: 1, g: 50 }, { n: 5, g: 200 }, { n: 12, g: 500 }, { n: 30, g: 1500 }] },
+  { id: "pages_read", icon: "📖", name: "ページをめくる", metric: "pagesRead", unit: "ページ", desc: "累計{n}読み進める",
+    tiers: [{ n: 500, g: 60 }, { n: 2000, g: 200 }, { n: 6000, g: 600 }, { n: 20000, g: 2000 }] },
 ];
 // 自分で追加した習慣には、それぞれ専用のクエストが付く
 export const HABIT_TIERS = [{ n: 7, g: 40 }, { n: 30, g: 120 }, { n: 100, g: 400 }, { n: 365, g: 1200 }];
@@ -48,8 +53,10 @@ export function questLines(habits = []) {
 export function questId(line, tierIdx) { return `${line.id}:${tierIdx}`; }
 
 // ── 進捗の集計(記録から毎回数える) ────────────────────────────────────────
-export function questMetrics({ records = {}, log = {}, habits = [], reward = null, today }) {
-  const m = { track: {}, part: {}, minutes: {}, habit: {}, activeDays: 0, habitTotal: 0, perfectDays: 0, medals: 0 };
+// reading: 読書の集計 { booksDone, pagesRead }(reading-core の questStats)
+export function questMetrics({ records = {}, log = {}, habits = [], reward = null, reading = null, today }) {
+  const m = { track: {}, part: {}, minutes: {}, habit: {}, activeDays: 0, habitTotal: 0, perfectDays: 0, medals: 0,
+    booksDone: reading?.booksDone || 0, pagesRead: reading?.pagesRead || 0 };
   const active = new Set(), trackDays = {}, partDays = {};
   for (const wk of Object.keys(records)) {
     if (!/^\d{4}-\d{2}-\d{2}$/.test(wk)) continue;

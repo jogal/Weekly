@@ -56,17 +56,17 @@ function seedRecords() {
   const reward = () => p.evaluate(() => JSON.parse(localStorage.getItem('wt_reward_v1')));
   const balance = async () => p.$eval('#today-view .hb-pill.gold', e => Number(e.textContent.replace(/[^\d]/g, '')));
 
-  // 1) これまでの記録で達成済みのクエストがあると、今日タブと育成タブに出る
-  const strip = p.locator('.hb-quest.ready');
-  await strip.waitFor();
-  const readyN = Number((await strip.innerText()).match(/(\d+)件/)[1]);
-  assert.ok(readyN >= 3, `ready quests: ${readyN}`);
+  // 1) これまでの記録で達成済みのクエストがあると、育成タブに印が付く。今日タブには帯を出さない(画面がずれるため)
+  assert.equal(await p.locator('#today-view .hb-quest').count(), 0);
   assert.ok(await p.locator('.tab-btn[data-tab="status"]').evaluate(e => e.classList.contains('has-badge')));
-  if (shots) await p.screenshot({ path: path.join(shots, 'quest-today-ready.png') });
   const gold0 = await balance();
 
-  // 2) 掲示板を開く → 受け取れるものが先頭。台所の主 I を受け取る
-  await strip.click();
+  // 2) 育成タブから掲示板を開く → 受け取れるものが先頭。台所の主 I を受け取る
+  await p.locator('[data-tab="status"]').click();
+  const openBoard = p.locator('#status-view .btn-primary', { hasText: /報酬を受け取る|掲示板を開く/ });
+  const readyN = Number((await openBoard.innerText()).match(/（(\d+)）/)[1]);
+  assert.ok(readyN >= 3, `ready quests: ${readyN}`);
+  await openBoard.click();
   await p.waitForSelector('#hb-sheet .qb-row');
   assert.ok(await p.locator('#hb-sheet .qb-row').first().evaluate(e => e.classList.contains('ready')));
   assert.ok(await p.locator('#hb-sheet .qb-btn:disabled', { hasText: 'ロック中' }).count() > 0);
@@ -88,6 +88,14 @@ function seedRecords() {
   if (shots) await p.screenshot({ path: path.join(shots, 'quest-clear.png') });
   await p.locator('.hb-celebrate').click();
   assert.match(await p.locator('#hb-sheet .qb-row', { hasText: 'ことばの旅 III' }).innerText(), /31\/100時間/);
+  // サムネイル: リングは今の段の進み具合(31%)、◆は済んだ2段+今の段
+  const thumb = p.locator('#hb-sheet .qb-row', { hasText: 'ことばの旅 III' }).locator('.qb-ico');
+  assert.ok(await thumb.locator('.qb-ring svg circle').nth(1).evaluate(e => {
+    const c = Number(e.getAttribute('stroke-dasharray')), off = Number(e.getAttribute('stroke-dashoffset'));
+    return Math.abs(1 - off / c - 0.31) < 0.01;
+  }));
+  assert.equal(await thumb.locator('.qb-pips i.on').count(), 2);
+  assert.equal(await thumb.locator('.qb-pips i.now').count(), 1);
   let r = await reward();
   assert.deepEqual(Object.keys(r.quests.claimed).sort(), ['cooking_days:0', 'english_hours:0', 'english_hours:1']);
   assert.equal('equipped' in r, false);
@@ -96,6 +104,7 @@ function seedRecords() {
   await p.locator('#hb-sheet .hb-seg button', { hasText: '達成の記録' }).click();
   assert.equal(await p.locator('#hb-sheet .qb-log').count(), 3);
   await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click();
+  await p.locator('[data-tab="today"]').click();
   assert.equal(await balance(), gold0 + 50 + 60 + 150);
 
   // 5) 育成タブ: クエストカードがある。ショップに称号・背景はない
@@ -107,7 +116,7 @@ function seedRecords() {
   await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click();
   if (shots) await p.screenshot({ path: path.join(shots, 'quest-growth.png'), fullPage: false });
 
-  // 6) 残りを受け取りきるとバッジが消え、今日タブは「あと少し」のクエストを出す
+  // 6) 残りを受け取りきるとバッジが消える
   for (let i = 0; i < 20; i++) {
     const btn = p.locator('#status-view .qb-btn.ready').first();
     if (!(await btn.count())) break;
@@ -118,10 +127,7 @@ function seedRecords() {
   }
   assert.equal(await p.locator('.tab-btn[data-tab="status"]').evaluate(e => e.classList.contains('has-badge')), false);
   await p.locator('[data-tab="today"]').click();
-  const near = p.locator('.hb-quest:not(.ready)');
-  await near.waitFor();
-  assert.match(await near.innerText(), /\d+(\.\d)?\/\d+/);
-  if (shots) await p.screenshot({ path: path.join(shots, 'quest-today-next.png') });
+  assert.equal(await p.locator('#today-view .hb-quest').count(), 0);
 
   // 7) 再読み込みしても受け取り状態とゴールドはそのまま
   const goldBefore = await balance();
@@ -130,16 +136,18 @@ function seedRecords() {
   assert.equal(await balance(), goldBefore);
   assert.deepEqual((await reward()).quests.claimed, r.quests.claimed);
 
-  // 8) はみ出しなし(今日タブのクエスト表示・掲示板)
+  // 8) はみ出しなし(今日タブ・掲示板)
   for (const width of [320, 375, 430]) {
     await p.setViewportSize({ width, height: 844 });
     assert.ok(await p.evaluate(() => document.documentElement.scrollWidth <= innerWidth), `today ${width} overflow`);
-    await p.locator('.hb-quest').click();
+    await p.locator('[data-tab="status"]').click();
+    await p.locator('#status-view .btn-primary', { hasText: '掲示板を開く' }).click();
     assert.equal(await p.locator('#hb-sheet .modal-box').evaluate(e => e.scrollWidth > e.clientWidth), false, `board ${width} overflow`);
     await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click();
+    await p.locator('[data-tab="today"]').click();
   }
 
   assert.deepEqual(errors, []);
-  console.log('Quest board: ready strip, badge, claim chain, gold-only reward, history, shop tabs, badge clear, reload, widths passed.');
+  console.log('Quest board: badge (no today strip), claim chain, gold-only reward, history, shop tabs, badge clear, reload, widths passed.');
   await browser.close(); server.close();
 })().catch(e => { console.error(e); server.close(); process.exit(1); });
