@@ -1858,17 +1858,22 @@ let selDay = null, lastToday = null;
 let stripDays = 28, stripRight = 0, stripFocus = false; // 日付ストリップ: 描く日数・右端からの位置・選んだ日へ寄せるか
 
 // ── state ──────────────────────────────────────────────────────────────────
+function readingBooks(today) { return RC.normalize(read(RC.KEY), today).books; }
 function ctxOf(s) {
-  const books = RC.normalize(read(RC.KEY), s.today).books; // 読書は本棚(wt_reading_v1)から。進んだページ・読了をゴールドに足す
-  return { records, log: s.log, freezes: s.reward.freezes, floorKey: H.dataFloor(records, s.log), today: s.today,
+  const books = readingBooks(s.today); // 読書は本棚(wt_reading_v1)から。進んだページ・読了をゴールドに足し、習慣「読書」の進み具合にする
+  let floorKey = H.dataFloor(records, s.log);
+  const rf = RC.firstLogDay(books);
+  if (rf && (!floorKey || rf < floorKey)) floorKey = rf;
+  return { records, log: s.log, freezes: s.reward.freezes, floorKey, today: s.today,
+    readPages: k => RC.pagesOnDay(books, k),
     extraGold: k => ({ ...T.dayGoldItems(s.todo, k), ...RC.dayGoldItems(books, k) }) };
 }
 // 読み込みのたびに未確定日のゴールドを精算する(ジムやNeuro Learnの記録もここで反映)
 function loadState() {
   const today = H.keyOfDate(new Date());
   const savedHabits = read(H.KEYS.habits);
-  const hs = H.ensureHabits(savedHabits, today);
-  if (!Array.isArray(savedHabits?.habits) || !savedHabits.habits.length) write(H.KEYS.habits, hs);
+  const hs = H.ensureHabits(savedHabits, today, RC.firstLogDay(readingBooks(today)));
+  if (!Array.isArray(savedHabits?.habits) || savedHabits.habits.length !== hs.habits.length) write(H.KEYS.habits, hs);
   const s = { today, habits: hs.habits, log: read(H.KEYS.log) || {}, reward: null, todo: T.normalizeTodo(read(T.KEY), today) };
   const saved = read(H.KEYS.reward);
   s.reward = H.normalizeReward(saved, today);
@@ -1917,6 +1922,7 @@ function ringSvg(size, sw, ratio, color, track = "#ffffff1f") {
 // ── writes ─────────────────────────────────────────────────────────────────
 // op: {toggle} | {delta} | {set} | {part,on}
 function applyChange(h, day, op) {
+  if (h.link === "reading") return; // 読書は本棚(ReadingUI)で記録する
   const s0 = loadState();
   const before = snapshotLevels(), xp0 = totalXP();
   if (h.link) {
@@ -2130,6 +2136,10 @@ function quickTap(h, day) {
   const s = loadState(), ctx = ctxOf(s);
   const p = H.progressOf(h, day, ctx), t = H.targetOf(h);
   if (h.link === "workout") return openDetail(h.id, day);
+  if (h.link === "reading") { // 読書中の本が1冊ならそのページ記録を開く。それ以外は詳細で本を選ぶ
+    const rb = RC.booksOn(readingBooks(s.today), day).filter(b => b.status === "reading");
+    return rb.length === 1 && window.ReadingUI ? window.ReadingUI.openPage(rb[0].id, day) : openDetail(h.id, day);
+  }
   if (h.goal.type === "minutes") return p >= t ? openDetail(h.id, day) : applyChange(h, day, { set: t });
   if (h.goal.type === "count") return applyChange(h, day, { delta: 1 });
   applyChange(h, day, { toggle: true });
@@ -2183,7 +2193,11 @@ function openDetail(hid, day) {
       ? (ach ? "✓ 達成" : "未達成") : `${p}<small>/ ${t}${H.unitLabel(h)}</small>`));
 
     const ctrl = el("div", "hb-ctrl");
-    if (h.link === "workout") {
+    if (h.link === "reading") { // 読書は本ごとに「何ページまで進んだか」を記録する(本棚と同じ記録)
+      const rb = RC.booksOn(readingBooks(s.today), day).filter(b => b.status === "reading");
+      rb.forEach(b => ctrl.appendChild(btn(`📖 ${b.title} p.${RC.pageAt(b, day)}`, "", () => window.ReadingUI?.openPage(b.id, day))));
+      ctrl.appendChild(btn("＋ 本を追加", rb.length ? "" : "on", () => window.ReadingUI?.openEditor(null, { status: "reading", day })));
+    } else if (h.link === "workout") {
       const wd = records?.[H.mondayOf(day)]?.[H.DAY_KEYS[H.weekdayIdx(day)]] || {};
       WORKOUT_PARTS.forEach(part => {
         const on = !!wd["workout_" + part.id]?.done;
@@ -2263,7 +2277,9 @@ function openEditor(hid) {
       });
       box.appendChild(lc);
     } else if (orig.link) {
-      box.appendChild(el("p", "modal-sub", `「${H.LINKS[orig.link].label}」の記録と連動しています。ここで記録するとXP・統計にも反映されます。`));
+      box.appendChild(el("p", "modal-sub", orig.link === "reading"
+        ? "本棚の読書記録と連動しています。その日に1ページでも進めば達成（目標をページ数にもできます）。XPと習慣のゴールドは付かず、ゴールドはページ分だけ入ります。"
+        : `「${H.LINKS[orig.link].label}」の記録と連動しています。ここで記録するとXP・統計にも反映されます。`));
     }
 
     box.appendChild(el("span", "field-label", "名前"));
@@ -2291,7 +2307,7 @@ function openEditor(hid) {
     box.appendChild(el("span", "field-label", "目標"));
     const gs = el("div", "hb-seg");
     H.allowedGoalTypes(draft.link).forEach(t => gs.appendChild(btn(
-      t === "count" && draft.link === "workout" ? "部位数" : GOAL_LABEL[t], draft.goal.type === t ? "on" : "", () => {
+      t === "count" && draft.link === "workout" ? "部位数" : t === "count" && draft.link === "reading" ? "ページ数" : GOAL_LABEL[t], draft.goal.type === t ? "on" : "", () => {
         draft.goal = { type: t, target: t === "check" ? 1 : (draft.goal.type === t ? draft.goal.target : t === "minutes" ? 15 : 2) };
         draw();
       })));
@@ -2798,7 +2814,8 @@ function renderRewardCard(wrap) {
 
 // ── クエスト掲示板 ─────────────────────────────────────────────────────────
 function questBoardOf(s) {
-  const reading = RC.questStats(RC.normalize(read(RC.KEY), s.today).books, s.today);
+  const books = readingBooks(s.today);
+  const reading = { ...RC.questStats(books, s.today), pagesOn: k => RC.pagesOnDay(books, k), firstDay: RC.firstLogDay(books) };
   const m = Q.questMetrics({ records, log: s.log, habits: s.habits, reward: s.reward, reading, today: s.today });
   return Q.questBoard(m, s.reward, s.habits);
 }
