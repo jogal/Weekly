@@ -76,6 +76,16 @@ const server = http.createServer((req, res) => {
   assert.equal(await balance(), g0 + 4);
   assert.deepEqual(Object.keys((await todo()).rlog['2026-10-18']).length, 2);
 
+  // 3b) 📅 で日課の連続達成カレンダー(週ごと、新しい週が上)
+  await p.locator('.td-cal').click();
+  assert.equal(await p.locator('#hb-sheet .td-rcal').count(), 2);
+  const cal = p.locator('#hb-sheet .td-rcal', { hasText: '歯みがき' });
+  assert.match(await cal.innerText(), /🔥1日連続[\s\S]*最長 1日/);
+  assert.equal(await cal.locator('.td-rcal-day.today').evaluate(e => e.classList.contains('done')), true);
+  assert.equal(await cal.locator('.td-rcal-wk').count(), 9, 'header + 8 weeks');
+  if (shots) await p.screenshot({ path: path.join(shots, 'todo-routine-cal.png') });
+  await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click();
+
   // 4) ダブルタップで編集(済みの状態は変わらない) → 名前を変える。長押しでは何も起きない
   const med = p.locator('.td-routine', { hasText: '薬' });
   await med.dispatchEvent('pointerdown');
@@ -85,6 +95,7 @@ const server = http.createServer((req, res) => {
   await med.click();
   await med.click();
   await p.waitForSelector('#hb-sheet .modal-title:has-text("日課を編集")');
+  assert.equal(await p.locator('#hb-sheet .td-rcal').count(), 1, 'the editor shows that routine\'s calendar');
   await p.clock.runFor(400);
   assert.equal(await balance(), g0 + 4, 'double tap does not toggle');
   await p.locator('#hb-sheet input.field-input').first().fill('降圧薬');
