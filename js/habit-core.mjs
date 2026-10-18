@@ -286,6 +286,7 @@ export function newRewardState(todayKey) {
     purchases: [], freezes: {}, owned: [],
     equipped: { title: null, bg: null },
     quests: { claimed: {} },
+    wishes: defaultWishes(), tickets: [],
   };
 }
 export function normalizeReward(r, todayKey) {
@@ -302,6 +303,9 @@ export function normalizeReward(r, todayKey) {
     owned: (Array.isArray(r.owned) ? r.owned : []).filter(id => !RETIRED_ITEMS.has(id)),
     equipped: { title: r.equipped?.title || null, bg: r.equipped?.bg || null },
     quests: { claimed: { ...(r.quests?.claimed || {}) } },
+    // ごほうびリストが未設定なら初期の3つ。自分で全部消した([])ならそのまま
+    wishes: Array.isArray(r.wishes) ? r.wishes.map(normalizeWish) : defaultWishes(),
+    tickets: Array.isArray(r.tickets) ? r.tickets.filter(t => t && t.id) : [],
   };
 }
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -408,7 +412,8 @@ export const SHOP = [
     css: "radial-gradient(ellipse at 50% 115%,#f2b36a66,transparent 60%),linear-gradient(180deg,#1b2238,#2a2232 70%,#3a2a2a)" },
 ];
 export const SHOP_KINDS = [
-  { kind: "shield", label: "どうぐ" }, { kind: "title", label: "称号" }, { kind: "bg", label: "背景" },
+  { kind: "wish", label: "ごほうび" }, { kind: "shield", label: "どうぐ" },
+  { kind: "title", label: "称号" }, { kind: "bg", label: "背景" },
 ];
 // 休止中のアイテム(おとも)。保存データに残っていても読み込み時に取り除く
 export const RETIRED_ITEMS = new Set(["p_chick", "p_cat", "p_owl", "p_fox", "p_dragon",
@@ -433,6 +438,68 @@ export function equip(r, kind, itemId) {
   n.equipped[kind] = itemId || null;
   return n;
 }
+
+// ── ごほうびチケット(リアルの自分へのごほうび) ──────────────────────────────
+// ごほうびリストに名前と値段を登録し、ゴールドでチケットを買う。チケットは1枚1回、
+// 実際にごほうびを楽しんだときに「使う」。購入時の名前・値段はチケットに写して残す
+export const WISH_ICONS = ["♨️", "🍻", "🛍️", "🍰", "🍣", "🎬", "💆", "📚", "🎮", "☕", "✈️", "🎁"];
+export const DEFAULT_WISHES = [
+  { id: "w_sauna", name: "サウナに行く", icon: "♨️", price: 700 },
+  { id: "w_drink", name: "飲みに行く", icon: "🍻", price: 1000 },
+  { id: "w_shopping", name: "買い物チケット", icon: "🛍️", price: 1500 },
+];
+export const WISH_PRICE_MIN = 10, WISH_PRICE_MAX = 99999;
+function defaultWishes() { return DEFAULT_WISHES.map(w => ({ ...w })); }
+export function normalizeWish(w) {
+  return {
+    id: String(w?.id || "w_" + Date.now().toString(36)),
+    name: String(w?.name || "ごほうび").trim().slice(0, 30) || "ごほうび",
+    icon: String(w?.icon || "🎁").slice(0, 8),
+    price: clampInt(w?.price, WISH_PRICE_MIN, WISH_PRICE_MAX, 500),
+  };
+}
+export function saveWish(r, wish) {
+  const n = clone(r), w = normalizeWish(wish);
+  const i = n.wishes.findIndex(x => x.id === w.id);
+  if (i >= 0) n.wishes[i] = w; else n.wishes.push(w);
+  return n;
+}
+// リストから消しても、買ったチケットはそのまま残る
+export function deleteWish(r, id) {
+  const n = clone(r);
+  n.wishes = n.wishes.filter(w => w.id !== id);
+  return n;
+}
+export function buyTicket(r, wishId, today) {
+  const w = r.wishes.find(x => x.id === wishId);
+  if (!w) return { ok: false, reason: "unknown" };
+  if (balance(r) < w.price) return { ok: false, reason: "gold" };
+  const n = clone(r);
+  const id = "tk" + (n.tickets.length + 1);
+  const ticket = { id, wishId: w.id, name: w.name, icon: w.icon, price: w.price, boughtOn: today, usedOn: null };
+  n.tickets.push(ticket);
+  n.purchases.push({ item: "ticket:" + w.id, price: w.price, on: today, ticket: id });
+  return { ok: true, state: n, ticket };
+}
+export function useTicket(r, ticketId, today) {
+  const t = r.tickets.find(x => x.id === ticketId);
+  if (!t) return { ok: false, reason: "unknown" };
+  if (t.usedOn) return { ok: false, reason: "used" };
+  const n = clone(r);
+  n.tickets.find(x => x.id === ticketId).usedOn = today;
+  return { ok: true, state: n };
+}
+export function unusedTickets(r) { return r.tickets.filter(t => !t.usedOn); }
+export function usedTickets(r) {
+  return r.tickets.filter(t => t.usedOn).sort((a, b) => b.usedOn.localeCompare(a.usedOn) || b.id.localeCompare(a.id));
+}
+// 値段の目安: 直近7日(今日を除く)の1日あたりの稼ぎ
+export function goldPerDay(r, today) {
+  let sum = 0;
+  for (let i = 1; i <= SETTLE_WINDOW; i++) sum += goldOn(r, addDays(today, -i));
+  return sum / SETTLE_WINDOW;
+}
+export function daysOfEffort(price, perDay) { return perDay > 0 ? Math.max(1, Math.round(price / perDay)) : null; }
 
 // ── 記録の書き込み(純粋関数: 新しいオブジェクトを返す) ───────────────────────
 // 独自習慣: 値を設定(0以下で消す)。休息フラグは残す

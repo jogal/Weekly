@@ -265,3 +265,60 @@ test('rates leave out rest days, shielded days and an unfinished today', () => {
   const dc = H.dayCompletion([h, custom({ id: 'h_y' })], H.addDays(TODAY, -3), ctxOf(log));
   assert.deepEqual(dc, { due: 2, done: 1 });
 });
+
+test('reward tickets: default list, buy with gold, use exactly once', () => {
+  let r = H.newRewardState(TODAY);
+  assert.deepEqual(r.wishes.map(w => [w.name, w.price]), [['サウナに行く', 700], ['飲みに行く', 1000], ['買い物チケット', 1500]]);
+  assert.equal(H.buyTicket(r, 'w_sauna', TODAY).reason, 'gold');
+  assert.equal(H.buyTicket(r, 'nope', TODAY).reason, 'unknown');
+  r.grants.push({ g: 2000, reason: 'test', on: TODAY });
+  const b1 = H.buyTicket(r, 'w_sauna', TODAY);
+  assert.ok(b1.ok);
+  r = b1.state;
+  assert.equal(H.balance(r), 2100 - 700);
+  assert.deepEqual(b1.ticket, { id: 'tk1', wishId: 'w_sauna', name: 'サウナに行く', icon: '♨️', price: 700, boughtOn: TODAY, usedOn: null });
+  r = H.buyTicket(r, 'w_sauna', TODAY).state;           // 同じごほうびを2枚持てる
+  assert.equal(H.unusedTickets(r).length, 2);
+  const used = H.useTicket(r, 'tk1', '2026-10-19');
+  assert.ok(used.ok);
+  r = used.state;
+  assert.equal(H.useTicket(r, 'tk1', '2026-10-20').reason, 'used', 'one use per ticket');
+  assert.equal(H.useTicket(r, 'tk9', TODAY).reason, 'unknown');
+  assert.deepEqual(H.unusedTickets(r).map(t => t.id), ['tk2']);
+  assert.deepEqual(H.usedTickets(r).map(t => [t.id, t.usedOn]), [['tk1', '2026-10-19']]);
+  assert.equal(H.balance(r), 2100 - 1400, 'using a ticket costs nothing more');
+});
+
+test('editing or deleting a wish keeps tickets already bought as they were', () => {
+  let r = H.newRewardState(TODAY);
+  r.grants.push({ g: 5000, reason: 'test', on: TODAY });
+  r = H.saveWish(r, { id: 'w_movie', name: '  映画を観る ', icon: '🎬', price: 500 });
+  assert.deepEqual(r.wishes.at(-1), { id: 'w_movie', name: '映画を観る', icon: '🎬', price: 500 });
+  r = H.buyTicket(r, 'w_movie', TODAY).state;
+  r = H.saveWish(r, { id: 'w_movie', name: 'レイトショー', icon: '🎬', price: 800 });
+  assert.equal(r.wishes.length, 4);
+  assert.deepEqual([r.tickets[0].name, r.tickets[0].price], ['映画を観る', 500]);
+  r = H.deleteWish(r, 'w_movie');
+  assert.equal(r.wishes.some(w => w.id === 'w_movie'), false);
+  assert.equal(H.unusedTickets(r).length, 1);
+  assert.equal(H.normalizeWish({ price: 0 }).price, H.WISH_PRICE_MIN);
+  assert.equal(H.normalizeWish({ name: '   ' }).name, 'ごほうび');
+});
+
+test('saved reward state keeps wishes and tickets; an emptied list stays empty', () => {
+  const r = H.newRewardState(TODAY);
+  r.wishes = []; r.tickets = [{ id: 'tk1', wishId: 'w_sauna', name: 'サウナに行く', icon: '♨️', price: 700, boughtOn: TODAY, usedOn: null }];
+  const n = H.normalizeReward(JSON.parse(JSON.stringify(r)), TODAY);
+  assert.deepEqual(n.wishes, []);
+  assert.equal(n.tickets.length, 1);
+  assert.equal(H.normalizeReward({ startedOn: TODAY }, TODAY).wishes.length, 3, 'older saves get the default list');
+});
+
+test('price estimate uses the last seven full days of gold', () => {
+  const r = H.newRewardState('2026-10-01');
+  for (let i = 1; i <= 7; i++) r.days[H.addDays(TODAY, -i)] = { items: { h: { g: 100 } }, perfect: 0 };
+  r.days[TODAY] = { items: { h: { g: 999 } }, perfect: 0 };   // 今日はまだ途中なので含めない
+  assert.equal(H.goldPerDay(r, TODAY), 100);
+  assert.equal(H.daysOfEffort(700, 100), 7);
+  assert.equal(H.daysOfEffort(700, 0), null);
+});

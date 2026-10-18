@@ -122,12 +122,13 @@ function seedRecords() {
   await p.waitForSelector('.rw-gold');
   assert.match(await p.locator('.rw-gold').innerText(), /186/);
   await p.locator('#status-view .btn-primary', { hasText: 'ショップ' }).click();
+  await p.locator('#hb-sheet .hb-seg button', { hasText: 'どうぐ' }).click();
   await p.locator('#hb-sheet .shop-row', { hasText: 'まもりの護符' }).locator('.shop-btn').click();
   assert.equal((await gold()).purchases.length, 1);
   assert.match(await p.locator('#hb-sheet .hb-pill').innerText(), /🪙 86$/);
   // 称号と背景を買うためにゴールドを足して、装備がキャラクターに出ることを確認。おともは休止中
   await p.evaluate(() => { const r = JSON.parse(localStorage.getItem('wt_reward_v1')); r.grants.push({ g: 3000, reason: 'qa', on: '2026-10-18' }); localStorage.setItem('wt_reward_v1', JSON.stringify(r)); });
-  assert.deepEqual(await p.locator('#hb-sheet .hb-seg button').allInnerTexts(), ['どうぐ', '称号', '背景']);
+  assert.deepEqual(await p.locator('#hb-sheet .hb-seg button').allInnerTexts(), ['ごほうび', 'どうぐ', '称号', '背景']);
   await p.locator('#hb-sheet .hb-seg button', { hasText: '称号' }).click();
   await p.locator('#hb-sheet .shop-row', { hasText: '鋼の意志' }).locator('.shop-btn').click();
   await p.locator('#hb-sheet .hb-seg button', { hasText: '背景' }).click();
