@@ -369,7 +369,7 @@ textarea.field-input { height:76px; resize:vertical; }
 .td-ico { font-size:18px; width:22px; text-align:center; }
 .td-rname { flex:1; min-width:0; overflow-wrap:anywhere; }
 .td-tbox { margin-bottom:10px; }
-.td-head .td-cal { margin-left:auto; margin-right:8px; font-size:15px; }
+.td-rstats-note { margin:0 2px 8px; }
 .td-rcal { border:1px solid var(--line); border-radius:14px; padding:10px 12px 12px; margin:0 0 10px; background:#ffffff04; }
 .td-rcal-head { display:flex; align-items:center; gap:8px; font-size:14px; }
 .td-rcal-head b { flex:1; min-width:0; overflow-wrap:anywhere; }
@@ -1402,6 +1402,7 @@ function renderStats(){
   wrap.appendChild(el("p","section-label",statsMode==="week"?"日ごとのまとめ":statsMode==="month"?"週ごとのまとめ":"月ごとのまとめ"));
   wrap.appendChild(renderTrendCard());
   window.HabitUI?.renderHabitStats(wrap);
+  window.HabitUI?.renderRoutineStats(wrap);
 
   // ── Monthly achievement dot calendar ──
   if(statsMode==="month"){
@@ -2424,7 +2425,6 @@ function sectionHead(title, addLabel, onAdd) {
 function renderRoutines(v, s, day) {
   const list = T.routinesOn(s.todo, day), cnt = T.routineCount(s.todo, day);
   const head = sectionHead(list.length ? `日課 ${cnt.done}/${cnt.total}` : "日課", "日課を追加", () => openRoutineEditor(null));
-  if (s.todo.routines.length) head.insertBefore(btn("📅", "td-plus td-cal", openRoutineCalendar, { "aria-label": "日課の連続達成カレンダー" }), head.lastChild);
   v.appendChild(head);
   if (!list.length) { v.appendChild(el("p", "td-empty", "歯みがき・薬など、毎日の小さなことをここに。")); return; }
   const box = el("div", "td-routines");
@@ -2448,9 +2448,10 @@ function renderRoutines(v, s, day) {
   v.appendChild(box);
 }
 
-// 日課の連続達成カレンダー(週ごと・新しい週が上)。見るだけでゴールドやメダルは付かない
+// 日課の連続達成カレンダー(統計タブ。週ごと・新しい週が上)。見るだけでゴールドやメダルは付かない
+// 連続・最長・直近30日はいまの値、カレンダーは統計で選んだ期間の終わりまでの8週
 const CAL_WEEKS = 8;
-function routineCal(s, r) {
+function routineCal(s, r, anchor = s.today) {
   const st = T.routineStreak(s.todo, r.id, s.today), best = T.routineBestStreak(s.todo, r.id);
   const rate = T.routineRate(s.todo, r.id, s.today, 30);
   const wrap = el("div", "td-rcal");
@@ -2463,7 +2464,7 @@ function routineCal(s, r) {
   grid.setAttribute("aria-label", `${r.name}の${CAL_WEEKS}週間の記録`);
   grid.appendChild(el("span", "td-rcal-wk", ""));
   H.WEEKDAY_LABELS.forEach(lb => grid.appendChild(el("span", "td-rcal-dow", lb)));
-  T.routineWeeks(s.todo, r.id, s.today, CAL_WEEKS).forEach(w => {
+  T.routineWeeks(s.todo, r.id, anchor, CAL_WEEKS).forEach(w => {
     grid.appendChild(el("span", "td-rcal-wk", `${+w.monday.slice(5, 7)}/${+w.monday.slice(8)}`));
     w.days.forEach(d => {
       const c = el("span", `td-rcal-day ${d.state}${d.key === s.today ? " today" : ""}`);
@@ -2474,16 +2475,19 @@ function routineCal(s, r) {
   wrap.appendChild(grid);
   return wrap;
 }
-function openRoutineCalendar() {
+function renderRoutineStats(wrap) {
   const s = loadState();
-  const list = s.todo.routines.filter(r => T.routineActiveOn(r, s.today));
-  sheet(box => {
-    box.appendChild(el("h3", "modal-title", "日課の連続達成"));
-    box.appendChild(el("p", "modal-sub", `直近${CAL_WEEKS}週間。色のついた日がやった日です。`));
-    if (!list.length) box.appendChild(el("p", "hb-note", "表示中の日課がありません。"));
-    list.forEach(r => box.appendChild(routineCal(s, r)));
-    box.appendChild(closeRow());
-  });
+  const range = statsRange(), from = H.keyOfDate(range.from), to = H.keyOfDate(range.to);
+  if (from > s.today) return;
+  const end = to < s.today ? to : s.today;
+  // その期間に表示していた日課(作る前・消した後は出さない)
+  const list = s.todo.routines.filter(r => r.createdOn <= end && (!r.archivedOn || r.archivedOn > from));
+  if (!list.length) return;
+  wrap.appendChild(el("p", "section-label", "日課の連続達成"));
+  const box = el("div", "td-rstats");
+  box.appendChild(el("p", "hb-note td-rstats-note", `${+end.slice(5, 7)}/${+end.slice(8)}までの${CAL_WEEKS}週間。色のついた日がやった日です。`));
+  list.forEach(r => box.appendChild(routineCal(s, r, end)));
+  wrap.appendChild(box);
 }
 
 // 日課: 1回タップで済み/戻す、ダブルタップで編集(長押しはスクロール中に誤作動しやすいため)。
@@ -2522,7 +2526,6 @@ function openRoutineEditor(rid) {
   let msg = "";
   const draw = () => sheet(box => {
     box.appendChild(el("h3", "modal-title", orig ? "日課を編集" : "日課を追加"));
-    if (orig) box.appendChild(routineCal(loadState(), orig));
     box.appendChild(el("p", "modal-sub", `毎日の小さなこと。1つ${T.GOLD_T.routine}G（1日${T.GOLD_T.routineCap}Gまで）で、連続記録はつきません。`));
     box.appendChild(el("span", "field-label", "名前"));
     const name = el("input", "field-input"); name.value = draft.name; name.maxLength = 40; name.placeholder = "例：歯みがき";
@@ -3081,7 +3084,7 @@ function renderHabitStats(wrap) {
   wrap.appendChild(card);
 }
 
-window.HabitUI = { renderToday, openDay: k => { selDay = k; stripFocus = true; }, renderRewardCard, renderHabitStats, updateQuestBadge: () => updateQuestBadge() };
+window.HabitUI = { renderToday, openDay: k => { selDay = k; stripFocus = true; }, renderRewardCard, renderHabitStats, renderRoutineStats, updateQuestBadge: () => updateQuestBadge() };
 if (["today", "status", "stats"].includes(tab)) render();
 </script>
 <script src="js/backup-file.js"></script>
