@@ -128,7 +128,16 @@ export function createNotion(config, fetcher = globalThis.fetch, { now = Date.no
       error.retryAt = now() + (Number.isFinite(seconds) && seconds > 0 ? seconds : 60) * 1000;
       throw error;
     }
-    if (!res.ok) fail(); // No automatic write retries, upstream bodies or logging.
+    // These statuses definitively reject the request. Never inspect or expose
+    // the response body: it may contain private page details or credentials.
+    const rejected = { 400: 'notion_request_rejected', 401: 'notion_token_rejected',
+      403: 'notion_permission_denied', 404: 'notion_resource_unavailable' }[res.status];
+    if (rejected) {
+      const error = new SyncError(rejected, 503);
+      error.definitelyRejected = true;
+      throw error;
+    }
+    if (!res.ok) fail(); // Network/5xx writes remain uncertain; no automatic retries.
     return readJSON(res);
   }
   async function children(id, limit = MAX_BLOCKS) {
@@ -188,6 +197,7 @@ export function createNotion(config, fetcher = globalThis.fetch, { now = Date.no
           properties: { title: { type: 'title', title: rich(staging) } } });
         } catch (error) {
           if (error.code === 'provider_rate_limited') await advance({ signature, phase: 'retry_create', retryAt: error.retryAt });
+          else if (error.definitelyRejected) await advance({ signature, phase: 'retry_create' });
           throw error;
         }
         if (!ID.test(page.id || '')) fail();
@@ -218,6 +228,7 @@ export function createNotion(config, fetcher = globalThis.fetch, { now = Date.no
         try { await mutate(`/blocks/${pageId}/children`, 'PATCH', { children: batch }); }
         catch (error) {
           if (error.code === 'provider_rate_limited') await advance({ signature, phase: 'ready', pageId, count, retryAt: error.retryAt });
+          else if (error.definitelyRejected) await advance({ signature, phase: 'ready', pageId, count });
           throw error;
         }
         actual = await children(pageId);

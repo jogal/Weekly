@@ -603,3 +603,29 @@ test('same-day wallclock advances do not produce duplicate snapshots', async () 
   f.now='2026-10-18T19:59:59Z'; await f.client.resume(); await f.client.localSaved('wt_records');
   assert.equal(f.calls.length,count); assert.equal(f.client.getState().queue,null);
 });
+
+test('reopening settings does not erase the error for an unacknowledged first upload', async()=>{
+  const f=fixture(); f.hook=call=>call.action==='enable'?f.respond({error:'provider_unavailable'},503):undefined;
+  await assert.rejects(f.enable(),{code:'SERVER_ERROR'});
+  assert.equal(f.client.getState().enabled,false);assert.ok(f.client.getState().queue);
+  await f.client.refreshStatus();assert.equal(f.client.getState().error,'SERVER_ERROR');
+  f.hook=null;await f.client.retryPending({...f.client.pendingReview(),confirmed:true});
+  assert.equal(f.client.getState().error,null);assert.equal(f.client.getState().queue,null);
+  assert.equal(f.client.getState().enabled,false);
+});
+
+test('fixed diagnostic codes survive reload with the exact outbox and clear only after recovery',async()=>{
+  for(const [upstream,code] of Object.entries({notion_token_rejected:'NOTION_TOKEN_REJECTED',notion_permission_denied:'NOTION_PERMISSION_DENIED',notion_resource_unavailable:'NOTION_RESOURCE_UNAVAILABLE',notion_request_rejected:'NOTION_REQUEST_REJECTED',store_unavailable:'STORE_ERROR'})){
+    const f=fixture();f.hook=call=>call.action==='enable'?f.respond({error:upstream},503):undefined;
+    await assert.rejects(f.enable(),{code});const queue=f.client.getState().queue;
+    f.client=f.make();assert.equal(f.client.getState().error,code);assert.deepEqual(f.client.getState().queue,queue);
+    await f.client.refreshStatus();assert.equal(f.client.getState().error,code);
+    f.hook=null;await f.client.retryPending({...f.client.pendingReview(),confirmed:true});
+    assert.equal(f.client.getState().queue,null);assert.equal(f.client.getState().lastFailure,null);
+    f.client=f.make();assert.equal(f.client.getState().error,null);assert.equal(f.client.getState().enabled,false);
+  }
+});
+test('unknown upstream text is never saved as a durable diagnostic',async()=>{
+  const f=fixture();f.hook=call=>call.action==='enable'?f.respond({error:'PRIVATE_SECRET_CANARY'},503):undefined;
+  await assert.rejects(f.enable());assert.ok(!f.map.get(SYNC_KEY).includes('PRIVATE_SECRET_CANARY'));
+});

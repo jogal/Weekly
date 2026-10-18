@@ -6,12 +6,13 @@ export const SOURCE_KEYS = new Set(["wt_records", "wt_habits_v1", "wt_habit_log_
 export const CONSENT_VERSION = 3;
 const clone = value => JSON.parse(JSON.stringify(value));
 const err = code => Object.assign(new Error(code), { code });
-const BLOCKING = new Set(["CONFLICT", "DEVICE_MISMATCH", "RECONNECT_REQUIRED", "UNAUTHENTICATED", "REVIEW_REQUIRED", "INVALID_LOCAL_DATA", "NOT_CONFIGURED", "SYNC_DISABLED", "PENDING_DISABLED", "SCOPE_REVIEW_REQUIRED", "LEGACY_PENDING_REVIEW_REQUIRED", "PAYLOAD_TOO_LARGE", "SNAPSHOT_LIMIT"]);
+const BLOCKING = new Set(["CONFLICT", "DEVICE_MISMATCH", "RECONNECT_REQUIRED", "UNAUTHENTICATED", "REVIEW_REQUIRED", "INVALID_LOCAL_DATA", "NOT_CONFIGURED", "SYNC_DISABLED", "PENDING_DISABLED", "SCOPE_REVIEW_REQUIRED", "LEGACY_PENDING_REVIEW_REQUIRED", "PAYLOAD_TOO_LARGE", "SNAPSHOT_LIMIT", "NOTION_TOKEN_REJECTED", "NOTION_PERMISSION_DENIED", "NOTION_RESOURCE_UNAVAILABLE", "NOTION_REQUEST_REJECTED"]);
 const ERROR_CODES = { not_configured: "NOT_CONFIGURED", auth_required: "UNAUTHENTICATED", reconnect_required: "RECONNECT_REQUIRED",
   device_conflict: "DEVICE_MISMATCH", revision_conflict: "CONFLICT", operation_conflict: "CONFLICT", pending_operation: "CONFLICT",
   external_change: "CONFLICT", sync_disabled: "SYNC_DISABLED", pending_disabled: "PENDING_DISABLED", csrf_failed: "UNAUTHENTICATED", owner_forbidden: "OWNER_FORBIDDEN",
-  scope_review_required: "SCOPE_REVIEW_REQUIRED", invalid_payload: "INVALID_LOCAL_DATA", invalid_request: "INVALID_REQUEST", store_unavailable: "SERVER_ERROR",
+  scope_review_required: "SCOPE_REVIEW_REQUIRED", invalid_payload: "INVALID_LOCAL_DATA", invalid_request: "INVALID_REQUEST", store_unavailable: "STORE_ERROR",
   snapshot_limit: "SNAPSHOT_LIMIT", provider_rate_limited: "RATE_LIMITED",
+  notion_token_rejected: "NOTION_TOKEN_REJECTED", notion_permission_denied: "NOTION_PERMISSION_DENIED", notion_resource_unavailable: "NOTION_RESOURCE_UNAVAILABLE", notion_request_rejected: "NOTION_REQUEST_REJECTED",
   provider_unavailable: "SERVER_ERROR", retry_later: "SERVER_ERROR", origin_forbidden: "ORIGIN_FORBIDDEN" };
 const codeOf = e => ERROR_CODES[e?.code] || e?.code || (e?.name === "AbortError" ? "PAUSED" : "NETWORK_ERROR");
 
@@ -68,7 +69,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
   // Keep the storage/lock/stop-marker identities stable across upgrades. An old
   // tab and a new tab must never become independent uploaders for this device.
   const defaults = () => ({ version: 2, deviceId: null, enabled: false, consentVersion: null,
-    consentToken: null, revision: 0, lastSyncedAt: null, lastPayload: null, queue: null, blocked: null });
+    consentToken: null, revision: 0, lastSyncedAt: null, lastPayload: null, queue: null, blocked: null, lastFailure: null });
   const assertInterface = () => { if (uiConsentVersion !== CONSENT_VERSION) throw err("UPDATE_REQUIRED"); };
   // Consent identifies the destination as well as scope. A Drive queue must never
   // become a Notion write, even when its payload already uses schema 2.
@@ -85,6 +86,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
       else validatePayload(m.queue.payload);
     }
     const next = Object.fromEntries(Object.entries(defaults()).map(([key, fallback]) => [key, m[key] ?? fallback]));
+    if (!Object.values(ERROR_CODES).includes(next.lastFailure)) next.lastFailure = null;
     if (legacyPending(next)) { next.enabled = false; next.blocked = "LEGACY_PENDING_REVIEW_REQUIRED"; }
     else if (next.version !== 2 || (next.enabled && next.consentVersion !== CONSENT_VERSION)) {
       next.enabled = false; next.blocked = "SCOPE_REVIEW_REQUIRED";
@@ -97,7 +99,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
     if (!meta.consentToken || meta.consentToken !== observedStop) meta.enabled = false;
   }
   catch { localError = "LOCAL_STATE_INVALID"; }
-  let session = null, busy = false, flight = null, controller = null, localSavedAt = null, lastError = localError || (uiConsentVersion !== CONSENT_VERSION ? "UPDATE_REQUIRED" : null);
+  let session = null, busy = false, flight = null, controller = null, localSavedAt = null, lastError = localError || (uiConsentVersion !== CONSENT_VERSION ? "UPDATE_REQUIRED" : meta.queue ? meta.lastFailure : null);
   const emit = () => onChange(getState());
   function syncExternal() {
     let raw;
@@ -184,7 +186,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
     return data;
   }
   async function refreshStatus() {
-    try { session = await api("status"); lastError = session.authError ? (ERROR_CODES[session.authError] || "UNAUTHENTICATED") : null; emit(); return clone({ ...session, csrfToken: undefined }); }
+    try { session = await api("status"); lastError = session.authError ? (ERROR_CODES[session.authError] || "UNAUTHENTICATED") : meta.queue ? lastError : null; emit(); return clone({ ...session, csrfToken: undefined }); }
     catch (e) { lastError = codeOf(e); emit(); throw e; }
   }
   async function authenticate() {
@@ -195,8 +197,9 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
   }
   function recordError(e) {
     lastError = codeOf(e);
-    if (BLOCKING.has(lastError)) {
-      try { persist({ ...meta, blocked: lastError }); } catch { /* original outbox remains intact */ }
+    if (BLOCKING.has(lastError) || meta.queue) {
+      try { persist({ ...meta, blocked: BLOCKING.has(lastError) ? lastError : meta.blocked,
+        lastFailure: meta.queue && Object.values(ERROR_CODES).includes(lastError) ? lastError : null }); } catch { /* original outbox remains intact */ }
     }
     emit();
   }
@@ -221,7 +224,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
     // Only the exact acknowledged operation can leave the outbox.
     if (meta.queue?.operationId !== queued.operationId) throw err("REVIEW_REQUIRED");
     persist({ ...meta, revision: response.revision, lastSyncedAt: response.lastSyncedAt,
-      lastPayload: JSON.stringify(queued.payload), queue: null, blocked: null, enabled: meta.enabled && response.enabled });
+      lastPayload: JSON.stringify(queued.payload), queue: null, blocked: null, lastFailure: null, enabled: meta.enabled && response.enabled });
     lastError = null;
     return response;
   }
