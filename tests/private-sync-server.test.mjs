@@ -452,3 +452,11 @@ test('handler and real Notion adapter durably persist preflight throttling throu
   now=32000;assert.equal((await h.browser.call('enable',initial())).body.error,'provider_rate_limited');
   assert.equal(requests,2);assert.equal((await h.redis.store.get('owner')).value.pending.notion.retryAt,62000);
 });
+
+test('store CAS failure keeps the client retryable and never exposes exception details',async()=>{
+  const h=harness();await h.browser.login();const cas=h.redis.store.cas.bind(h.redis.store);
+  h.redis.store.cas=async(name,...args)=>{if(name==='owner')throw new SyncError('store_unavailable',503);return cas(name,...args);};
+  const result=await h.browser.call('enable',initial());assert.equal(result.statusCode,503);
+  assert.deepEqual(result.body,{error:'store_unavailable'});assert.equal(h.notion.writes,0);
+  h.redis.store.cas=cas;assert.equal((await h.browser.call('enable',initial())).body.revision,1);
+});

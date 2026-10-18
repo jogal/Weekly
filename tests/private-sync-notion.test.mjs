@@ -8,7 +8,7 @@ const envelope = (revision = 1, extra = {}) => ({ schemaVersion: 1, deviceId: 'a
   operationId: 'operationabcdefghijkl', syncedAt: '2026-10-18T00:00:00.000Z',
   payload: { schemaVersion: 2, asOf: '2026-10-18', habits: [{ name: 'Walk', target: 1, unit: 'check', entries: [] }], ...extra } });
 function harness() {
-  const pages = new Map(); const calls = []; let counter = 1; let state = null; let intercept; let time = 1000;
+  const pages = new Map(); const calls = []; let counter = 1; let state = null; let intercept; let time = 1000; let vetoCheckpoint;
   const response = body => new Response(JSON.stringify(body), { headers: { 'content-type': 'application/json' } });
   const fetcher = async (url, options) => {
     assert.equal(options.headers.Authorization, 'Bearer server-only-test-secret');
@@ -39,9 +39,9 @@ function harness() {
   };
   const notion = createNotion(config, fetcher, { paceMs: 0, now: () => time });
   const publish = (data = envelope(), overrides = {}) => notion.publish(data, { state: structuredClone(state),
-    checkpoint: async (old, next) => { if (JSON.stringify(old) !== JSON.stringify(state)) return false; state = structuredClone(next); return true; },
+    checkpoint: async (old, next) => { if (vetoCheckpoint?.(old, next)) return false; if (JSON.stringify(old) !== JSON.stringify(state)) return false; state = structuredClone(next); return true; },
     authorize: async () => {}, ...overrides });
-  return { pages, calls, publish, elapse(ms) { time += ms; }, get state() { return state; }, reset() { state = null; }, set intercept(fn) { intercept = fn; } };
+  return { pages, calls, publish, elapse(ms) { time += ms; }, get state() { return state; }, reset() { state = null; }, set intercept(fn) { intercept = fn; }, set vetoCheckpoint(fn) { vetoCheckpoint = fn; } };
 }
 
 test('publishes exact content and complete only after verified block reads', async () => {
@@ -179,3 +179,70 @@ for (const target of ['parent-read', 'page-read', 'block-read', 'archive', 'comp
   assert.equal(h.calls.length, count);
   h.elapse(120000); await h.publish(data);
 });
+
+const rejectedStatuses = [[400, 'notion_request_rejected'], [401, 'notion_token_rejected'],
+  [403, 'notion_permission_denied'], [404, 'notion_resource_unavailable']];
+const isEndpoint = (target, c) => target === 'first-read' ? c.method === 'GET' && c.path === `/blocks/${parent}/children`
+  : target === 'create' ? c.method === 'POST' : c.method === 'PATCH' && c.path.includes('/blocks/');
+for (const [status, code] of rejectedStatuses) {
+  for (const target of ['first-read', 'create', 'append']) test(`sanitized ${status} during ${target} permits exact-operation retry after correction`, async () => {
+    const h = harness(); let rejectedResponse;
+    h.intercept = c => {
+      if (!isEndpoint(target, c)) return;
+      rejectedResponse = new Response('private payload and secret which must not be exposed', { status });
+      return rejectedResponse;
+    };
+    await assert.rejects(h.publish(), error => {
+      assert.equal(error.code, code); assert.equal(error.status, 503);
+      assert.equal(error.message, code); assert.doesNotMatch(error.stack, /private payload|server-only-test-secret/);
+      return true;
+    });
+    assert.equal(rejectedResponse.bodyUsed, false);
+    assert.equal(h.state?.phase ?? null, target === 'first-read' ? null : target === 'create' ? 'retry_create' : 'ready');
+    h.intercept = null;
+    await h.publish(); await h.publish();
+    assert.equal(h.pages.size, 1);
+    assert.deepEqual([...h.pages.values()][0].blocks, snapshotBlocks(envelope()));
+    assert.equal(h.calls.filter(c => c.method === 'POST').length, target === 'create' ? 2 : 1);
+    assert.equal(h.calls.filter(c => c.method === 'PATCH' && c.path.includes('/blocks/')).length, target === 'append' ? 2 : 1);
+  });
+  for (const target of ['create', 'append']) test(`${status} ${target} recovery cannot bypass a stale checkpoint fence`, async () => {
+    const h = harness();
+    h.intercept = c => isEndpoint(target, c) ? new Response('{}', { status }) : undefined;
+    h.vetoCheckpoint = (old, next) => target === 'create' ? old?.phase === 'creating' && next.phase === 'retry_create'
+      : old?.phase === 'appending' && next.phase === 'ready';
+    await assert.rejects(h.publish(), { code: 'retry_later' });
+    assert.equal(h.state.phase, target === 'create' ? 'creating' : 'appending');
+    h.intercept = null; h.vetoCheckpoint = null;
+    await assert.rejects(h.publish(), { code: 'pending_operation' });
+    assert.equal(h.calls.filter(c => isEndpoint(target, c)).length, 1);
+  });
+}
+for (const status of [500, 502, 503, 504]) for (const target of ['create', 'append']) test(`${status} ${target} stays uncertain without a duplicate write`, async () => {
+  const h = harness(); h.intercept = c => isEndpoint(target, c) ? new Response('private upstream detail', { status }) : undefined;
+  await assert.rejects(h.publish(), { code: 'provider_unavailable' });
+  h.intercept = null;
+  await assert.rejects(h.publish(), { code: 'pending_operation' });
+  assert.equal(h.calls.filter(c => isEndpoint(target, c)).length, 1);
+});
+for (const [status, code] of [...rejectedStatuses, [429, 'provider_rate_limited'], [500, 'provider_unavailable'], [503, 'provider_unavailable']]) {
+  for (const target of ['page-read', 'block-read', 'archive', 'complete']) test(`${status} ${target} reports a fixed code and retries without duplicate content`, async () => {
+    const h = harness();
+    if (target === 'archive') for (let r = 1; r <= 3; r++) { h.reset(); await h.publish(envelope(r)); }
+    h.reset(); const data = envelope(target === 'archive' ? 4 : 1);
+    h.intercept = c => {
+      const matches = target === 'page-read' ? c.method === 'GET' && c.path.startsWith('/pages/')
+        : target === 'block-read' ? c.method === 'GET' && c.path.includes('/blocks/') && !c.path.includes(parent)
+        : target === 'archive' ? c.method === 'PATCH' && c.body?.archived
+        : c.method === 'PATCH' && c.body?.properties;
+      return matches ? new Response('private upstream details', { status, headers: { 'retry-after': '120' } }) : undefined;
+    };
+    await assert.rejects(h.publish(data), { code, status: 503, message: code });
+    h.intercept = null; h.elapse(120000);
+    await h.publish(data); await h.publish(data);
+    const active = [...h.pages.values()].filter(p => !p.archived);
+    assert.equal(active.length, target === 'archive' ? 3 : 1);
+    const latest = active.at(-1);
+    assert.deepEqual(latest.blocks, snapshotBlocks(data));
+  });
+}
