@@ -1512,7 +1512,7 @@ function renderPlan(root){
     gline.textContent="📅 Googleカレンダーを読めませんでした(タップで再試行)";
     gline.style.cursor="pointer";
     gline.onclick=()=>fetchGcalWeek();
-  }else if(gcalState==="off"){ gline.textContent="📅 GCal連携はトラッカーの設定から(未接続でも予定はwt_schedulesを利用)"; }
+  }else if(gcalState==="off"){ gline.textContent="📅 Googleカレンダー未接続(下の日をタップすると予定を手で指定できます)"; }
   rcard.appendChild(gline);
   rcard.appendChild(el("div","wo-progress","日をタップ: 可→△→不可→自動。手動指定は自動判定より優先"));
   root.appendChild(rcard);
