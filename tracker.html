@@ -441,7 +441,6 @@ textarea.field-input { height:76px; resize:vertical; }
 .hb-archived-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
 .hb-archived-row span { flex:1; }
 /* rewards (育成) */
-.hero-title { font-size:11px; color:#f0d7a3; letter-spacing:.12em; margin:-3px 0 7px; }
 .rw-top { display:flex; align-items:center; gap:10px; }
 .rw-gold { font:700 30px var(--cond); letter-spacing:.03em; color:#f0d7a3; }
 .rw-gold small { font-size:13px; color:var(--dim); margin-left:4px; }
@@ -506,7 +505,6 @@ textarea.field-input { height:76px; resize:vertical; }
 .tab-btn.has-badge::after { content:""; position:absolute; top:7px; left:calc(50% + 7px); width:8px; height:8px; border-radius:50%;
   background:var(--gold); box-shadow:0 0 0 2px #15171b; }
 .hb-celebrate-kicker { font:600 11px var(--cond); letter-spacing:.3em; color:var(--gold); margin-bottom:6px; }
-.hb-celebrate-item { font-size:13px; margin-top:8px; color:var(--txt); }
 .hb-top { flex-wrap:wrap; }
 .hb-wallet { flex-wrap:wrap; justify-content:flex-end; }
 .hb-pill.tk { border-color:#4b3f6b; background:#1b1828; }
@@ -1465,7 +1463,6 @@ function renderStatus(){
   const heroImg=hero.querySelector(".hero-sprite");
   setHeroSprite(heroImg,jobSt);
   hero.querySelector(".hero-sprite-box").onclick=()=>openHeroZoom(heroImg.src,jobName,totalLvl);
-  window.HabitUI?.decorateHero(hero);
   window.HabitUI?.renderRewardCard(wrap);
 
   // Track cards
@@ -2898,12 +2895,6 @@ function openArchived() {
 }
 
 // ── 育成タブ: ゴールド・もちもの・ショップ ────────────────────────────────
-function decorateHero(hero) {
-  const eq = loadState().reward.equipped;
-  const bg = H.shopItem(eq.bg), title = H.shopItem(eq.title);
-  if (bg?.css) hero.style.background = bg.css;
-  if (title) hero.querySelector(".hero-job")?.insertAdjacentHTML("afterend", `<div class="hero-title">《${esc(title.name)}》</div>`);
-}
 function renderRewardCard(wrap) {
   const s = loadState(), r = s.reward;
   const week = Array.from({ length: 7 }, (_, i) => H.goldOn(r, H.addDays(s.today, -i))).reduce((a, b) => a + b, 0);
@@ -3016,11 +3007,9 @@ function claim(q) {
   write(H.KEYS.reward, res.state);
   render();
   if (document.getElementById("hb-sheet")?.style.display === "flex") openQuests("active");
-  const it = res.item ? H.shopItem(res.item) : null;
-  rewardOverlay({ icon: q.line.icon, kicker: "QUEST CLEAR", title: q.title, sub: Q.questDesc(q), gold: res.gold,
-    item: it, equipped: !!it && res.state.equipped[it.kind] === it.id });
+  rewardOverlay({ icon: q.line.icon, kicker: "QUEST CLEAR", title: q.title, sub: Q.questDesc(q), gold: res.gold });
 }
-function rewardOverlay({ icon, kicker, title, sub, gold, item, equipped }) {
+function rewardOverlay({ icon, kicker, title, sub, gold }) {
   const o = document.createElement("div");
   o.className = "hb-celebrate";
   o.innerHTML = `<div class="hb-celebrate-box" role="dialog" aria-label="${esc(kicker)}">
@@ -3029,7 +3018,6 @@ function rewardOverlay({ icon, kicker, title, sub, gold, item, equipped }) {
     <div class="hb-celebrate-title">${esc(title)}</div>
     <div class="hb-celebrate-sub">${esc(sub)}</div>
     ${gold != null ? `<div class="hb-celebrate-gold">+${gold}G</div>` : ""}
-    ${item ? `<div class="hb-celebrate-item">${item.icon} ${esc(item.name)}を手に入れた${equipped ? "（装備しました）" : ""}</div>` : ""}
     <div class="hb-celebrate-sub" style="margin-top:12px">タップして閉じる</div></div>`;
   o.onclick = () => o.remove();
   document.body.appendChild(o);
@@ -3150,34 +3138,22 @@ function openShop(kind = "wish") {
     if (kind === "wish") { renderWishShop(box, s); return; }
     H.SHOP.filter(it => it.kind === kind).forEach(it => {
       const row = el("div", "shop-row");
-      const owned = r.owned.includes(it.id), worn = r.equipped[it.kind] === it.id;
-      const preview = it.css ? ` style="background:${it.css}"` : "";
-      row.innerHTML = `<div class="shop-ico"${preview}>${it.icon}</div>
-        <div class="shop-main"><div class="shop-name">${esc(it.name)}</div><div class="shop-desc">${esc(it.quest ? `クエスト「${Q.questForItem(it.id) || ""}」の報酬` : it.desc)}${it.kind === "shield" ? `（所持 ${H.shieldCount(r)}/${H.SHIELD_MAX}）` : ""}</div></div>`;
-      if (it.kind !== "shield" && owned) {
-        row.appendChild(btn(worn ? "はずす" : "装備する", "shop-btn ghost", () => {
-          write(H.KEYS.reward, H.equip(r, it.kind, worn ? null : it.id)); render(); openShop(kind);
-        }));
-      } else if (it.quest) {
-        const b = btn("クエスト報酬", "shop-btn ghost", null, { "aria-label": `${it.name}はクエストの報酬` });
-        b.disabled = true; row.appendChild(b);
-      } else {
-        const full = it.kind === "shield" && H.shieldCount(r) >= H.SHIELD_MAX;
-        const b = btn(full ? "満タン" : `${fmt(it.price)}G`, "shop-btn", () => {
-          if (!confirm(`「${it.name}」を ${fmt(it.price)}G で買いますか？`)) return;
-          const res = H.purchase(loadState().reward, it.id, s.today);
-          if (!res.ok) { showToast(res.reason === "gold" ? "ゴールドが足りません" : "買えませんでした"); return; }
-          write(H.KEYS.reward, res.state); render(); openShop(kind);
-          showToast(`🎁 ${it.icon} ${it.name}を手に入れた！`);
-        }, { "aria-label": `${it.name}を${it.price}ゴールドで買う` });
-        if (full || bal < it.price) b.disabled = true;
-        row.appendChild(b);
-      }
+      row.innerHTML = `<div class="shop-ico">${it.icon}</div>
+        <div class="shop-main"><div class="shop-name">${esc(it.name)}</div><div class="shop-desc">${esc(it.desc)}（所持 ${H.shieldCount(r)}/${H.SHIELD_MAX}）</div></div>`;
+      const full = H.shieldCount(r) >= H.SHIELD_MAX;
+      const b = btn(full ? "満タン" : `${fmt(it.price)}G`, "shop-btn", () => {
+        if (!confirm(`「${it.name}」を ${fmt(it.price)}G で買いますか？`)) return;
+        const res = H.purchase(loadState().reward, it.id, s.today);
+        if (!res.ok) { showToast(res.reason === "gold" ? "ゴールドが足りません" : "買えませんでした"); return; }
+        write(H.KEYS.reward, res.state); render(); openShop(kind);
+        showToast(`🎁 ${it.icon} ${it.name}を手に入れた！`);
+      }, { "aria-label": `${it.name}を${it.price}ゴールドで買う` });
+      if (full || bal < it.price) b.disabled = true;
+      row.appendChild(b);
       box.appendChild(row);
     });
-    if (kind === "shield") box.appendChild(el("p", "hb-note",
+    box.appendChild(el("p", "hb-note",
       "護符は、予定の日に記録がないまま日付が変わったとき自動で1つ使われます。あとからその日を記録すると護符は戻ります。"));
-    else box.appendChild(el("p", "hb-note", "買ったものは育成タブのキャラクターに反映されます。いつでも付け替えられます。"));
     box.appendChild(closeRow());
   });
 }
@@ -3207,7 +3183,7 @@ function renderHabitStats(wrap) {
   wrap.appendChild(card);
 }
 
-window.HabitUI = { renderToday, decorateHero, renderRewardCard, renderHabitStats, updateQuestBadge: () => updateQuestBadge() };
+window.HabitUI = { renderToday, renderRewardCard, renderHabitStats, updateQuestBadge: () => updateQuestBadge() };
 if (["today", "status", "stats"].includes(tab)) render();
 </script>
 </body>

@@ -58,35 +58,22 @@ test('board: locked until the target, claim pays gold once and reveals the next 
   const next = line(b, 'cooking_days');
   assert.equal(next.title, '台所の主 II');
   assert.equal(next.claimable, false);
-  assert.equal(Q.rewardText(next), '200G ＋ 🍲灯りの台所');
+  assert.equal(Q.rewardText(next), '200G');
   assert.equal(Q.claimQuest(res.state, b, next.id, TODAY).reason, 'locked');
 });
 
-test('item rewards are owned, equipped into an empty slot, and never sold in the shop', () => {
+test('quest rewards are gold only: no items are handed out', () => {
+  for (const l of Q.QUEST_LINES) for (const t of l.tiers) assert.equal('item' in t, false, l.id);
   const rec = recordsFor(daysBack(31).map(k => [k, 'english', { duration: '60' }]));
   let { reward, b } = board(rec);
   reward = Q.claimQuest(reward, b, line(b, 'english_hours').id, TODAY).state;
   ({ b } = board(rec, { reward }));
   const q2 = line(b, 'english_hours');
-  assert.equal(q2.title, 'ことばの旅 II');
-  assert.equal(Q.rewardText(q2), '150G ＋ 📜ことばの使い手');
+  assert.equal(Q.rewardText(q2), '150G');
   const res = Q.claimQuest(reward, b, q2.id, TODAY);
-  assert.equal(res.item, 't_linguist');
-  assert.ok(res.state.owned.includes('t_linguist'));
-  assert.equal(res.state.equipped.title, 't_linguist');
-  assert.equal(H.purchase({ ...res.state, grants: [{ g: 99999 }] }, 't_linguist', TODAY).reason, 'quest');
-  assert.equal(Q.questForItem('t_linguist'), 'ことばの旅 II');
-  // すでに装備があれば上書きしない
-  const worn = { ...reward, equipped: { ...reward.equipped, title: 't_steady' }, owned: ['t_steady'] };
-  assert.equal(Q.claimQuest(worn, b, q2.id, TODAY).state.equipped.title, 't_steady');
-});
-
-test('every quest reward item exists and none of them is a pet', () => {
-  for (const l of Q.QUEST_LINES) for (const t of l.tiers) if (t.item) {
-    const it = H.shopItem(t.item);
-    assert.ok(it, t.item);
-    assert.ok(it.quest && ['title', 'bg'].includes(it.kind), t.item);
-  }
+  assert.equal(res.gold, 150);
+  assert.equal('item' in res, false);
+  assert.equal('owned' in res.state, false);
 });
 
 test('hours are shown with one decimal under ten hours', () => {
