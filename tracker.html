@@ -1496,19 +1496,10 @@ document.getElementById("export-btn").onclick=()=>{
   ARCHIVED_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v!==null)archivedData[k]=v;});
   const out={records,habitData};
   if(Object.keys(archivedData).length)out.archivedData=archivedData;
-  const blob=new Blob([JSON.stringify(out)],{type:"application/json"});
-  const a=document.createElement("a");
-  a.href=URL.createObjectURL(blob);
-  a.download="weekly-quest-data.json";
-  a.click();
-  URL.revokeObjectURL(a.href);
+  BackupFile.save("weekly-quest-data.json",JSON.stringify(out));
 };
 document.getElementById("import-btn").onclick=()=>{
-  const inp=document.createElement("input");
-  inp.type="file"; inp.accept="application/json,.json";
-  inp.onchange=()=>{
-    const f=inp.files[0]; if(!f)return;
-    f.text().then(t=>{
+  BackupFile.pick(t=>{
       try{
         const d=JSON.parse(t);
         if(!d.records)throw new Error("bad format");
@@ -1517,11 +1508,9 @@ document.getElementById("import-btn").onclick=()=>{
           ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1"].forEach(k=>{if(d.habitData[k]!==undefined)localStorage.setItem(k,JSON.stringify(d.habitData[k]));});
         if(d.archivedData&&typeof d.archivedData==="object")
           ARCHIVED_KEYS.forEach(k=>{if(typeof d.archivedData[k]==="string")localStorage.setItem(k,d.archivedData[k]);});
-        saveData();render();
+        persist();render();showToast("✅ 復元しました");
       }catch(err){ alert("データを読み込めませんでした"); }
-    });
-  };
-  inp.click();
+  },()=>alert("ファイルを開けませんでした"));
 };
 
 // ── PWA service worker ────────────────────────────────────────────────────────
@@ -2593,6 +2582,7 @@ function renderHabitStats(wrap) {
 window.HabitUI = { renderToday, openDay: k => { selDay = k; stripFocus = true; }, renderRewardCard, renderHabitStats, updateQuestBadge: () => updateQuestBadge() };
 if (["today", "status", "stats"].includes(tab)) render();
 </script>
+<script src="js/backup-file.js"></script>
 <script src="js/pwa-update.js"></script>
 </body>
 </html>
