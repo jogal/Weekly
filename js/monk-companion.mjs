@@ -16,11 +16,22 @@ export function createMonkCompanion() {
     return actor?.isConnected && visible && !document.hidden && !away && !motion.matches;
   }
   function eligible() { return awake() && ready; }
+  function setPose(pose) {
+    const wasIdle = actor.dataset.pose === 'idle';
+    actor.dataset.pose = pose;
+    if (pose !== 'idle' || wasIdle) return;
+    // iOS Safari leaves the breathing loop frozen after its sprite was hidden; restart it.
+    const sprite = actor.querySelector('.monk-sprite');
+    if (!sprite) return;
+    sprite.style.animation = 'none';
+    void sprite.offsetWidth;
+    sprite.style.animation = '';
+  }
   function clearTimers() {
     clearTimeout(idleTimer); idleTimer = null;
     frameTimers.forEach(clearTimeout); frameTimers = [];
     busy = false;
-    if (actor) actor.dataset.pose = 'idle';
+    if (actor) setPose('idle');
   }
   function schedule() {
     clearTimeout(idleTimer);
@@ -40,7 +51,7 @@ export function createMonkCompanion() {
     for (const [delay, pose] of SEQUENCES[kind]) {
       frameTimers.push(setTimeout(() => {
         if (!eligible()) { sync(); return; }
-        actor.dataset.pose = pose;
+        setPose(pose);
         if (pose === 'idle') { busy = false; frameTimers = []; schedule(); }
       }, delay));
     }

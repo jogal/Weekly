@@ -112,6 +112,11 @@ const server = http.createServer((req,res)=>{
   await p.clock.runFor(2200);await actor.click();await p.clock.runFor(300);
   assert.equal(await pose(),'flex');await shot('flex');
   await p.clock.runFor(1600);assert.equal(await pose(),'idle');
+  // Back at rest, the two-frame breathing must loop again rather than freeze on one frame.
+  assert.deepEqual(await p.locator('.monk-sprite').evaluate(img=>{
+    const cs=getComputedStyle(img);return [img.style.animation,cs.animationName,cs.animationPlayState];
+  }),['','monkIdle','running']);
+  await checkBreathing(p.locator('.monk-sprite'));
   assert.equal(await snapshot(),before,'actions must not write any storage');
   await p.clock.runFor(18000);assert.notEqual(await pose(),'idle','occasional action');
   await p.emulateMedia({reducedMotion:'reduce'});await new Promise(r=>setTimeout(r,100));
