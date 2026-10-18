@@ -507,6 +507,21 @@ textarea.field-input { height:76px; resize:vertical; }
   background:var(--gold); box-shadow:0 0 0 2px #15171b; }
 .hb-celebrate-kicker { font:600 11px var(--cond); letter-spacing:.3em; color:var(--gold); margin-bottom:6px; }
 .hb-celebrate-item { font-size:13px; margin-top:8px; color:var(--txt); }
+.hb-top { flex-wrap:wrap; }
+.hb-wallet { flex-wrap:wrap; justify-content:flex-end; }
+.hb-pill.tk { border-color:#4b3f6b; background:#1b1828; }
+.rw-btns { margin-top:0; }
+.rw-btns .rw-tk { flex:0 0 auto; min-width:112px; }
+.tk-link { display:block; width:100%; text-align:left; margin:0 0 4px; padding:10px 12px; border-radius:12px;
+  border:1px solid #4b3f6b; background:#1b1828; color:var(--txt); font:inherit; font-size:13px; cursor:pointer; }
+.wish-edit { display:inline-flex; align-items:center; min-height:32px; padding:0 2px; margin-top:2px; border:0; background:none;
+  color:var(--dim); font:inherit; font-size:11px; text-decoration:underline; cursor:pointer; }
+.hb-seg button { white-space:nowrap; }
+@media(max-width:360px) { .hb-seg button { font-size:12px; padding:0 2px; } }
+.wish-add { width:100%; margin-top:12px; }
+.tk-row.used { opacity:.6; }
+.tk-use { border-color:#c9a45f; background:linear-gradient(160deg,#f0d7a3,#c9a45f); color:#1d1a14; font-family:inherit; font-size:14px; }
+.tk-used { font-size:11px; color:var(--dim); flex-shrink:0; }
 /* stats: per-habit rates */
 .hs-row { display:flex; align-items:center; gap:10px; padding:10px 0; border-bottom:1px solid var(--line); }
 .hs-row:last-child { border-bottom:0; }
@@ -2521,9 +2536,11 @@ function renderToday() {
     <div class="hb-wallet">
       <button type="button" class="hb-pill gold" aria-label="ゴールド ${fmt(H.balance(s.reward))}。ショップを開く">🪙 ${fmt(H.balance(s.reward))}</button>
       <span class="hb-pill shield" title="まもりの護符" aria-label="まもりの護符 ${H.shieldCount(s.reward)}個">🧿 ${H.shieldCount(s.reward)}</span>
+      ${H.unusedTickets(s.reward).length ? `<button type="button" class="hb-pill tk" aria-label="未使用のごほうびチケット ${H.unusedTickets(s.reward).length}枚">🎟️ ${H.unusedTickets(s.reward).length}</button>` : ""}
       <button type="button" class="hb-add" aria-label="習慣を追加">＋</button>
     </div>`;
   top.querySelector(".gold").onclick = () => openShop();
+  top.querySelector(".tk")?.addEventListener("click", () => openTickets());
   top.querySelector(".hb-add").onclick = () => openEditor(null);
   v.appendChild(top);
 
@@ -2904,7 +2921,12 @@ function renderRewardCard(wrap) {
   });
   else md.appendChild(el("span", "rw-medal", "🥉 7日続けると最初のメダル"));
   card.appendChild(md);
-  card.appendChild(btn("🛒 ショップを開く", "btn btn-primary rw-shop", () => openShop()));
+  const nTk = H.unusedTickets(r).length;
+  const rwBtns = el("div", "btn-row rw-btns");
+  rwBtns.appendChild(btn("🛒 ショップを開く", "btn btn-primary rw-shop", () => openShop()));
+  rwBtns.appendChild(btn(`🎟️ チケット${nTk ? `（${nTk}）` : ""}`, "btn btn-secondary rw-tk", () => openTickets(),
+    { "aria-label": `ごほうびチケット 未使用${nTk}枚` }));
+  card.appendChild(rwBtns);
   card.appendChild(el("p", "rw-rules",
     `目標を達成 +${H.GOLD.base}G ・ 連続2日目から1日ごとに +${H.GOLD.streakStep}G（最大 +${H.GOLD.streakCap}G）<br>`
     + `週N回の目標を達成 +${H.GOLD.weekGoal}G〜 ・ その日の予定をすべて達成 +${H.GOLD.perfect}G<br>`
@@ -3006,14 +3028,117 @@ function rewardOverlay({ icon, kicker, title, sub, gold, item, equipped }) {
     <div class="hb-celebrate-ico">${esc(icon)}</div>
     <div class="hb-celebrate-title">${esc(title)}</div>
     <div class="hb-celebrate-sub">${esc(sub)}</div>
-    <div class="hb-celebrate-gold">+${gold}G</div>
+    ${gold != null ? `<div class="hb-celebrate-gold">+${gold}G</div>` : ""}
     ${item ? `<div class="hb-celebrate-item">${item.icon} ${esc(item.name)}を手に入れた${equipped ? "（装備しました）" : ""}</div>` : ""}
     <div class="hb-celebrate-sub" style="margin-top:12px">タップして閉じる</div></div>`;
   o.onclick = () => o.remove();
   document.body.appendChild(o);
   if (navigator.vibrate) navigator.vibrate([30, 40, 60]);
 }
-function openShop(kind = "shield") {
+// ── ごほうびチケット ───────────────────────────────────────────────────────
+function renderWishShop(box, s) {
+  const r = s.reward, bal = H.balance(r), unused = H.unusedTickets(r), perDay = H.goldPerDay(r, s.today);
+  box.appendChild(btn(`🎟️ 持っているチケット ${unused.length}枚 ›`, "tk-link", () => openTickets()));
+  if (!r.wishes.length) box.appendChild(el("p", "hb-empty", "ごほうびがまだありません。<br>下の「ごほうびを追加」から登録しましょう。"));
+  r.wishes.forEach(w => {
+    const have = unused.filter(t => t.wishId === w.id).length, days = H.daysOfEffort(w.price, perDay);
+    const row = el("div", "shop-row");
+    row.innerHTML = `<div class="shop-ico" aria-hidden="true">${esc(w.icon)}</div>
+      <div class="shop-main"><div class="shop-name">${esc(w.name)}</div>
+        <div class="shop-desc">${days ? `頑張り約${days}日分` : "ゴールドでチケットと交換"}${have ? ` ・ 所持 ${have}枚` : ""}</div></div>`;
+    row.querySelector(".shop-main").appendChild(btn("編集", "wish-edit", () => openWishEditor(w.id), { "aria-label": `${w.name}を編集` }));
+    const b = btn(`${fmt(w.price)}G`, "shop-btn", () => {
+      if (!confirm(`「${w.name}」のチケットを ${fmt(w.price)}G で買いますか？`)) return;
+      const res = H.buyTicket(loadState().reward, w.id, s.today);
+      if (!res.ok) { showToast(res.reason === "gold" ? "ゴールドが足りません" : "買えませんでした"); return; }
+      write(H.KEYS.reward, res.state); render(); openShop("wish");
+      showToast(`🎟️ 「${w.name}」のチケットを手に入れた！`);
+    }, { "aria-label": `${w.name}のチケットを${w.price}ゴールドで買う` });
+    if (bal < w.price) b.disabled = true;
+    row.appendChild(b);
+    box.appendChild(row);
+  });
+  box.appendChild(btn("＋ ごほうびを追加", "btn btn-secondary wish-add", () => openWishEditor(null)));
+  box.appendChild(el("p", "hb-note", "リアルの自分へのごほうびです。チケットは1枚につき1回。実際に楽しむときに「使う」を押してください。"
+    + (perDay > 0 ? `　目安は直近7日の稼ぎ（1日 約${fmt(perDay)}G）から計算しています。` : "")));
+  box.appendChild(closeRow());
+}
+function openWishEditor(id) {
+  const s = loadState(), orig = id ? s.reward.wishes.find(w => w.id === id) : null;
+  const draft = orig ? { ...orig } : { id: "w_" + Date.now().toString(36), name: "", icon: "🎁", price: 500 };
+  const perDay = H.goldPerDay(s.reward, s.today);
+  let msg = "";
+  const draw = () => sheet(box => {
+    box.appendChild(el("h3", "modal-title", orig ? "ごほうびを編集" : "ごほうびを追加"));
+    box.appendChild(el("span", "field-label", "ごほうびの名前"));
+    const name = el("input", "field-input"); name.value = draft.name; name.maxLength = 30; name.placeholder = "例：サウナに行く";
+    name.oninput = () => { draft.name = name.value; };
+    box.appendChild(name);
+    box.appendChild(el("span", "field-label", "アイコン"));
+    const ir = el("div", "hb-chips");
+    const icon = el("input", "field-input"); icon.value = draft.icon; icon.maxLength = 8; icon.style.width = "64px"; icon.style.textAlign = "center";
+    icon.setAttribute("aria-label", "アイコン（絵文字）");
+    icon.oninput = () => { draft.icon = icon.value || "🎁"; };
+    ir.appendChild(icon);
+    H.WISH_ICONS.forEach(ic => ir.appendChild(btn(ic, "hb-chip" + (draft.icon === ic ? " on" : ""), () => { draft.icon = ic; draw(); })));
+    box.appendChild(ir);
+    box.appendChild(el("span", "field-label", "値段（ゴールド）"));
+    const est = el("p", "hb-note");
+    const showEst = () => { const d = H.daysOfEffort(draft.price, perDay); est.textContent = d ? `いまの稼ぎで 頑張り約${d}日分` : ""; };
+    box.appendChild(stepper(draft.price, H.WISH_PRICE_MIN, H.WISH_PRICE_MAX, "G", n => { draft.price = n; showEst(); }, 50));
+    showEst(); box.appendChild(est);
+    if (orig) box.appendChild(el("p", "hb-note", "名前や値段を変えても、買ったチケットはそのままです。"));
+    if (msg) box.appendChild(el("p", "hb-note", esc(msg)));
+    const row = el("div", "btn-row");
+    if (orig) row.appendChild(btn("削除", "btn btn-secondary", () => {
+      if (!confirm(`「${orig.name}」をごほうびリストから消しますか？買ったチケットは残ります。`)) return;
+      write(H.KEYS.reward, H.deleteWish(loadState().reward, orig.id)); render(); openShop("wish"); showToast("ごほうびを消しました");
+    }));
+    row.appendChild(btn("キャンセル", "btn btn-secondary", () => openShop("wish")));
+    row.appendChild(btn("保存", "btn btn-primary", () => {
+      if (!draft.name.trim()) { msg = "名前を入れてください"; draw(); return; }
+      write(H.KEYS.reward, H.saveWish(loadState().reward, draft)); render(); openShop("wish");
+      showToast(orig ? "✅ ごほうびを更新しました" : `✨ 「${draft.name.trim()}」を追加しました`);
+    }));
+    box.appendChild(row);
+  });
+  draw();
+}
+function openTickets(seg = "unused") {
+  const s = loadState(), r = s.reward, unused = H.unusedTickets(r), used = H.usedTickets(r);
+  const md = k => k.slice(5).replace("-", "/");
+  sheet(box => {
+    const head = el("div", "hb-sheet-head");
+    head.innerHTML = `<h3 class="modal-title">🎟️ ごほうびチケット</h3><span class="hb-pill" aria-label="所持ゴールド">🪙 ${fmt(H.balance(r))}</span>`;
+    box.appendChild(head);
+    const sg = el("div", "hb-seg");
+    sg.appendChild(btn(`未使用（${unused.length}）`, seg === "unused" ? "on" : "", () => openTickets("unused")));
+    sg.appendChild(btn(`使用済み（${used.length}）`, seg === "used" ? "on" : "", () => openTickets("used")));
+    box.appendChild(sg);
+    const list = seg === "unused" ? unused : used;
+    if (!list.length) {
+      box.appendChild(el("p", "hb-empty", seg === "unused" ? "チケットはありません。<br>ショップの「ごほうび」でゴールドと交換できます。" : "まだ使ったチケットはありません。"));
+      if (seg === "unused") box.appendChild(btn("🛒 ごほうびを見る", "btn btn-primary rw-shop", () => openShop("wish")));
+    }
+    list.forEach(t => {
+      const row = el("div", "shop-row tk-row" + (t.usedOn ? " used" : ""));
+      row.innerHTML = `<div class="shop-ico" aria-hidden="true">${esc(t.icon)}</div>
+        <div class="shop-main"><div class="shop-name">${esc(t.name)}</div>
+          <div class="shop-desc">${t.usedOn ? `使用 ${md(t.usedOn)} ・ ` : ""}交換 ${md(t.boughtOn)} ・ ${fmt(t.price)}G</div></div>`;
+      if (!t.usedOn) row.appendChild(btn("使う", "shop-btn tk-use", () => {
+        if (!confirm(`「${t.name}」のチケットを使いますか？使ったチケットは戻せません。`)) return;
+        const res = H.useTicket(loadState().reward, t.id, s.today);
+        if (!res.ok) { showToast("このチケットは使えません"); return; }
+        write(H.KEYS.reward, res.state); render(); openTickets("unused");
+        rewardOverlay({ icon: t.icon, kicker: "REWARD TIME", title: t.name, sub: "頑張った自分へのごほうび。楽しんできてください！", gold: null });
+      }, { "aria-label": `${t.name}のチケットを使う` }));
+      else row.appendChild(el("span", "tk-used", "使用済み"));
+      box.appendChild(row);
+    });
+    box.appendChild(closeRow());
+  });
+}
+function openShop(kind = "wish") {
   const s = loadState(), r = s.reward, bal = H.balance(r);
   sheet(box => {
     const head = el("div", "hb-sheet-head");
@@ -3022,6 +3147,7 @@ function openShop(kind = "shield") {
     const seg = el("div", "hb-seg");
     H.SHOP_KINDS.forEach(k => seg.appendChild(btn(k.label, k.kind === kind ? "on" : "", () => openShop(k.kind))));
     box.appendChild(seg);
+    if (kind === "wish") { renderWishShop(box, s); return; }
     H.SHOP.filter(it => it.kind === kind).forEach(it => {
       const row = el("div", "shop-row");
       const owned = r.owned.includes(it.id), worn = r.equipped[it.kind] === it.id;

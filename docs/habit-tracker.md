@@ -28,6 +28,13 @@ Grit 風の「今日」画面を週クエの主画面にし、習慣ごとの目
 - おともは休止中。`RETIRED_ITEMS` に入れたアイテムは読み込み時に購入・所持・装備から取り除き、払ったゴールドは戻る
 - 指標: 記録の完了日数（筋トレは部位をまとめて1日）、部位ごとの日数、累計分、何か達成した日数、習慣の達成回数、パーフェクトデイ、メダル数
 
+## ごほうびチケット
+
+- `wt_reward_v1.wishes`: ごほうびリスト（id・名前・アイコン・値段）。未設定の古い保存データには初期の3つを入れる。全部消した `[]` はそのまま
+- `wt_reward_v1.tickets`: 買ったチケット。購入時の名前・アイコン・値段を写して持つので、リストを編集・削除しても変わらない。`usedOn` が入ったら使用済みで、2回目は `useTicket` が `used` で拒否
+- 購入は `purchases` に `ticket:<wishId>` として入り、既存の残高計算にそのまま反映される
+- 値段の目安は直近7日（今日を除く）の1日あたりの稼ぎから計算する
+
 ## 統計の数え方の修正
 
 統計タブの「達成回数」とカテゴリ別の回数は、予定に入っていた記録しか数えていなかった。今日タブ・ジム・Neuro Learn からの予定外の記録も数えるよう、完了記録ベースに変更した。
@@ -38,6 +45,7 @@ Grit 風の「今日」画面を週クエの主画面にし、習慣ごとの目
 node --test tests/*.test.mjs
 BROWSER_PATH=<chromium> node tests/habit-ui.cjs
 BROWSER_PATH=<chromium> node tests/quest-ui.cjs
+BROWSER_PATH=<chromium> node tests/ticket-ui.cjs
 BROWSER_PATH=<chromium> node tests/app-ui.cjs
 ```
 
