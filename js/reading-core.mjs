@@ -7,8 +7,10 @@ import { SETTLE_WINDOW, addDays } from "./habit-core.mjs";
 export const KEY = "wt_reading_v1";
 export const STATUSES = ["reading", "want", "done"];
 export const STATUS_LABEL = { want: "読みたい", reading: "読書中", done: "読了" };
-export const GOLD_PER_PAGE = 1;   // 進んだ1ページごと
-export const FINISH_BONUS_RATE = 0.5; // 読了した日に1回、全ページ数×1/2(端数切り捨て)
+export const PAGES_PER_GOLD = 2;      // 2ページ進むごとに1G
+export const FINISH_BONUS_RATE = 0.25; // 読了した日に1回、全ページ数×1/4(端数切り捨て)
+// from ページから to ページまで進んだ分のゴールド。端数は次の日に持ち越す(累計で数えるので取りこぼさない)
+export const pagesGold = (from, to) => Math.max(0, Math.floor(to / PAGES_PER_GOLD) - Math.floor(from / PAGES_PER_GOLD));
 export const finishBonus = book => Math.floor(book.pages * FINISH_BONUS_RATE);
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
@@ -157,7 +159,7 @@ export function booksOn(books, day) {
 export function bookDayGold(book, day) {
   if (book.recordOnly) return null;
   const pages = readOn(book, day), bonus = book.status === "done" && book.bonusOn === day ? finishBonus(book) : 0;
-  const g = pages * GOLD_PER_PAGE + bonus;
+  const g = (pages ? pagesGold(pageBefore(book, day), pageAt(book, day)) : 0) + bonus;
   return g ? { g, streak: 0, unit: "d", ms: 0, pages, bonus } : null;
 }
 // 習慣のゴールド精算(habit-core の settle)に足す、その日の読書の分。キーは "book:<id>"

@@ -57,27 +57,27 @@ const server = http.createServer((req, res) => {
   assert.match(await p.locator('#rd-today .rd-book').innerText(), /p\.0 \/ 400/);
   await shot('reading-today-new.png');
 
-  // 3) 何ページまで進んだか → 1ページ1G
+  // 3) 何ページまで進んだか → 2ページで1G
   await p.locator('#rd-today .rd-book').click();
   await p.getByLabel('進んだページ').fill('35');
   await p.getByLabel('進んだページ').blur();
-  assert.match(await p.locator('#rd-sheet').innerText(), /\+35ページ ・ \+35G/);
+  assert.match(await p.locator('#rd-sheet').innerText(), /\+35ページ ・ \+17G/);
   await shot('reading-page.png');
   await p.locator('#rd-sheet button', { hasText: '記録する' }).click();
   await p.waitForSelector('#rd-sheet', { state: 'hidden' });
-  assert.equal(await balance(), g0 + 35);
-  assert.match(await p.locator('#rd-today .rd-book').innerText(), /p\.35 \/ 400 ・ この日 \+35ページ ・ \+35G/);
+  assert.equal(await balance(), g0 + 17);
+  assert.match(await p.locator('#rd-today .rd-book').innerText(), /p\.35 \/ 400 ・ この日 \+35ページ ・ \+17G/);
   let d = await saved();
   assert.deepEqual(d.books[0].log, { '2026-10-18': { page: 35 } });
 
-  // 4) 昨日に戻ると昨日は p.0、昨日に20ページまで記録 → 今日の分は +15 に変わり、合計は同じ35G
+  // 4) 昨日に戻ると昨日は p.0、昨日に20ページまで記録 → 今日の分は +15 に変わり、合計は同じ17G
   await p.locator('.hb-day[data-day="2026-10-17"]').click();
   await p.locator('#rd-today .rd-book').click();
   await p.locator('#rd-sheet .hb-ctrl button', { hasText: '+10' }).click();
   await p.locator('#rd-sheet .hb-ctrl button', { hasText: '+10' }).click();
   await p.locator('#rd-sheet button', { hasText: '記録する' }).click();
   await p.waitForSelector('#rd-sheet', { state: 'hidden' });
-  assert.equal(await balance(), g0 + 35);
+  assert.equal(await balance(), g0 + 17);
   await p.locator('.hb-day[data-day="2026-10-18"]').click();
   assert.match(await p.locator('#rd-today .rd-book').innerText(), /この日 \+15ページ/);
 
@@ -87,7 +87,7 @@ const server = http.createServer((req, res) => {
   await p.getByLabel('感想').fill('局在診断の考え方が整理できた');
   await p.getByLabel('感想').blur();
   await p.locator('#rd-sheet button', { hasText: '閉じる' }).click();
-  assert.equal(await balance(), g0 + 400 + 200);
+  assert.equal(await balance(), g0 + 200 + 100);
   assert.match(await p.locator('#rd-today .rd-book').innerText(), /読了/);
   d = await saved();
   assert.equal(d.books[0].status, 'done');
@@ -104,7 +104,7 @@ const server = http.createServer((req, res) => {
   await p.locator('#rd-sheet button', { hasText: '閉じる' }).click();
   // 翌日以降の今日タブには出ない
   await p.reload(); await p.waitForSelector('#rd-today');
-  assert.equal(await balance(), g0 + 600, 'gold survives reload');
+  assert.equal(await balance(), g0 + 300, 'gold survives reload');
   // 読書のクエスト「本の虫 I」(1冊読了)が受け取れる
   assert.ok(await p.locator('.tab-btn[data-tab="status"]').evaluate(e => e.classList.contains('has-badge')), 'quest badge');
 

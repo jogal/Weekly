@@ -184,7 +184,7 @@ export function openPage(id, day) {
     box.appendChild(big);
     const n = Math.max(0, page - before);
     const willGold = inGoldWindow(day, t0);
-    box.appendChild(h("p", "hb-note rd-center", n ? `この日 +${n}ページ${willGold ? ` ・ +${n * R.GOLD_PER_PAGE}G` : ""}` : before ? `前回は p.${before} まで` : "最初のページから数えます"));
+    box.appendChild(h("p", "hb-note rd-center", n ? `この日 +${n}ページ${willGold ? ` ・ +${R.pagesGold(before, page)}G` : ""}` : before ? `前回は p.${before} まで` : "最初のページから数えます"));
     const ctrl = h("div", "hb-ctrl");
     [-10, -1, 1, 10].forEach(d => ctrl.appendChild(button(d > 0 ? `+${d}` : String(d), "", () => { page = Math.min(max, Math.max(0, page + d)); draw(); })));
     box.appendChild(ctrl);
@@ -237,7 +237,7 @@ export function openEditor(id, opts = {}) {
     }
     if (msg) box.appendChild(h("p", "hb-note rd-warn", esc(msg)));
     if (!orig && draft.status === "done") box.appendChild(h("p", "hb-note", "読了で登録した本は記録として残り、ゴールドは付きません。"));
-    box.appendChild(h("p", "hb-note", `読み進めた1ページごとに ${R.GOLD_PER_PAGE}G、読了した日に全ページ数×1/2のボーナス${draft.pages > 0 ? `（${R.finishBonus(draft)}G）` : ""}。`));
+    box.appendChild(h("p", "hb-note", `読み進めた${R.PAGES_PER_GOLD}ページごとに1G、読了した日に全ページ数×1/4のボーナス${draft.pages > 0 ? `（${R.finishBonus(draft)}G）` : ""}。`));
     const list = [];
     if (orig) list.push(button("削除", "btn btn-secondary", () => {
       if (!confirm(`「${orig.title}」と、その読書記録を消しますか？`)) return;
@@ -272,7 +272,7 @@ export function renderTodayBooks(v, day) {
   const head = h("div", "td-head", `<p class="hb-group">読書</p>`);
   head.appendChild(button("＋", "td-plus rd-today-add", () => openEditor(null, { status: "reading", day }), { "aria-label": "読書中の本を追加" }));
   sec.appendChild(head);
-  if (!books.length) sec.appendChild(h("p", "hb-note", "読んでいる本を追加すると、何ページまで進んだかを記録できます（1ページ1G・読了でボーナス）。"));
+  if (!books.length) sec.appendChild(h("p", "hb-note", "読んでいる本を追加すると、何ページまで進んだかを記録できます（2ページで1G・読了でボーナス）。"));
   books.forEach(b => {
     const page = R.pageAt(b, day), n = R.readOn(b, day), ratio = b.pages ? Math.min(1, page / b.pages) : 0;
     const card = button("", "hb-card rd-book" + (n ? " done" : ""), () => (b.status === "done" ? openBook(b.id) : openPage(b.id, day)));

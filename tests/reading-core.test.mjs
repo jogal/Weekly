@@ -36,14 +36,18 @@ test('setPage records the page reached; pages read are the gain over the previou
   assert.equal(R.setPage(b, TODAY, 5000).log[TODAY].page, 300, 'capped at the total pages');
 });
 
-test('gold: 1G per page read, finish bonus once on the finish day', () => {
+test('gold: 1G per 2 pages read (remainder carries over), quarter-pages bonus on the finish day', () => {
   let b = R.setPage(book(), '2026-10-16', 280);
-  assert.deepEqual(R.bookDayGold(b, '2026-10-16'), { g: 280, streak: 0, unit: 'd', ms: 0, pages: 280, bonus: 0 });
+  assert.deepEqual(R.bookDayGold(b, '2026-10-16'), { g: 140, streak: 0, unit: 'd', ms: 0, pages: 280, bonus: 0 });
   b = R.setStatus(b, 'done', TODAY);
   assert.equal(b.finishedOn, TODAY);
   assert.equal(b.log[TODAY].page, 300, 'finishing fills the rest of the pages');
-  assert.equal(R.bookDayGold(b, TODAY).g, 20 + 150, 'bonus is half the total pages');
-  assert.equal(R.finishBonus({ pages: 301 }), 150, 'rounded down');
+  assert.equal(R.bookDayGold(b, TODAY).g, 10 + 75, 'bonus is a quarter of the total pages');
+  assert.equal(R.finishBonus({ pages: 303 }), 75, 'rounded down');
+  let odd = R.setPage(book({ id: 'o' }), '2026-10-16', 21);
+  odd = R.setPage(odd, '2026-10-17', 42);
+  assert.equal(R.bookDayGold(odd, '2026-10-16').g, 10);
+  assert.equal(R.bookDayGold(odd, '2026-10-17').g, 11, 'the odd page carries over');
   assert.deepEqual(Object.keys(R.dayGoldItems([b], TODAY)), ['book:b1']);
   b = R.setStatus(b, 'reading', TODAY);
   assert.equal(b.finishedOn, null);
@@ -55,8 +59,8 @@ test('settle adds reading gold to the day and it counts in the balance', () => {
   const ctx = { log: {}, records: {}, freezes: {}, floorKey: null, today: TODAY, extraGold: k => R.dayGoldItems([b], k) };
   const r0 = H.newRewardState('2026-10-15');
   const r = H.settle(r0, [], ctx, TODAY);
-  assert.equal(H.goldOn(r, TODAY), 40);
-  assert.equal(H.balance(r), H.balance(H.settle(r0, [], { ...ctx, extraGold: undefined }, TODAY)) + 40);
+  assert.equal(H.goldOn(r, TODAY), 20);
+  assert.equal(H.balance(r), H.balance(H.settle(r0, [], { ...ctx, extraGold: undefined }, TODAY)) + 20);
 });
 
 test('periodStats, finishedByMonth and booksOn', () => {
@@ -90,17 +94,17 @@ test('loopholes: record-only finish, one bonus per book, undo and finish-date mo
   b = R.setPage(b, TODAY, 120);
   b = R.setStatus(b, 'done', TODAY, TODAY);
   assert.deepEqual(b.fill, { on: TODAY, prev: 120 });
-  assert.equal(R.bookDayGold(b, TODAY).g, 200 + 150);
+  assert.equal(R.bookDayGold(b, TODAY).g, 100 + 75);
   b = R.setStatus(b, 'reading', TODAY, TODAY);
   assert.deepEqual(b.log[TODAY], { page: 120 });
   assert.equal(b.bonusOn, null);
-  assert.equal(R.bookDayGold(b, TODAY).g, 20);
+  assert.equal(R.bookDayGold(b, TODAY).g, 10);
 
   // 読了日を前に動かすと、埋めたページとボーナスも動く
   b = R.setStatus(b, 'done', TODAY, TODAY);
   b = R.setFinishedOn(b, '2026-10-16', TODAY);
   assert.deepEqual(b.log, { '2026-10-16': { page: 300 }, [TODAY]: { page: 120 } });
-  assert.equal(R.bookDayGold(b, '2026-10-16').g, 300 + 150);
+  assert.equal(R.bookDayGold(b, '2026-10-16').g, 150 + 75);
   assert.equal(R.bookDayGold(b, TODAY), null);
 
   // 確定済み(8日以上前)のボーナスは、取り消して読了し直しても2回目は付かない
