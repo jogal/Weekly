@@ -1,4 +1,4 @@
-const CACHE = "weekly-quest-v68";
+const CACHE = "weekly-quest-v70";
 const ASSETS = [
   "./tracker.html",
   "./gym.html",
@@ -31,6 +31,9 @@ const ASSETS = [
   "./icon-192.png",
   "./icon-512.png",
   "./icon-180.png",
+  "./icon-quest-192.png",
+  "./icon-quest-512.png",
+  "./icons/avatar/novice.png",
   "./sprites/novice.png",
   "./sprites/monk.png",
   "./sprites/monk-room.svg",
@@ -43,6 +46,9 @@ const ASSETS = [
   "./sprites/blackmage.png",
   "./sprites/bard.png",
   "./sprites/chef.png",
+  "./css/reading.css",
+  "./js/reading-core.mjs",
+  "./js/reading-ui.mjs",
 ];
 
 self.addEventListener("install", e => {

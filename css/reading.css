@@ -1,0 +1,38 @@
+/* 読書記録(js/reading-ui.mjs): 本棚シート・今日タブの読書カード・統計の読書まとめ */
+.rd-main { flex:1; min-width:0; }
+.rd-title { font-size:14px; font-weight:700; line-height:1.4; overflow-wrap:anywhere; }
+.rd-title.big { font-size:16px; }
+.rd-author { font-size:11px; color:var(--dim); margin-top:2px; }
+.rd-sub { font-size:11px; color:var(--dim); margin-top:3px; }
+.rd-chev { color:var(--faint); font-size:20px; }
+.rd-head { margin-bottom:12px; }
+.rd-row { display:flex; align-items:center; gap:10px; width:100%; text-align:left; background:none; color:var(--txt);
+  border:0; border-bottom:1px solid var(--line); padding:11px 0; font:inherit; cursor:pointer; }
+.rd-bar { height:5px; background:#ffffff12; border-radius:3px; overflow:hidden; margin-top:7px; }
+.rd-bar div { height:100%; background:var(--gold); }
+.rd-date { max-width:180px; }
+.rd-add { display:flex; gap:8px; align-items:flex-start; }
+.rd-add .rd-date { flex:1; }
+.rd-add-btn { flex:0 0 auto; padding:10px 12px; }
+.rd-page { text-align:center; max-width:140px; display:block; margin:0 auto 10px; }
+.rd-center { text-align:center; }
+.rd-warn { color:#f0a07a; }
+.rd-review { font-size:12px; color:var(--txt); margin-top:6px; line-height:1.6; white-space:pre-wrap; }
+.rd-log { margin:4px 0 6px; }
+.rd-log-row { display:flex; align-items:center; gap:10px; font-size:12px; padding:6px 0; border-bottom:1px solid var(--line); }
+.rd-log-row span:first-child { color:var(--dim); }
+.rd-log-row span:nth-child(2) { flex:1; }
+.rd-log-row .hb-chip { min-height:32px; min-width:36px; }
+.rd-fin { width:100%; background:none; border:0; border-bottom:1px solid var(--line); color:var(--txt); font:inherit; text-align:left; cursor:pointer; }
+.rd-log-row span:first-child { min-width:44px; }
+.rd-fin-title small { color:var(--dim); margin-left:4px; }
+.rd-months { display:grid; grid-template-columns:repeat(12,1fr); gap:3px; height:96px; margin:4px 0 8px; }
+.rd-month { display:flex; flex-direction:column; justify-content:flex-end; align-items:center; gap:2px; }
+.rd-month-bar { width:70%; background:var(--gold); border-radius:2px 2px 0 0; min-height:0; }
+.rd-month-n { font-size:10px; color:var(--txt); }
+.rd-month-l { font-size:9px; color:var(--faint); }
+/* 今日タブ */
+.rd-today { margin-top:6px; }
+.rd-book { width:100%; text-align:left; color:var(--txt); font:inherit; cursor:pointer; }
+.rd-book .rd-bar { margin-top:6px; }
+.rd-pct { font:600 15px var(--cond); color:var(--dim); min-width:44px; text-align:right; }

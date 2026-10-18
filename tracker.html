@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#08090b">
 <title>週間クエスト</title>
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="apple-touch-icon" href="icons/avatar/novice.png" id="home-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
@@ -467,8 +467,18 @@ textarea.field-input { height:76px; resize:vertical; }
 .hb-celebrate-gold { font:700 22px var(--cond); color:#f0d7a3; margin-top:10px; letter-spacing:.04em; }
 /* quests */
 .qb-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--line); }
-.qb-ico { width:44px; height:44px; flex-shrink:0; border-radius:12px; display:grid; place-items:center; font-size:24px; background:#ffffff07; }
-.qb-row.ready .qb-ico { background:#dfbd7c22; }
+/* サムネイル: 外周リング=今の段の進み具合、下の◆=何段目か。色は段ごとに 銅→銀→金→紫 */
+.qb-ico { width:48px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:5px; font-size:21px; }
+.qb-ring { position:relative; width:46px; height:46px; border-radius:50%; display:grid; place-items:center; }
+.qb-ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
+.qb-ring b { width:36px; height:36px; border-radius:50%; display:grid; place-items:center; font-weight:400; overflow:hidden; white-space:nowrap;
+  background:radial-gradient(circle at 35% 30%,#24262d,#101115); box-shadow:inset 0 0 0 1px #ffffff10; }
+.qb-row.ready .qb-ring { box-shadow:0 0 10px #f0d7a388; }
+.qb-row.fresh .qb-ring b { filter:grayscale(1) opacity(.55); }
+.qb-pips { display:flex; gap:3px; }
+.qb-pips i { width:6px; height:6px; transform:rotate(45deg); background:#ffffff1a; }
+.qb-pips i.on { background:var(--t2); }
+.qb-pips i.now { background:var(--t1); box-shadow:0 0 4px var(--t1); }
 .qb-main { flex:1; min-width:0; }
 .qb-title { font-size:14px; font-weight:700; }
 .qb-desc { font-size:11px; color:var(--dim); margin:2px 0 6px; }
@@ -515,6 +525,7 @@ textarea.field-input { height:76px; resize:vertical; }
 .hs-rate { min-width:56px; text-align:center; font:700 15px var(--cond); padding:5px 8px; border-radius:999px; }
 </style>
 <link rel="stylesheet" href="css/weekly-theme.css">
+<link rel="stylesheet" href="css/reading.css">
 </head>
 <body data-app="tracker">
 <div id="app">
@@ -523,6 +534,7 @@ textarea.field-input { height:76px; resize:vertical; }
       <span>Weekly <span class="t-red">Quest</span><span class="t-jp">週間クエスト</span></span>
       <span>
         <a class="mini-btn" href="gym.html" style="text-decoration:none">GYM</a>
+        <button type="button" class="mini-btn" id="rd-open" title="本棚（読書記録）">本棚</button>
         <button type="button" class="mini-btn" id="nl-import" title="Neuro Learnの学習を取り込む">🧠</button>
         <button type="button" class="mini-btn" id="menu-open">設定</button>
       </span>
@@ -881,6 +893,20 @@ window.addEventListener('resize',()=>{
     if(img.complete&&img.naturalWidth&&img.getClientRects().length)sizeHeroSprite(img);
   });
 });
+// Home-screen icon = the hero's face for the current job × tier
+// (icons/avatar/, made by tools/make_home_icon.py). iPhone copies the
+// apple-touch-icon once, when "Add to Home Screen" is tapped, so the icon shows
+// the avatar as of that moment; it does not follow later level-ups.
+const AVATAR_ICONS=new Set(["bard","bard_lv1","bard_lv10","bard_lv20","bard_lv30","bard_lv40","blackmage","chef","monk","monk_lv1","monk_lv10","monk_lv20","monk_lv30","monk_lv40","novice","redmage_lv1","redmage_lv10","redmage_lv20","redmage_lv30","redmage_lv40","whitemage","whitemage_lv1","whitemage_lv10","whitemage_lv20","whitemage_lv30","whitemage_lv40"]);
+function updateHomeIcon(){
+  const link=document.getElementById("home-icon");
+  if(!link)return;
+  const name=spriteCandidates(jobState(getTracks(computeXP())))
+    .map(p=>p.match(/^sprites\/(\w+?)(_lv\d+)?(?:x2)?\.png$/))
+    .filter(Boolean).map(m=>m[1]+(m[2]||"")).find(n=>AVATAR_ICONS.has(n));
+  const href=`icons/avatar/${name||"novice"}.png`;
+  if(link.getAttribute("href")!==href)link.setAttribute("href",href);
+}
 // Fullscreen character viewer
 function openHeroZoom(src,jobName,lvl){
   const ov=document.getElementById("hero-zoom");
@@ -1461,6 +1487,7 @@ function renderStats(){
     wrap.appendChild(card);
   });
 
+  window.ReadingUI?.renderReadingStats(wrap,statsRange(),statsMode);
   cont.appendChild(wrap);
 }
 
@@ -1537,6 +1564,7 @@ document.getElementById("export-btn").onclick=()=>{
   ARCHIVED_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v!==null)archivedData[k]=v;});
   const out={records,habitData};
   if(Object.keys(archivedData).length)out.archivedData=archivedData;
+  try{const v=JSON.parse(localStorage.getItem("wt_reading_v1"));if(v!==null)out.readingData=v;}catch(e){}
   BackupFile.save("weekly-quest-data.json",JSON.stringify(out));
 };
 document.getElementById("import-btn").onclick=()=>{
@@ -1549,6 +1577,8 @@ document.getElementById("import-btn").onclick=()=>{
           ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1","wt_todo_v1"].forEach(k=>{if(d.habitData[k]!==undefined)localStorage.setItem(k,JSON.stringify(d.habitData[k]));});
         if(d.archivedData&&typeof d.archivedData==="object")
           ARCHIVED_KEYS.forEach(k=>{if(typeof d.archivedData[k]==="string")localStorage.setItem(k,d.archivedData[k]);});
+        // 読書記録(wt_reading_v1)。これを含まない古いバックアップでは今の読書記録をそのまま残す
+        if(d.readingData&&typeof d.readingData==="object")localStorage.setItem("wt_reading_v1",JSON.stringify(d.readingData));
         persist();render();showToast("✅ 復元しました");
       }catch(err){ alert("データを読み込めませんでした"); }
   },()=>alert("ファイルを開けませんでした"));
@@ -1757,6 +1787,7 @@ function render(){
   else if(tab==="stats")renderStats();
   else if(tab==="status")renderStatus();
   window.HabitUI?.updateQuestBadge();
+  updateHomeIcon();
 }
 render();
 
@@ -1793,11 +1824,15 @@ function handleQuestParam(){
 }
 handleQuestParam();
 </script>
+<!-- 読書記録: ヘッダーの本棚・今日タブの読書カード・統計の読書まとめ。ロジックは js/reading-core.mjs。
+     今日タブの描画で使うので、習慣トラッカーより先に読み込む -->
+<script type="module" src="js/reading-ui.mjs"></script>
 <!-- 習慣トラッカー: 今日タブ・目標・ゴールド・ショップ。ロジックは js/habit-core.mjs -->
 <script type="module">
 import * as H from "./js/habit-core.mjs";
 import * as Q from "./js/quest-core.mjs";
 import * as T from "./js/todo-core.mjs";
+import * as RC from "./js/reading-core.mjs";
 
 const read = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
 const write = (k, v) => localStorage.setItem(k, JSON.stringify(v));
@@ -1810,8 +1845,9 @@ let stripDays = 28, stripRight = 0, stripFocus = false; // 日付ストリップ
 
 // ── state ──────────────────────────────────────────────────────────────────
 function ctxOf(s) {
+  const books = RC.normalize(read(RC.KEY), s.today).books; // 読書は本棚(wt_reading_v1)から。進んだページ・読了をゴールドに足す
   return { records, log: s.log, freezes: s.reward.freezes, floorKey: H.dataFloor(records, s.log), today: s.today,
-    extraGold: k => T.dayGoldItems(s.todo, k) };
+    extraGold: k => ({ ...T.dayGoldItems(s.todo, k), ...RC.dayGoldItems(books, k) }) };
 }
 // 読み込みのたびに未確定日のゴールドを精算する(ジムやNeuro Learnの記録もここで反映)
 function loadState() {
@@ -1999,6 +2035,7 @@ function renderToday() {
     off.forEach(h => v.appendChild(habitCard(h, day, ctx, true)));
   }
   renderRoutines(v, s, day);
+  window.ReadingUI?.renderTodayBooks(v, day);
   v.appendChild(el("p", "hb-hint", "リングをタップで記録 ・ 長押しで休息日<br>カードをタップすると細かく記録・編集できます<br>タスクはタップでステップを開く ・ 日課はタップで済み、長押しで編集"));
   const archived = s.habits.filter(h => h.archived);
   if (archived.length) {
@@ -2678,7 +2715,8 @@ function renderRewardCard(wrap) {
 
 // ── クエスト掲示板 ─────────────────────────────────────────────────────────
 function questBoardOf(s) {
-  const m = Q.questMetrics({ records, log: s.log, habits: s.habits, reward: s.reward, today: s.today });
+  const reading = RC.questStats(RC.normalize(read(RC.KEY), s.today).books, s.today);
+  const m = Q.questMetrics({ records, log: s.log, habits: s.habits, reward: s.reward, reading, today: s.today });
   return Q.questBoard(m, s.reward, s.habits);
 }
 function updateQuestBadge(board) {
@@ -2690,9 +2728,20 @@ function updateQuestBadge(board) {
   }
   return n;
 }
+// 自分で付けたアイコンは8文字まで入るので、丸の中には先頭の1文字(絵文字1つ)だけ出す
+const firstGlyph = s => (typeof Intl !== "undefined" && Intl.Segmenter
+  ? new Intl.Segmenter().segment(String(s)).containing(0)?.segment : Array.from(String(s))[0]) || "";
+const QUEST_TIER_COLORS = [["#d39a63", "#7a4a26"], ["#e4ebf3", "#7d8896"], ["#ffe39a", "#b8862f"], ["#c9b6ff", "#6a4fd0"]];
+function questThumb(q) {
+  const t = Math.min(q.tierIdx, q.line.tiers.length - 1);
+  const [t1, t2] = QUEST_TIER_COLORS[Math.min(t, QUEST_TIER_COLORS.length - 1)];
+  const pips = q.line.tiers.map((_, i) => `<i class="${i < q.tierIdx ? "on" : i === q.tierIdx ? "now" : ""}"></i>`).join("");
+  return `<div class="qb-ico" aria-hidden="true" style="--t1:${t1};--t2:${t2}">
+    <span class="qb-ring">${ringSvg(46, 4, q.ratio, q.claimable ? "#f0d7a3" : t1)}<b>${esc(firstGlyph(q.line.icon))}</b></span><span class="qb-pips">${pips}</span></div>`;
+}
 function questRow(q, onClaim) {
-  const row = el("div", "qb-row" + (q.claimable ? " ready" : ""));
-  row.innerHTML = `<div class="qb-ico" aria-hidden="true">${esc(q.line.icon)}</div>
+  const row = el("div", "qb-row" + (q.claimable ? " ready" : "") + (!q.done && !q.value ? " fresh" : ""));
+  row.innerHTML = `${questThumb(q)}
     <div class="qb-main"><div class="qb-title">${esc(q.title)}</div>
       <div class="qb-desc">${esc(Q.questDesc(q))}</div>
       <div class="qb-bar" role="progressbar" aria-label="${esc(q.title)}の進み具合" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.round(q.ratio * 100)}">
