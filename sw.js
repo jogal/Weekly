@@ -1,4 +1,4 @@
-const CACHE = "weekly-quest-v67";
+const CACHE = "weekly-quest-v68";
 const ASSETS = [
   "./tracker.html",
   "./gym.html",
@@ -43,6 +43,9 @@ const ASSETS = [
   "./sprites/blackmage.png",
   "./sprites/bard.png",
   "./sprites/chef.png",
+  "./css/reading.css",
+  "./js/reading-core.mjs",
+  "./js/reading-ui.mjs",
 ];
 
 self.addEventListener("install", e => {

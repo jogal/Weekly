@@ -515,6 +515,7 @@ textarea.field-input { height:76px; resize:vertical; }
 .hs-rate { min-width:56px; text-align:center; font:700 15px var(--cond); padding:5px 8px; border-radius:999px; }
 </style>
 <link rel="stylesheet" href="css/weekly-theme.css">
+<link rel="stylesheet" href="css/reading.css">
 </head>
 <body data-app="tracker">
 <div id="app">
@@ -523,6 +524,7 @@ textarea.field-input { height:76px; resize:vertical; }
       <span>Weekly <span class="t-red">Quest</span><span class="t-jp">週間クエスト</span></span>
       <span>
         <a class="mini-btn" href="gym.html" style="text-decoration:none">GYM</a>
+        <button type="button" class="mini-btn" id="rd-open" title="本棚（読書記録）">本棚</button>
         <button type="button" class="mini-btn" id="nl-import" title="Neuro Learnの学習を取り込む">🧠</button>
         <button type="button" class="mini-btn" id="menu-open">設定</button>
       </span>
@@ -1461,6 +1463,7 @@ function renderStats(){
     wrap.appendChild(card);
   });
 
+  window.ReadingUI?.renderReadingStats(wrap,statsRange(),statsMode);
   cont.appendChild(wrap);
 }
 
@@ -1537,6 +1540,7 @@ document.getElementById("export-btn").onclick=()=>{
   ARCHIVED_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v!==null)archivedData[k]=v;});
   const out={records,habitData};
   if(Object.keys(archivedData).length)out.archivedData=archivedData;
+  try{const v=JSON.parse(localStorage.getItem("wt_reading_v1"));if(v!==null)out.readingData=v;}catch(e){}
   BackupFile.save("weekly-quest-data.json",JSON.stringify(out));
 };
 document.getElementById("import-btn").onclick=()=>{
@@ -1549,6 +1553,8 @@ document.getElementById("import-btn").onclick=()=>{
           ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1","wt_todo_v1"].forEach(k=>{if(d.habitData[k]!==undefined)localStorage.setItem(k,JSON.stringify(d.habitData[k]));});
         if(d.archivedData&&typeof d.archivedData==="object")
           ARCHIVED_KEYS.forEach(k=>{if(typeof d.archivedData[k]==="string")localStorage.setItem(k,d.archivedData[k]);});
+        // 読書記録(wt_reading_v1)。これを含まない古いバックアップでは今の読書記録をそのまま残す
+        if(d.readingData&&typeof d.readingData==="object")localStorage.setItem("wt_reading_v1",JSON.stringify(d.readingData));
         persist();render();showToast("✅ 復元しました");
       }catch(err){ alert("データを読み込めませんでした"); }
   },()=>alert("ファイルを開けませんでした"));
@@ -1793,11 +1799,15 @@ function handleQuestParam(){
 }
 handleQuestParam();
 </script>
+<!-- 読書記録: ヘッダーの本棚・今日タブの読書カード・統計の読書まとめ。ロジックは js/reading-core.mjs。
+     今日タブの描画で使うので、習慣トラッカーより先に読み込む -->
+<script type="module" src="js/reading-ui.mjs"></script>
 <!-- 習慣トラッカー: 今日タブ・目標・ゴールド・ショップ。ロジックは js/habit-core.mjs -->
 <script type="module">
 import * as H from "./js/habit-core.mjs";
 import * as Q from "./js/quest-core.mjs";
 import * as T from "./js/todo-core.mjs";
+import * as RC from "./js/reading-core.mjs";
 
 const read = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
 const write = (k, v) => localStorage.setItem(k, JSON.stringify(v));
@@ -1810,8 +1820,9 @@ let stripDays = 28, stripRight = 0, stripFocus = false; // 日付ストリップ
 
 // ── state ──────────────────────────────────────────────────────────────────
 function ctxOf(s) {
+  const books = RC.normalize(read(RC.KEY), s.today).books; // 読書は本棚(wt_reading_v1)から。進んだページ・読了をゴールドに足す
   return { records, log: s.log, freezes: s.reward.freezes, floorKey: H.dataFloor(records, s.log), today: s.today,
-    extraGold: k => T.dayGoldItems(s.todo, k) };
+    extraGold: k => ({ ...T.dayGoldItems(s.todo, k), ...RC.dayGoldItems(books, k) }) };
 }
 // 読み込みのたびに未確定日のゴールドを精算する(ジムやNeuro Learnの記録もここで反映)
 function loadState() {
@@ -1999,6 +2010,7 @@ function renderToday() {
     off.forEach(h => v.appendChild(habitCard(h, day, ctx, true)));
   }
   renderRoutines(v, s, day);
+  window.ReadingUI?.renderTodayBooks(v, day);
   v.appendChild(el("p", "hb-hint", "リングをタップで記録 ・ 長押しで休息日<br>カードをタップすると細かく記録・編集できます<br>タスクはタップでステップを開く ・ 日課はタップで済み、長押しで編集"));
   const archived = s.habits.filter(h => h.archived);
   if (archived.length) {
