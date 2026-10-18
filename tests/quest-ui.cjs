@@ -79,17 +79,17 @@ function seedRecords() {
   assert.match(await kitchen2.innerText(), /12\/50日[\s\S]*200G ＋ 🍲灯りの台所/);
   assert.ok(await kitchen2.locator('.qb-btn').isDisabled());
 
-  // 3) ことばの旅 I → II を続けて受け取ると、オウムが手に入り装備される
+  // 3) ことばの旅 I → II を続けて受け取ると、称号「ことばの使い手」が手に入り装備される
   await p.locator('#hb-sheet .qb-row', { hasText: 'ことばの旅 I' }).first().locator('.qb-btn').click();
   await p.locator('.hb-celebrate').click();
   await p.locator('#hb-sheet .qb-row', { hasText: 'ことばの旅 II' }).locator('.qb-btn').click();
-  assert.match(await p.locator('.hb-celebrate').innerText(), /オウムを手に入れた（装備しました）/);
+  assert.match(await p.locator('.hb-celebrate').innerText(), /ことばの使い手を手に入れた（装備しました）/);
   if (shots) await p.screenshot({ path: path.join(shots, 'quest-clear.png') });
   await p.locator('.hb-celebrate').click();
   assert.match(await p.locator('#hb-sheet .qb-row', { hasText: 'ことばの旅 III' }).innerText(), /31\/100時間/);
   let r = await reward();
   assert.deepEqual(Object.keys(r.quests.claimed).sort(), ['cooking_days:0', 'english_hours:0', 'english_hours:1']);
-  assert.equal(r.equipped.pet, 'p_parrot');
+  assert.equal(r.equipped.title, 't_linguist');
 
   // 4) 達成の記録
   await p.locator('#hb-sheet .hb-seg button', { hasText: '達成の記録' }).click();
@@ -97,16 +97,16 @@ function seedRecords() {
   await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click();
   assert.equal(await balance(), gold0 + 50 + 60 + 150);
 
-  // 5) 育成タブ: おともが表示され、クエストカードがある。ショップでは限定品は買えない
+  // 5) 育成タブ: 称号が表示され、クエストカードがある。ショップでは限定品は買えない
   await p.locator('[data-tab="status"]').click();
   await p.waitForSelector('#status-view .qb-row');
-  assert.equal(await p.locator('#status-view .hero-pet').innerText(), '🦜');
+  assert.match(await p.locator('#status-view .hero-title').innerText(), /ことばの使い手/);
   await p.locator('#status-view .btn-primary', { hasText: 'ショップ' }).click();
-  await p.locator('#hb-sheet .hb-seg button', { hasText: 'おとも' }).click();
-  assert.match(await p.locator('#hb-sheet .shop-row', { hasText: 'オウム' }).innerText(), /ことばの旅 II[\s\S]*はずす/);
-  const roo = p.locator('#hb-sheet .shop-row', { hasText: 'カンガルー' });
-  assert.match(await roo.innerText(), /脚の日 II/);
-  assert.ok(await roo.locator('.shop-btn').isDisabled());
+  await p.locator('#hb-sheet .hb-seg button', { hasText: '称号' }).click();
+  assert.match(await p.locator('#hb-sheet .shop-row', { hasText: 'ことばの使い手' }).innerText(), /ことばの旅 II[\s\S]*はずす/);
+  const legs = p.locator('#hb-sheet .shop-row', { hasText: '健脚の旅人' });
+  assert.match(await legs.innerText(), /脚の日 II/);
+  assert.ok(await legs.locator('.shop-btn').isDisabled());
   await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click();
   if (shots) await p.screenshot({ path: path.join(shots, 'quest-growth.png'), fullPage: false });
 

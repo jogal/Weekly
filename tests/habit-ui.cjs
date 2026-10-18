@@ -125,17 +125,16 @@ function seedRecords() {
   await p.locator('#hb-sheet .shop-row', { hasText: 'まもりの護符' }).locator('.shop-btn').click();
   assert.equal((await gold()).purchases.length, 1);
   assert.match(await p.locator('#hb-sheet .hb-pill').innerText(), /🪙 86$/);
-  // おともを買うためにゴールドを足して、装備がキャラクターに出ることを確認
+  // 称号と背景を買うためにゴールドを足して、装備がキャラクターに出ることを確認。おともは休止中
   await p.evaluate(() => { const r = JSON.parse(localStorage.getItem('wt_reward_v1')); r.grants.push({ g: 3000, reason: 'qa', on: '2026-10-18' }); localStorage.setItem('wt_reward_v1', JSON.stringify(r)); });
-  await p.locator('#hb-sheet .hb-seg button', { hasText: 'おとも' }).click();
-  await p.locator('#hb-sheet .shop-row', { hasText: 'ねこ' }).locator('.shop-btn').click();
+  assert.deepEqual(await p.locator('#hb-sheet .hb-seg button').allInnerTexts(), ['どうぐ', '称号', '背景']);
   await p.locator('#hb-sheet .hb-seg button', { hasText: '称号' }).click();
   await p.locator('#hb-sheet .shop-row', { hasText: '鋼の意志' }).locator('.shop-btn').click();
   await p.locator('#hb-sheet .hb-seg button', { hasText: '背景' }).click();
   await p.locator('#hb-sheet .shop-row', { hasText: '星空' }).locator('.shop-btn').click();
   if (shots) await p.screenshot({ path: path.join(shots, 'habit-shop.png') });
   await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click();
-  assert.equal(await p.locator('#status-view .hero-pet').innerText(), '🐈');
+  assert.equal(await p.locator('#status-view .hero-pet').count(), 0);
   assert.match(await p.locator('#status-view .hero-title').innerText(), /鋼の意志/);
   assert.ok(await p.locator('#status-view .rw-medal', { hasText: '7日' }).count() >= 1);
   await p.waitForFunction(() => document.querySelector('#status-view .hero-sprite')?.naturalWidth > 0);
@@ -162,6 +161,20 @@ function seedRecords() {
   const before = await balance();
   await p.reload(); await p.waitForSelector('#today-view .hb-card');
   assert.equal(await balance(), before);
+
+  // 12) 以前に買ったおともは読み込み時に取り消され、ゴールドが戻る
+  const g0 = await balance();
+  await p.evaluate(() => {
+    const r = JSON.parse(localStorage.getItem('wt_reward_v1'));
+    r.purchases.push({ item: 'p_cat', price: 500, on: '2026-10-18' }); r.owned.push('p_cat'); r.equipped.pet = 'p_cat';
+    localStorage.setItem('wt_reward_v1', JSON.stringify(r));
+  });
+  await p.reload(); await p.waitForSelector('#today-view .hb-card');
+  assert.equal(await balance(), g0, 'pet purchase refunded');
+  const cleaned = await gold();
+  assert.equal(cleaned.purchases.some(x => x.item === 'p_cat'), false);
+  assert.equal(cleaned.owned.includes('p_cat'), false);
+  assert.equal('pet' in cleaned.equipped, false);
 
   assert.deepEqual(errors, []);
   console.log('Habit tracker: today tab, linked/custom habits, rest, workout parts, medals, shop, equip, stats, reload passed.');

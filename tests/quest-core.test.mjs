@@ -69,15 +69,24 @@ test('item rewards are owned, equipped into an empty slot, and never sold in the
   ({ b } = board(rec, { reward }));
   const q2 = line(b, 'english_hours');
   assert.equal(q2.title, 'ことばの旅 II');
+  assert.equal(Q.rewardText(q2), '150G ＋ 📜ことばの使い手');
   const res = Q.claimQuest(reward, b, q2.id, TODAY);
-  assert.equal(res.item, 'p_parrot');
-  assert.ok(res.state.owned.includes('p_parrot'));
-  assert.equal(res.state.equipped.pet, 'p_parrot');
-  assert.equal(H.purchase({ ...res.state, grants: [{ g: 99999 }] }, 'p_parrot', TODAY).reason, 'quest');
-  assert.equal(Q.questForItem('p_parrot'), 'ことばの旅 II');
+  assert.equal(res.item, 't_linguist');
+  assert.ok(res.state.owned.includes('t_linguist'));
+  assert.equal(res.state.equipped.title, 't_linguist');
+  assert.equal(H.purchase({ ...res.state, grants: [{ g: 99999 }] }, 't_linguist', TODAY).reason, 'quest');
+  assert.equal(Q.questForItem('t_linguist'), 'ことばの旅 II');
   // すでに装備があれば上書きしない
-  const worn = { ...reward, equipped: { ...reward.equipped, pet: 'p_cat' }, owned: ['p_cat'] };
-  assert.equal(Q.claimQuest(worn, b, q2.id, TODAY).state.equipped.pet, 'p_cat');
+  const worn = { ...reward, equipped: { ...reward.equipped, title: 't_steady' }, owned: ['t_steady'] };
+  assert.equal(Q.claimQuest(worn, b, q2.id, TODAY).state.equipped.title, 't_steady');
+});
+
+test('every quest reward item exists and none of them is a pet', () => {
+  for (const l of Q.QUEST_LINES) for (const t of l.tiers) if (t.item) {
+    const it = H.shopItem(t.item);
+    assert.ok(it, t.item);
+    assert.ok(it.quest && ['title', 'bg'].includes(it.kind), t.item);
+  }
 });
 
 test('hours are shown with one decimal under ten hours', () => {

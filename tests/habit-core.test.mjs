@@ -189,20 +189,37 @@ test('weekly habits spend one shield for a missed week', () => {
 
 test('shop: gold, ownership, shield cap and equipment', () => {
   let r = H.newRewardState(TODAY);
-  assert.equal(H.purchase(r, 'p_cat', TODAY).reason, 'gold');
+  assert.equal(H.purchase(r, 'bg_dusk', TODAY).reason, 'gold');
   assert.equal(H.purchase(r, 'nope', TODAY).reason, 'unknown');
   r.grants.push({ g: 2000, reason: 'test', on: TODAY });
-  const bought = H.purchase(r, 'p_cat', TODAY);
+  const bought = H.purchase(r, 'bg_dusk', TODAY);
   assert.ok(bought.ok);
   r = bought.state;
-  assert.equal(r.equipped.pet, 'p_cat');
-  assert.equal(H.balance(r), 2100 - 500);
-  assert.equal(H.purchase(r, 'p_cat', TODAY).reason, 'owned');
+  assert.equal(r.equipped.bg, 'bg_dusk');
+  assert.equal(H.balance(r), 2100 - 700);
+  assert.equal(H.purchase(r, 'bg_dusk', TODAY).reason, 'owned');
   for (let i = 0; i < 3; i++) r = H.purchase(r, 'shield', TODAY).state;
   assert.equal(H.purchase(r, 'shield', TODAY).reason, 'max');
-  r = H.equip(r, 'pet', null);
-  assert.equal(r.equipped.pet, null);
-  assert.equal(H.equip(r, 'pet', 'p_dragon').equipped.pet, null, 'cannot equip unowned');
+  r = H.equip(r, 'bg', null);
+  assert.equal(r.equipped.bg, null);
+  assert.equal(H.equip(r, 'bg', 'bg_castle').equipped.bg, null, 'cannot equip unowned');
+});
+
+test('pets are retired: not sold, no slot, and earlier pet purchases are refunded on load', () => {
+  assert.equal(H.SHOP.some(i => i.kind === 'pet'), false);
+  assert.equal(H.SHOP_KINDS.some(k => k.kind === 'pet'), false);
+  assert.equal(H.purchase({ ...H.newRewardState(TODAY), grants: [{ g: 9999 }] }, 'p_cat', TODAY).reason, 'unknown');
+  const saved = {
+    ...H.newRewardState(TODAY),
+    purchases: [{ item: 'p_cat', price: 500, on: TODAY }, { item: 'shield', price: 100, on: TODAY }],
+    owned: ['p_cat', 't_steady'], equipped: { title: 't_steady', pet: 'p_cat', bg: null },
+  };
+  const n = H.normalizeReward(saved, TODAY);
+  assert.deepEqual(n.purchases, [{ item: 'shield', price: 100, on: TODAY }]);
+  assert.deepEqual(n.owned, ['t_steady']);
+  assert.deepEqual(n.equipped, { title: 't_steady', bg: null });
+  assert.equal(H.balance(n), H.balance(saved) + 500);
+  assert.equal(H.equip(n, 'pet', null), n, 'pet slot no longer exists');
 });
 
 test('medals: first time per habit and tier, kept after the day is folded into bank', () => {
