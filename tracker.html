@@ -207,35 +207,71 @@ textarea.field-input { height:76px; resize:vertical; }
 .mcal-legend span { display:inline-flex; align-items:center; gap:3px; }
 .mcal-legend i { width:9px; height:9px; display:inline-block; }
 
-/* Heatmap (month calendar / year grid) */
-.hm-chips { display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px; }
-.hm-chip { background:none; border:1px solid var(--line); color:var(--dim); font-size:11px;
-  padding:4px 9px; cursor:pointer; font-family:var(--cond); letter-spacing:.08em; }
-.hm-chip.active { color:#fff; border-color:transparent; font-weight:700; }
-.hm-summary { display:grid; grid-template-columns:repeat(4,1fr); gap:6px; margin-bottom:10px; }
-.hm-summary div { background:var(--panel2); border:1px solid var(--line); padding:6px 2px; text-align:center; }
-.hm-summary b { display:block; font-size:16px; font-family:var(--cond); letter-spacing:.06em; line-height:1.2; }
-.hm-summary span { font-size:9px; color:var(--dim); }
-.tr-row { display:grid; grid-template-columns:64px 1fr auto; align-items:center; gap:10px; padding:7px 0;
-  border-bottom:1px solid var(--line); font-size:12px; }
-.tr-row:last-of-type { border-bottom:none; }
-.tr-row.now .tr-lbl { color:var(--gold); }
-.tr-lbl { font-family:var(--cond); letter-spacing:.06em; color:var(--txt); }
-.tr-bar { height:8px; background:#ffffff10; position:relative; overflow:hidden; }
-.tr-bar i { position:absolute; inset:0 auto 0 0; background:var(--gold); }
-.tr-val { color:var(--dim); text-align:right; white-space:nowrap; font-size:11px; }
-.tr-val b { color:var(--txt); font-weight:600; font-size:12px; }
-.hm-jump { display:block; margin:8px 0 0 auto; min-height:36px; padding:0 14px; border-radius:999px;
+/* 統計の上の部分: 習慣の選択・丸カレンダー・記録・1週間・1年のドット・達成率 */
+.so-pick { position:relative; display:flex; align-items:center; gap:10px; padding:12px 16px; margin-bottom:16px;
+  border:1px solid #292b33; border-radius:16px; background:var(--surface); font-size:14px; }
+.so-pick-ico { width:24px; height:24px; border-radius:7px; display:grid; place-items:center; font-size:13px;
+  background:color-mix(in srgb, var(--c) 30%, transparent); color:var(--c); font-weight:700; }
+.so-pick-v { margin-left:auto; color:var(--dim); font-size:13px; }
+.so-pick select { position:absolute; inset:0; width:100%; opacity:0; font-size:16px; cursor:pointer; }
+.so-cal { display:grid; grid-template-columns:repeat(7,1fr); row-gap:8px; }
+.so-dow { text-align:center; font-size:11px; color:var(--faint); padding-bottom:2px; }
+.so-d { position:relative; height:36px; display:grid; place-items:center; padding:0; border:0; background:none;
+  color:inherit; font:inherit; cursor:pointer; }
+.so-d.jl::before, .so-d.jr::after { content:""; position:absolute; top:50%; height:3px; margin-top:-1.5px; background:var(--c); }
+.so-d.jl::before { left:0; right:50%; }
+.so-d.jr::after { left:50%; right:0; }
+.so-dot { position:relative; z-index:1; width:32px; height:32px; border-radius:50%; display:grid; place-items:center;
+  font-size:12px; font-weight:700; color:var(--dim); }
+.so-dot svg { position:absolute; inset:0; width:100%; height:100%; transform:rotate(-90deg); }
+.so-dot span { position:relative; }
+.so-d.done .so-dot { background:var(--c); color:#17150f; }
+.so-d.miss .so-dot { background:#ffffff0d; }
+.so-d.rest .so-dot { border:2px solid var(--c); opacity:.6; }
+.so-d.off .so-dot, .so-d.future .so-dot { color:var(--faint); font-weight:400; }
+.so-d.other { opacity:.4; }
+.so-d.today .so-dot { box-shadow:0 0 0 2px #121418, 0 0 0 3.5px #fff; }
+.so-d.sel .so-dot { outline:2px solid var(--gold); outline-offset:3px; }
+.so-legend { font-size:10px; color:var(--dim); text-align:center; margin:12px 0 0; }
+.so-info { font-size:11px; color:var(--dim); margin:10px 0 0; min-height:14px; line-height:1.6; }
+.so-jump { display:block; margin:8px 0 0 auto; min-height:36px; padding:0 14px; border-radius:999px;
   border:1px solid var(--line); background:none; color:var(--gold); font-size:12px; cursor:pointer; }
-.hm-jump[hidden] { display:none; }
-.hm-month { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
-.hm-cell { aspect-ratio:1; background:#0f0f12; border:1px solid #1e1e24; position:relative;
-  font-size:9px; color:var(--dim); padding:2px 3px; cursor:pointer; box-sizing:border-box; }
-.hm-cell.empty { background:none; border-color:transparent; cursor:default; }
-.hm-cell.today { border-color:#fff; }
-.hm-cell.lit { color:#fff; }
-.hm-cell.sel { outline:2px solid var(--gold); outline-offset:-1px; }
-.hm-cell .hm-n { position:absolute; right:3px; bottom:1px; font-size:11px; font-weight:700; }
+.so-jump[hidden] { display:none; }
+.so-recs { display:grid; grid-template-columns:1fr 1fr; gap:10px; }
+.so-rec { position:relative; background:#ffffff08; border-radius:14px; padding:14px 8px 12px; text-align:center; }
+.so-rec b { display:block; font-size:24px; font-weight:700; line-height:1.2; }
+.so-rec b small { font-size:12px; font-weight:500; margin-left:2px; color:var(--dim); }
+.so-rec span { font-size:10px; color:var(--dim); }
+.so-rec em { position:absolute; right:10px; top:8px; font-style:normal; font-size:15px; }
+.so-note { font-size:10px; color:var(--dim); margin:10px 2px 0; line-height:1.6; }
+.so-wk { display:grid; grid-template-columns:minmax(0,1fr) repeat(7,26px); gap:6px 4px; align-items:center; }
+.so-wk-h { font-size:10px; color:var(--faint); }
+.so-wk .td-rcal-dow.now { color:var(--txt); text-decoration:underline; }
+.so-wk-n { font-size:13px; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.so-wk-sec { font-size:11px; color:var(--dim); margin-top:4px; }
+.so-yr-m, .so-yr-g { display:grid; }
+.so-yr-m { font-size:8px; letter-spacing:-.04em; color:var(--dim); margin-bottom:5px; white-space:nowrap; }
+.so-yr-g { grid-template-rows:repeat(7,auto); grid-auto-flow:column; gap:1.5px; }
+.so-yr-g i { aspect-ratio:1; border-radius:50%; background:#ffffff14; cursor:pointer; }
+.so-yr-g i.pad { visibility:hidden; }
+.so-yr-g i.done, .so-yr-g i.miss[style] { background:var(--c); }
+.so-yr-g i.rest { background:none; box-shadow:inset 0 0 0 1px var(--c); }
+.so-yr-g i.off, .so-yr-g i.future { background:#ffffff08; cursor:default; }
+.so-yr-g i.today { box-shadow:0 0 0 1px #fff; }
+.so-yr-g i.sel { outline:1.5px solid #fff; outline-offset:1px; }
+.so-bars { position:relative; display:flex; align-items:stretch; gap:5px; height:160px; margin:6px 34px 0 0;
+  border-bottom:1px solid var(--line); }
+.so-gl { position:absolute; left:0; right:-34px; height:0; border-top:1px solid #ffffff0d; font-size:9px;
+  color:var(--faint); text-align:right; line-height:0; padding-top:0; pointer-events:none; }
+.so-bar { flex:1; position:relative; display:flex; align-items:flex-end; padding:0; border:0; border-radius:5px 5px 0 0;
+  background:color-mix(in srgb, var(--c) 14%, transparent); cursor:pointer; min-width:0; }
+.so-bar i { display:block; width:100%; background:var(--c); border-radius:5px 5px 0 0; }
+.so-bar.now i { opacity:.6; }
+.so-bar.future { background:none; box-shadow:inset 0 0 0 1px #ffffff0d; }
+.so-bar.sel { outline:1.5px solid #fff; outline-offset:2px; }
+.so-bar span { position:absolute; top:100%; left:50%; transform:translateX(-50%); margin-top:4px; font-size:9px;
+  color:var(--faint); white-space:nowrap; }
+.so-prog .so-info { margin-top:24px; }
 .hm-year-row { display:flex; align-items:flex-start; }
 .hm-ylabels { display:grid; grid-template-rows:repeat(7,11px); gap:2px; font-size:8px; color:var(--dim);
   margin-right:4px; margin-top:14px; flex-shrink:0; line-height:11px; }
@@ -247,10 +283,6 @@ textarea.field-input { height:76px; resize:vertical; }
 .hm-ycell.today { border-color:#fff; }
 .hm-ycell.sel { outline:2px solid var(--gold); outline-offset:-1px; }
 .hm-ycell.empty { visibility:hidden; }
-.hm-info { font-size:11px; color:var(--dim); margin-top:8px; min-height:14px; }
-.hm-legend { display:flex; align-items:center; gap:3px; font-size:9px; color:var(--dim);
-  margin-top:6px; justify-content:flex-end; }
-.hm-legend i { width:10px; height:10px; display:inline-block; background:#0f0f12; border:1px solid #1e1e24; }
 
 /* Hero character (dossier profile style) */
 .hero-sprite { width:auto; height:148px; display:block;
@@ -378,18 +410,26 @@ textarea.field-input { height:76px; resize:vertical; }
 .td-rcal-grid { display:grid; grid-template-columns:34px repeat(7,1fr); gap:4px; align-items:center; }
 .td-rcal-dow { font-size:9px; color:var(--faint); text-align:center; }
 .td-rcal-wk { font-size:9px; color:var(--faint); }
-.td-rcal-day { aspect-ratio:1; max-height:26px; border-radius:6px; background:#ffffff10; justify-self:stretch; }
-.td-rcal-day.done { background:var(--c, #a9c98f); }
-.td-rcal-day.rest, .hm-ycell.td-ry.rest { background:none; border:1.5px solid var(--c, #a9c98f); opacity:.55; }
+.td-rcal-day { position:relative; height:24px; display:grid; place-items:center; }
+.td-rcal-day i { position:relative; z-index:1; width:22px; height:22px; border-radius:50%; background:#ffffff10;
+  display:grid; place-items:center; font:900 12px/1 sans-serif; font-style:normal; color:#17150f; box-sizing:border-box; }
+.td-rcal-day i svg { position:absolute; inset:0; width:100%; height:100%; transform:rotate(-90deg); }
+.so-wk .td-rcal-day i { width:24px; height:24px; }
+.td-rcal-day.done i { background:var(--c, #a9c98f); }
+.td-rcal-day.j::before { content:""; position:absolute; top:50%; right:50%; width:calc(100% + 4px); height:3px; margin-top:-1.5px; background:var(--c, #a9c98f); }
+.td-rcal-day.rest i { background:none; border:2px solid var(--c, #a9c98f); opacity:.55; }
+.hm-ycell.td-ry.rest { background:none; border:1.5px solid var(--c, #a9c98f); opacity:.55; }
 .hs-cal .td-rcal-head .hs-rate { flex-shrink:0; }
-.td-rcal-day.off, .td-rcal-day.future { background:none; }
-.td-rcal-day.off { border:1px dashed #ffffff10; }
-.td-rcal-day.today { outline:1.5px solid var(--gold); outline-offset:1px; }
+.td-rcal-day.off i, .td-rcal-day.future i { background:none; }
+.td-rcal-day.off i { border:1px dashed #ffffff14; }
+.td-rcal-day.today i { outline:1.5px solid var(--gold); outline-offset:1px; }
 .td-ryear .hm-year-row { margin-top:2px; }
 .hm-ycell.td-ry { cursor:default; }
 .hm-ycell.td-ry.done { background:var(--c, #a9c98f); border-color:var(--c, #a9c98f); }
 .hm-ycell.td-ry.off, .hm-ycell.td-ry.future { background:none; border-color:#ffffff0a; }
-.td-rcal-day.slip, .hm-ycell.td-ry.slip { background:#d98f8f; border-color:#d98f8f; }
+.td-rcal-day.slip i { background:#d98f8f; color:#fff; }
+.hm-ycell.td-ry.slip { background:#d98f8f; border-color:#d98f8f; }
+.hm-ycell.td-ry { border-radius:50%; }
 .td-rcal.avoid .td-rcal-streak { color:#a9c98f; }
 .td-routine.avoid.done .td-check { background:#d98f8f; border-color:#d98f8f; }
 .td-routine.avoid.done .td-rname { text-decoration:none; color:#e2b3b3; }
@@ -663,8 +703,6 @@ let statsMode = "month";              // "week" | "month" | "year"
 let statsWeek = getWeekKey(new Date()); // 週間表示の月曜日
 let statsYear = new Date().getFullYear();
 let statsMonth= new Date().getMonth();  // 0-11
-let heatTrack = "all";                 // "all" | CAL_TRACKS id
-let heatSel   = null;                  // tapped date key in the heatmap
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 function getWeekKey(date){
@@ -1157,205 +1195,13 @@ function fmtMin(n){
   const h=Math.floor(n/60),m=n%60;
   return h?`${h}時間${m?m+"分":""}`:`${m}分`;
 }
-// 推移: 週間=日ごと、月間=週ごと、年間=月ごとのまとめ
-function renderTrendCard(){
+// 統計: 期間の記録の合計(件数・活動日・分)。達成率グラフの棒をタップしたときと「記録」の下に出す
+function periodTotals(fromKey,toKey){
   const done=dailyDoneMap(), mins=dailyMinutesMap();
-  const {from,to}=statsRange();
-  const today=new Date(); today.setHours(0,0,0,0);
-  const buckets=[];
-  if(statsMode==="week"){
-    for(const d=new Date(from);d<=to;d.setDate(d.getDate()+1))
-      buckets.push({label:`${d.getMonth()+1}/${d.getDate()}(${DAYS[(d.getDay()+6)%7]})`,from:new Date(d),to:new Date(d)});
-  }else if(statsMode==="month"){
-    const d=new Date(from); d.setDate(d.getDate()-((d.getDay()+6)%7));
-    for(;d<=to;d.setDate(d.getDate()+7)){
-      const a=new Date(Math.max(d,from)), e=new Date(d); e.setDate(e.getDate()+6);
-      const b=new Date(Math.min(e,to));
-      buckets.push({label:`${a.getMonth()+1}/${a.getDate()}〜`,from:a,to:b});
-    }
-  }else{
-    for(let m=0;m<12;m++)buckets.push({label:`${m+1}月`,from:new Date(statsYear,m,1),to:new Date(statsYear,m+1,0)});
-  }
-  buckets.forEach(b=>{
-    b.active=0;b.total=0;b.min=0;
-    for(const d=new Date(b.from);d<=b.to;d.setDate(d.getDate()+1)){
-      const k=dateKeyOf(d), n=done[k]?.total||0;
-      if(n>0)b.active++;
-      b.total+=n; b.min+=mins[k]||0;
-    }
-    b.now=today>=b.from&&today<=b.to;
-    b.future=b.from>today;
-  });
-  const max=Math.max(1,...buckets.map(b=>b.total));
-  const card=el("div","stats-card");
-  buckets.forEach(b=>{
-    const row=el("div","tr-row"+(b.now?" now":""));
-    row.innerHTML=`<span class="tr-lbl">${b.label}</span>
-      <span class="tr-bar"><i style="width:${(b.total/max*100).toFixed(1)}%"></i></span>
-      <span class="tr-val">${b.future?"—":`<b>${b.total}</b>件${statsMode==="week"?"":` · ${b.active}日`} · ${fmtMin(b.min)}`}</span>`;
-    card.appendChild(row);
-  });
-  const sum=buckets.reduce((a,b)=>({total:a.total+b.total,active:a.active+b.active,min:a.min+b.min}),{total:0,active:0,min:0});
-  card.appendChild(el("p","hb-note",`合計 ${sum.total}件 ・ 活動 ${sum.active}日 ・ ${fmtMin(sum.min)}　（件数は完了した記録の数、時間は記録した分数の合計）`));
-  return card;
-}
-function heatCount(m,track){
-  if(!m)return 0;
-  return track==="all"?m.total:(m.byTrack[track]||0);
-}
-const HEAT_ALPHA=[0,.3,.52,.76,1];
-function heatLevel(n,track){
-  if(n<=0)return 0;
-  // 単一習慣は1日1回が普通なので1回で濃く、2回以上で最大
-  return track==="all"?Math.min(4,n):Math.min(4,n+2);
-}
-function hexA(hex,a){
-  const h=hex.replace("#","");
-  return `rgba(${parseInt(h.slice(0,2),16)},${parseInt(h.slice(2,4),16)},${parseInt(h.slice(4,6),16)},${a})`;
-}
-function heatBase(track){
-  return track==="all"?"#c8a557":(CAL_TRACKS.find(t=>t.id===track)?.color||"#e01937");
-}
-function heatColor(n,track){
-  const lv=heatLevel(n,track);
-  return lv?hexA(heatBase(track),HEAT_ALPHA[lv]):"";
-}
-// Streak that ends on `d` (walks backwards while each day has a hit)
-function streakEndingAt(map,track,d){
-  const c=new Date(d); let n=0;
-  while(heatCount(map[dateKeyOf(c)],track)>0){n++;c.setDate(c.getDate()-1);}
-  return n;
-}
-// Period summary: active days / total count / best streak inside the period /
-// current streak (only when the period includes today; a quiet today keeps
-// yesterday's streak alive)
-function heatSummary(map,track,from,to){
-  let active=0,total=0,best=0,run=0;
-  const today=new Date(); today.setHours(0,0,0,0);
-  for(const d=new Date(from);d<=to;d.setDate(d.getDate()+1)){
-    const n=heatCount(map[dateKeyOf(d)],track);
-    if(n>0){active++;total+=n;run++;if(run>best)best=run;}else run=0;
-  }
-  let cur=null;
-  if(today>=from&&today<=to){
-    cur=streakEndingAt(map,track,today);
-    if(cur===0){const y=new Date(today);y.setDate(y.getDate()-1);cur=streakEndingAt(map,track,y);}
-  }
-  return {active,total,best,cur};
-}
-function heatInfoText(map,key){
-  const m=map[key];
-  const [y,mo,d]=key.split("-").map(Number);
-  const dt=new Date(y,mo-1,d);
-  const head=`${mo}/${d}(${DAYS[(dt.getDay()+6)%7]})`;
-  if(!m)return `${head} 記録なし`;
-  const parts=CAL_TRACKS.filter(t=>m.byTrack[t.id])
-    .map(t=>`${t.icon}${t.label}${m.byTrack[t.id]>1?"×"+m.byTrack[t.id]:""}`);
-  return `${head} ${m.total}件 · ${parts.join("　")}`;
-}
-
-function renderHeatmapCard(){
-  const map=dailyDoneMap();
-  const card=el("div","stats-card");
-  const today=new Date(); today.setHours(0,0,0,0);
-  const todayKey=dateKeyOf(today);
-
-  // ── Track filter chips ──
-  const chips=el("div","hm-chips");
-  [{id:"all",label:"すべて",color:"#c8a557"},...CAL_TRACKS].forEach(t=>{
-    const b=el("button","hm-chip"+(heatTrack===t.id?" active":""),(t.icon||"")+t.label);
-    if(heatTrack===t.id)b.style.background=t.color;
-    b.onclick=()=>{heatTrack=t.id;heatSel=null;renderStats();};
-    chips.appendChild(b);
-  });
-  card.appendChild(chips);
-
-  // ── Period range ──
-  const {from,to}=statsRange();
-  const sm=heatSummary(map,heatTrack,from,to);
-  const summary=el("div","hm-summary");
-  summary.innerHTML=
-    `<div><b>${sm.active}</b><span>活動日</span></div>`+
-    `<div><b>${sm.total}</b><span>達成数</span></div>`+
-    `<div><b>${sm.best}</b><span>最長連続</span></div>`+
-    `<div><b>${sm.cur===null?"—":sm.cur}</b><span>現在連続</span></div>`;
-  card.appendChild(summary);
-
-  const info=el("div","hm-info");
-  const jump=el("button","hm-jump","この日の記録を開く ›");
-  jump.type="button";
-  jump.onclick=()=>{ if(!heatSel)return; tab="today"; window.HabitUI?.openDay(heatSel); render(); };
-  const select=(key,cell)=>{
-    heatSel=key;
-    card.querySelectorAll(".sel").forEach(x=>x.classList.remove("sel"));
-    if(cell)cell.classList.add("sel");
-    info.textContent=heatInfoText(map,key);
-    jump.hidden=key>todayKey;
-  };
-
-  if(statsMode!=="year"){
-    // ── Week / Month: calendar heatmap ──
-    const grid=el("div","hm-month");
-    DAYS.forEach(d=>grid.appendChild(el("div","mcal-hdr",d)));
-    const offset=(from.getDay()+6)%7;
-    for(let i=0;i<offset;i++)grid.appendChild(el("div","hm-cell empty"));
-    for(const day=new Date(from);day<=to;day.setDate(day.getDate()+1)){
-      const dd=day.getDate();
-      const key=dateKeyOf(day);
-      const n=heatCount(map[key],heatTrack);
-      const cell=el("div","hm-cell"+(key===todayKey?" today":"")+(n>0?" lit":"")+(key===heatSel?" sel":""));
-      const bg=heatColor(n,heatTrack);
-      if(bg)cell.style.background=bg;
-      cell.appendChild(el("span","",String(dd)));
-      if(n>0)cell.appendChild(el("span","hm-n",String(n)));
-      cell.onclick=()=>select(key,cell);
-      grid.appendChild(cell);
-    }
-    card.appendChild(grid);
-  }else{
-    // ── Year: week-column grid (Monday-start), horizontally scrollable ──
-    const row=el("div","hm-year-row");
-    const labels=el("div","hm-ylabels");
-    DAYS.forEach((d,i)=>labels.appendChild(el("div","",i%2===0?d:"")));
-    row.appendChild(labels);
-    const scroll=el("div","hm-year-wrap");
-    const months=el("div","hm-months");
-    const grid=el("div","hm-year");
-    const start=new Date(from); start.setDate(start.getDate()-((start.getDay()+6)%7)); // Monday on/before Jan 1
-    let lastMonth=-1, col=0;
-    for(const d=new Date(start);d<=to;d.setDate(d.getDate()+1)){
-      const inYear=d.getFullYear()===statsYear;
-      const isMon=(d.getDay()+6)%7===0;
-      if(isMon){
-        const lbl=el("div","");
-        if(inYear&&d.getMonth()!==lastMonth){lbl.textContent=`${d.getMonth()+1}月`;lastMonth=d.getMonth();}
-        months.appendChild(lbl);
-        col++;
-      }
-      const key=dateKeyOf(d);
-      const n=inYear?heatCount(map[key],heatTrack):0;
-      const cell=el("div","hm-ycell"+(inYear?"":" empty")+(key===todayKey?" today":"")+(key===heatSel?" sel":""));
-      const bg=heatColor(n,heatTrack);
-      if(bg)cell.style.background=bg;
-      if(inYear)cell.onclick=()=>select(key,cell);
-      grid.appendChild(cell);
-    }
-    scroll.appendChild(months);scroll.appendChild(grid);
-    row.appendChild(scroll);
-    card.appendChild(row);
-    // scroll to the latest week for the current year
-    if(statsYear===today.getFullYear())requestAnimationFrame(()=>{scroll.scrollLeft=scroll.scrollWidth;});
-  }
-
-  const legend=el("div","hm-legend");
-  legend.innerHTML=`少<i></i>`+[1,2,3,4].map(l=>`<i style="background:${hexA(heatBase(heatTrack),HEAT_ALPHA[l])}"></i>`).join("")+`多`;
-  card.appendChild(legend);
-  if(heatSel)info.textContent=heatInfoText(map,heatSel);
-  else info.textContent="日をタップすると内訳を表示";
-  card.appendChild(info);
-  jump.hidden=!heatSel||heatSel>todayKey;
-  card.appendChild(jump);
-  return card;
+  let total=0,active=0,min=0;
+  Object.keys(done).forEach(k=>{if(k>=fromKey&&k<=toKey){total+=done[k].total;if(done[k].total>0)active++;}});
+  Object.keys(mins).forEach(k=>{if(k>=fromKey&&k<=toKey)min+=mins[k];});
+  return {total,active,min,minLabel:fmtMin(min)};
 }
 
 function renderStats(){
@@ -1367,7 +1213,7 @@ function renderStats(){
   const toggle=el("div","mode-toggle");
   [["week","週間"],["month","月間"],["year","年間"]].forEach(([m,label])=>{
     const b=el("button",statsMode===m?"active":"",label);
-    b.onclick=()=>{statsMode=m;heatSel=null;renderStats();};
+    b.onclick=()=>{statsMode=m;renderStats();};
     toggle.appendChild(b);
   });
   wrap.appendChild(toggle);
@@ -1381,21 +1227,21 @@ function renderStats(){
   if(statsMode==="week"){
     const {from,to}=statsRange();
     lbl.textContent=`${from.getMonth()+1}/${from.getDate()} 〜 ${to.getMonth()+1}/${to.getDate()}`;
-    const step=n=>{const d=new Date(from);d.setDate(d.getDate()+7*n);statsWeek=getWeekKey(d);heatSel=null;renderStats();};
+    const step=n=>{const d=new Date(from);d.setDate(d.getDate()+7*n);statsWeek=getWeekKey(d);renderStats();};
     prevB.onclick=()=>step(-1);
     nextB.onclick=()=>step(1);
     if(statsWeek>=getWeekKey(now))nextB.disabled=true;
   }else if(statsMode==="month"){
     lbl.textContent=`${statsYear}年 ${statsMonth+1}月`;
-    prevB.onclick=()=>{statsMonth--;if(statsMonth<0){statsMonth=11;statsYear--;}heatSel=null;renderStats();};
-    nextB.onclick=()=>{statsMonth++;if(statsMonth>11){statsMonth=0;statsYear++;}heatSel=null;renderStats();};
+    prevB.onclick=()=>{statsMonth--;if(statsMonth<0){statsMonth=11;statsYear--;}renderStats();};
+    nextB.onclick=()=>{statsMonth++;if(statsMonth>11){statsMonth=0;statsYear++;}renderStats();};
     // disable next if future
     if(statsYear>now.getFullYear()||(statsYear===now.getFullYear()&&statsMonth>=now.getMonth()))
       nextB.disabled=true;
   }else{
     lbl.textContent=`${statsYear}年`;
-    prevB.onclick=()=>{statsYear--;heatSel=null;renderStats();};
-    nextB.onclick=()=>{statsYear++;heatSel=null;renderStats();};
+    prevB.onclick=()=>{statsYear--;renderStats();};
+    nextB.onclick=()=>{statsYear++;renderStats();};
     if(statsYear>=now.getFullYear())nextB.disabled=true;
   }
   pNav.appendChild(prevB);pNav.appendChild(lbl);pNav.appendChild(nextB);
@@ -1406,11 +1252,8 @@ function renderStats(){
   const filterFn=(d)=>d>=range.from&&d<=range.to;
   const st=aggregateStats(filterFn);
 
-  // ── Heatmap (month calendar / year grid) ──
-  wrap.appendChild(el("p","section-label","ヒートマップ"));
-  wrap.appendChild(renderHeatmapCard());
-  wrap.appendChild(el("p","section-label",statsMode==="week"?"日ごとのまとめ":statsMode==="month"?"週ごとのまとめ":"月ごとのまとめ"));
-  wrap.appendChild(renderTrendCard());
+  // ── 習慣の選択・カレンダー・記録・今週・1年・達成率 ──
+  window.HabitUI?.renderStatsOverview(wrap);
   window.HabitUI?.renderHabitStats(wrap);
   window.HabitUI?.renderRoutineStats(wrap);
 
@@ -2507,8 +2350,9 @@ function weekGrid(weeks, name, word, today) {
   H.WEEKDAY_LABELS.forEach(lb => grid.appendChild(el("span", "td-rcal-dow", lb)));
   weeks.forEach(w => {
     grid.appendChild(el("span", "td-rcal-wk", `${+w.monday.slice(5, 7)}/${+w.monday.slice(8)}`));
-    w.days.forEach(d => {
-      const c = el("span", `td-rcal-day ${d.state}${d.key === today ? " today" : ""}`);
+    w.days.forEach((d, i) => { // 続けて達成した日は線でつなぐ
+      const j = d.state === "done" && w.days[i - 1]?.state === "done";
+      const c = el("span", `td-rcal-day ${d.state}${j ? " j" : ""}${d.key === today ? " today" : ""}`, "<i></i>");
       c.title = `${d.key} ${word(d.state)}`;
       grid.appendChild(c);
     });
@@ -3178,7 +3022,259 @@ function renderHabitStats(wrap) {
   wrap.appendChild(box);
 }
 
-window.HabitUI = { renderToday, openDay: k => { selDay = k; stripFocus = true; }, renderRewardCard, renderHabitStats, renderRoutineStats, updateQuestBadge: () => updateQuestBadge() };
+// ── 統計タブ: 上の部分(習慣の選択・カレンダー・記録・今週・1年・達成率) ─────────
+// 「すべての習慣」は、その日にやるはずの習慣を全部できた日を達成として数え、連続や線もその日でつなぐ
+let statsHabit = "all";
+const GOLD_C = "#dfbd7c";
+const shortDay = k => `${+k.slice(5, 7)}/${+k.slice(8)}(${H.WEEKDAY_LABELS[H.weekdayIdx(k)]})`;
+const pct = (a, b) => b ? Math.round(a / b * 100) : null;
+// 1つの習慣の、まだ届いていない日の進み具合(回数・時間の目標のとき)
+function habitPart(h, key, ctx) {
+  if (h.goal.type === "check") return 0;
+  return Math.min(.95, H.progressOf(h, key, ctx) / H.targetOf(h));
+}
+function statsDay(o, key) {
+  if (key > o.today) return { state: "future", f: 0 };
+  if (o.ctx.floorKey && key < o.ctx.floorKey) return { state: "off", f: 0 }; // 記録をつけ始める前の日は数えない
+  if (o.sel) {
+    const state = H.habitDayState(o.sel, key, o.ctx, o.today);
+    return { state, f: state === "done" ? 1 : state === "miss" ? habitPart(o.sel, key, o.ctx) : 0 };
+  }
+  const c = H.dayCompletion(o.habits, key, o.ctx);
+  if (!c.due) return { state: "off", f: 0, c };
+  return { state: c.done >= c.due ? "done" : "miss", f: c.done / c.due, c };
+}
+function perfectStreak(o, from, to, untilToday) {
+  // untilToday: 今日がまだなら昨日から数える。予定のない日は数えないが途切れもしない
+  let run = 0, best = 0;
+  for (let k = from; k <= to; k = H.addDays(k, 1)) {
+    const d = statsDay(o, k);
+    if (d.state === "done") { run++; best = Math.max(best, run); }
+    else if (d.state === "miss" && k !== o.today) run = 0;
+  }
+  if (!untilToday) return best;
+  let n = 0, k = statsDay(o, o.today).state === "done" ? o.today : H.addDays(o.today, -1);
+  for (let i = 0; i < 3660; i++, k = H.addDays(k, -1)) {
+    if (o.ctx.floorKey && k < o.ctx.floorKey) break;
+    const st = statsDay(o, k).state;
+    if (st === "done") n++; else if (st === "miss") break;
+  }
+  return n;
+}
+function dayDetail(o, key) {
+  if (o.sel) {
+    const st = statsDay(o, key).state, p = H.progressLabel(o.sel, key, o.ctx);
+    return `${shortDay(key)} ${o.sel.icon}${o.sel.name}：${{ done: "達成", miss: "未", rest: "休息・護符", off: "予定なし", future: "" }[st]}${p ? ` · ${p}` : ""}`;
+  }
+  const c = H.dayCompletion(o.habits, key, o.ctx);
+  const marks = o.habits.filter(h => H.isActiveOn(h, key)).map(h => `${h.icon}${H.isAchieved(h, key, o.ctx) ? "✓" : "・"}`).join(" ");
+  return `${shortDay(key)} ${c.due ? `${c.done}/${c.due}できた` : "予定なし"}　${marks}`;
+}
+// 日をタップしたときの内訳と「この日の記録を開く」
+function detailBox(o) {
+  const box = el("div", "so-detail"), info = el("p", "so-info", "日をタップすると内訳を表示");
+  const jump = el("button", "so-jump", "この日の記録を開く ›"); jump.type = "button"; jump.hidden = true;
+  let cur = null;
+  jump.onclick = () => { if (!cur) return; window.HabitUI.openDay(cur); tab = "today"; render(); };
+  box.append(info, jump);
+  box.show = (key, cell) => {
+    cur = key;
+    box.parentElement?.querySelectorAll(".sel").forEach(x => x.classList.remove("sel"));
+    cell?.classList.add("sel");
+    info.textContent = dayDetail(o, key);
+    jump.hidden = key > o.today;
+  };
+  return box;
+}
+function statsPicker(o, wrap) {
+  const row = el("label", "so-pick");
+  row.style.setProperty("--c", o.color);
+  row.innerHTML = `<span class="so-pick-ico" aria-hidden="true">${o.sel ? esc(o.sel.icon) : "✓"}</span><span>習慣</span>
+    <span class="so-pick-v">${o.sel ? esc(o.sel.name) : "すべての習慣"} ›</span>`;
+  const sel = document.createElement("select");
+  sel.setAttribute("aria-label", "統計で見る習慣");
+  sel.innerHTML = `<option value="all">すべての習慣</option>` + o.habits.map(h => `<option value="${esc(h.id)}">${esc(h.icon)} ${esc(h.name)}</option>`).join("");
+  sel.value = statsHabit;
+  sel.onchange = () => { statsHabit = sel.value; renderStats(); };
+  row.appendChild(sel);
+  wrap.appendChild(row);
+}
+// 月(週)のカレンダー: 達成日は塗りつぶし、続いた日を線でつなぐ。途中の日はリング
+function statsCalendar(o, from, to) {
+  const card = el("div", "stats-card so-cal-card");
+  card.style.setProperty("--c", o.color);
+  const grid = el("div", "so-cal");
+  H.WEEKDAY_LABELS.forEach(d => grid.appendChild(el("span", "so-dow", d)));
+  const start = H.mondayOf(from), end = H.addDays(H.mondayOf(to), 6);
+  const days = [];
+  for (let k = start; k <= end; k = H.addDays(k, 1)) days.push({ key: k, ...statsDay(o, k) });
+  const detail = detailBox(o);
+  days.forEach((d, i) => {
+    const full = d.state === "done", col = i % 7;
+    const jl = full && col > 0 && days[i - 1].state === "done";
+    const jr = full && col < 6 && days[i + 1]?.state === "done";
+    const b = el("button", `so-d ${d.state}${jl ? " jl" : ""}${jr ? " jr" : ""}${d.key < from || d.key > to ? " other" : ""}${d.key === o.today ? " today" : ""}`);
+    b.type = "button"; b.dataset.key = d.key;
+    b.innerHTML = `<span class="so-dot">${d.state === "miss" && d.f > 0 ? ringSvg(32, 2.6, d.f, o.color) : ""}<span>${+d.key.slice(8)}</span></span>`;
+    b.onclick = () => detail.show(d.key, b);
+    grid.appendChild(b);
+  });
+  card.appendChild(grid);
+  card.appendChild(el("p", "so-legend", o.sel ? "● 達成　◔ 途中まで　○ 休息日・護符" : "● 全部できた日（続いた日は線でつなぐ）　◔ 一部だけ"));
+  card.appendChild(detail);
+  return card;
+}
+function statsRecords(o, from, end) {
+  if (o.ctx.floorKey && from < o.ctx.floorKey) from = o.ctx.floorKey < end ? o.ctx.floorKey : end;
+  let cur, best, unit = "日", count = 0, ok = 0, due = 0;
+  const list = o.sel ? [o.sel] : o.habits;
+  list.forEach(h => {
+    for (let k = from; k <= end; k = H.addDays(k, 1)) if (H.isActiveOn(h, k) && H.isAchieved(h, k, o.ctx)) count++;
+    const r = H.habitRate(h, from, end, o.today, o.ctx); ok += r.ok; due += r.due;
+  });
+  if (o.sel) {
+    const c = H.currentStreak(o.sel, o.today, o.ctx), b = H.bestStreak(o.sel, from, end, o.ctx);
+    cur = c.n; best = b.n; if (c.unit === "w") unit = "週";
+  } else {
+    cur = perfectStreak(o, from, end, true); best = perfectStreak(o, from, end, false);
+  }
+  const rate = pct(ok, due);
+  const t = window.periodTotals ? periodTotals(from, end) : null;
+  const card = el("div", "stats-card so-rec-card");
+  card.innerHTML = `<div class="so-recs">
+      <div class="so-rec"><em aria-hidden="true">🔥</em><b>${cur}<small>${unit}</small></b><span>いまの連続（${+o.today.slice(5, 7)}/${+o.today.slice(8)}時点）</span></div>
+      <div class="so-rec"><em aria-hidden="true">🏅</em><b>${best}<small>${unit}</small></b><span>最長連続</span></div>
+      <div class="so-rec"><em aria-hidden="true">✅</em><b>${count}</b><span>完了数</span></div>
+      <div class="so-rec"><em aria-hidden="true">🏁</em><b>${rate == null ? "—" : rate + "<small>%</small>"}</b><span>成功率</span></div>
+    </div>${t ? `<p class="so-note">この期間の記録 ${t.total}件 ・ 活動 ${t.active}日 ・ ${t.minLabel}</p>` : ""}`;
+  return card;
+}
+// 今週(期間の終わりの週)の習慣・日課を✓の丸で1行ずつ
+function weekCell(state, color, f, mark) {
+  return `<span class="td-rcal-day ${state}" style="--c:${color}"><i>${state === "miss" && f > 0 ? ringSvg(24, 2.4, f, color) : ""}${mark || ""}</i></span>`;
+}
+function joinRow(html) { // 続けて達成した丸を線でつなぐ
+  return html.map((c, i) => i > 0 && c.includes(" done") && html[i - 1].includes(" done") ? c.replace(" done", " done j") : c).join("");
+}
+function statsWeekRows(o, s, end) {
+  const mon = H.mondayOf(end), sun = H.addDays(mon, 6);
+  const card = el("div", "stats-card");
+  const grid = el("div", "so-wk");
+  grid.setAttribute("aria-label", `${shortDay(mon)}〜${shortDay(sun)}の週`);
+  let html = `<span class="so-wk-h">${+mon.slice(5, 7)}/${+mon.slice(8)}〜${+sun.slice(5, 7)}/${+sun.slice(8)}</span>`
+    + H.WEEKDAY_LABELS.map((d, i) => `<span class="td-rcal-dow${H.addDays(mon, i) === o.today ? " now" : ""}">${d}</span>`).join("");
+  o.habits.forEach(h => {
+    const cells = H.habitDays(h, mon, sun, o.ctx, o.today).map(d => weekCell(d.state, h.color, d.state === "miss" ? habitPart(h, d.key, o.ctx) : 0, d.state === "done" ? "✓" : ""));
+    html += `<span class="so-wk-n">${esc(h.icon)} ${esc(h.name)}</span>${joinRow(cells)}`;
+  });
+  const rs = s.todo.routines.filter(r => r.createdOn <= sun && !r.archivedOn);
+  if (rs.length) html += `<span class="so-wk-sec">日課</span>${"<span></span>".repeat(7)}`;
+  rs.forEach(r => {
+    const cells = T.routineDays(s.todo, r.id, mon, sun, o.today).map(d => weekCell(d.state, "#a9c98f", 0, d.state === "done" ? "✓" : d.state === "slip" ? "✕" : ""));
+    html += `<span class="so-wk-n">${esc(r.icon)} ${esc(r.name)}</span>${joinRow(cells)}`;
+  });
+  grid.innerHTML = html;
+  card.appendChild(grid);
+  card.appendChild(el("p", "so-note", "枠だけ＝休息日・護符／リング＝途中まで／✕＝やめたいことをやってしまった日"));
+  return card;
+}
+// 1年ぶんのドット(画面の幅に収める)
+function statsYearDots(o, year) {
+  const from = `${year}-01-01`, to = `${year}-12-31`, lead = H.weekdayIdx(from);
+  const n = H.daysBetween(from, to) + 1, cols = Math.ceil((lead + n) / 7);
+  const card = el("div", "stats-card so-yr");
+  card.style.setProperty("--c", o.color);
+  const months = el("div", "so-yr-m"), grid = el("div", "so-yr-g");
+  months.style.gridTemplateColumns = grid.style.gridTemplateColumns = `repeat(${cols},1fr)`;
+  const detail = detailBox(o);
+  for (let i = 0; i < lead; i++) grid.appendChild(el("i", "pad"));
+  for (let i = 0, k = from; i < n; i++, k = H.addDays(k, 1)) {
+    if (k.slice(8) === "01") {
+      const m = el("span", "", `${+k.slice(5, 7)}月`);
+      m.style.gridColumn = `${Math.floor((lead + i) / 7) + 1} / span 4`;
+      months.appendChild(m);
+    }
+    const d = statsDay(o, k);
+    const c = el("i", `${d.state}${k === o.today ? " today" : ""}`);
+    if (d.state === "done" || (d.state === "miss" && d.f > 0)) c.style.opacity = d.state === "done" ? 1 : (.25 + .5 * d.f).toFixed(2);
+    c.dataset.key = k;
+    c.onclick = () => detail.show(k, c);
+    grid.appendChild(c);
+  }
+  card.append(months, grid);
+  card.appendChild(el("p", "so-legend", o.sel ? "濃い＝達成　うすい＝途中まで　枠＝休息日・護符" : "濃いほど多くの習慣ができた日"));
+  card.appendChild(detail);
+  return card;
+}
+// 達成率の棒グラフ: 週間=日ごと、月間=週ごと、年間=月ごと。棒をタップすると件数・時間
+function statsProgress(o, from, to) {
+  const buckets = [];
+  if (statsMode === "week") for (let k = from; k <= to; k = H.addDays(k, 1)) buckets.push({ label: H.WEEKDAY_LABELS[H.weekdayIdx(k)], name: shortDay(k), from: k, to: k });
+  else if (statsMode === "month") {
+    for (let m = H.mondayOf(from); m <= to; m = H.addDays(m, 7)) {
+      const a = m < from ? from : m, e = H.addDays(m, 6) > to ? to : H.addDays(m, 6);
+      buckets.push({ label: `${+a.slice(5, 7)}/${+a.slice(8)}〜`, name: `${+a.slice(5, 7)}/${+a.slice(8)}〜${+e.slice(5, 7)}/${+e.slice(8)}`, from: a, to: e });
+    }
+  } else for (let m = 1; m <= 12; m++) {
+    const y = from.slice(0, 4), mm = String(m).padStart(2, "0");
+    buckets.push({ label: `${m}月`, name: `${y}年${m}月`, from: `${y}-${mm}-01`, to: H.addDays(m === 12 ? `${+y + 1}-01-01` : `${y}-${String(m + 1).padStart(2, "0")}-01`, -1) });
+  }
+  const list = o.sel ? [o.sel] : o.habits;
+  buckets.forEach(b => {
+    b.done = 0; b.due = 0; b.future = b.from > o.today; b.now = b.from <= o.today && o.today <= b.to;
+    for (let k = b.from; k <= b.to && k <= o.today; k = H.addDays(k, 1)) {
+      if (o.ctx.floorKey && k < o.ctx.floorKey) continue;
+      const c = H.dayCompletion(list, k, o.ctx); b.done += c.done; b.due += c.due;
+    }
+    b.rate = pct(b.done, b.due);
+  });
+  const card = el("div", "stats-card so-prog");
+  card.style.setProperty("--c", o.color);
+  const chart = el("div", "so-bars");
+  [100, 50, 0].forEach(v => { const g = el("span", "so-gl", `${v}%`); g.style.bottom = `${v}%`; chart.appendChild(g); });
+  const info = el("p", "so-info", "棒をタップすると件数と時間を表示");
+  buckets.forEach(b => {
+    const bar = el("button", `so-bar${b.now ? " now" : ""}${b.future ? " future" : ""}`);
+    bar.type = "button";
+    bar.setAttribute("aria-label", `${b.name} ${b.rate == null ? "記録なし" : b.rate + "%"}`);
+    bar.innerHTML = `<i style="height:${b.rate || 0}%"></i><span>${b.label}</span>`;
+    bar.onclick = () => {
+      chart.querySelectorAll(".sel").forEach(x => x.classList.remove("sel")); bar.classList.add("sel");
+      const t = window.periodTotals ? periodTotals(b.from, b.to < o.today ? b.to : o.today) : null;
+      info.textContent = b.future ? `${b.name} まだ先の日です`
+        : `${b.name} ${b.due ? `${b.done}/${b.due}（${b.rate}%）` : "予定なし"}${t ? ` ・ 記録 ${t.total}件${statsMode === "week" ? "" : ` ・ 活動 ${t.active}日`} ・ ${t.minLabel}` : ""}`;
+    };
+    chart.appendChild(bar);
+  });
+  card.appendChild(chart);
+  card.appendChild(info);
+  return card;
+}
+function renderStatsOverview(wrap) {
+  const s = loadState(), ctx = ctxOf(s);
+  const range = statsRange(), from = H.keyOfDate(range.from), to = H.keyOfDate(range.to);
+  const habits = s.habits.filter(h => !h.archived || (h.archivedOn && h.archivedOn > from));
+  const sel = habits.find(h => h.id === statsHabit) || null;
+  if (!sel) statsHabit = "all";
+  const o = { today: s.today, ctx, habits, sel, color: sel ? sel.color : GOLD_C };
+  statsPicker(o, wrap);
+  if (from > s.today) return;
+  const end = to < s.today ? to : s.today;
+  if (statsMode === "year") wrap.appendChild(statsYearDots(o, from.slice(0, 4)));
+  else wrap.appendChild(statsCalendar(o, from, to));
+  wrap.appendChild(el("p", "section-label", "記録"));
+  wrap.appendChild(statsRecords(o, from, end));
+  wrap.appendChild(el("p", "section-label", "1週間の習慣"));
+  wrap.appendChild(statsWeekRows(o, s, end));
+  if (statsMode !== "year") {
+    wrap.appendChild(el("p", "section-label", `${end.slice(0, 4)}年`));
+    wrap.appendChild(statsYearDots(o, end.slice(0, 4)));
+  }
+  wrap.appendChild(el("p", "section-label", statsMode === "week" ? "達成率（日ごと）" : statsMode === "month" ? "達成率（週ごと）" : "達成率（月ごと）"));
+  wrap.appendChild(statsProgress(o, from, to));
+}
+
+window.HabitUI = { renderToday, openDay: k => { selDay = k; stripFocus = true; }, renderRewardCard, renderHabitStats, renderRoutineStats, renderStatsOverview, updateQuestBadge: () => updateQuestBadge() };
 if (["today", "status", "stats"].includes(tab)) render();
 </script>
 <script src="js/backup-file.js"></script>

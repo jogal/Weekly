@@ -85,6 +85,8 @@ const server = http.createServer((req, res) => {
   assert.match(await cal.innerText(), /🔥1日連続[\s\S]*最長 1日/);
   assert.equal(await cal.locator('.td-rcal-day.today').evaluate(e => e.classList.contains('done')), true);
   assert.equal(await cal.locator('.td-rcal-wk').count(), 9, 'header + 8 weeks');
+  // 統計の上の「1週間の習慣」にも日課の行が出る
+  assert.equal(await p.locator('.so-wk .so-wk-n', { hasText: '歯みがき' }).count(), 1);
   await cal.scrollIntoViewIfNeeded();
   if (shots) await p.screenshot({ path: path.join(shots, 'todo-routine-cal.png') });
   // 年間表示では日課も1年ぶんのヒートマップ(2026年は木曜はじまり → 先頭に空き3つ)
