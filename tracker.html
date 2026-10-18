@@ -2538,8 +2538,8 @@ function renderRoutineStats(wrap) {
   const range = statsRange(), from = H.keyOfDate(range.from), to = H.keyOfDate(range.to);
   if (from > s.today) return;
   const end = to < s.today ? to : s.today;
-  // その期間に表示していた日課(作る前・消した後は出さない)
-  const list = s.todo.routines.filter(r => r.createdOn <= end && (!r.archivedOn || r.archivedOn > from));
+  // その期間に表示していた日課(作る前は出さない)。消した日課は統計にも出さない
+  const list = s.todo.routines.filter(r => r.createdOn <= end && !r.archivedOn);
   const year = statsMode === "year";
   const span = year ? `${from.slice(0, 4)}年の1年間` : `${+end.slice(5, 7)}/${+end.slice(8)}までの${CAL_WEEKS}週間`;
   // ふつうの日課と、やめたいこと(守れた日を数える)を別の見出しで
@@ -2616,7 +2616,7 @@ function openRoutineEditor(rid, avoid = false) {
     if (msg) box.appendChild(el("p", "hb-note", esc(msg)));
     const row = el("div", "btn-row");
     if (orig) row.appendChild(btn("削除", "btn btn-secondary", () => {
-      if (!confirm(`「${orig.name}」を消しますか？これまでの記録とゴールドは残ります。`)) return;
+      if (!confirm(`「${orig.name}」を消しますか？統計からも消えます（もらったゴールドはそのまま）。`)) return;
       closeSheet();
       changeTodo((t, st) => T.archiveRoutine(t, orig.id, st.today), `${what}を消しました`);
     }));

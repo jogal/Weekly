@@ -232,6 +232,13 @@ const server = http.createServer((req, res) => {
   await p.locator('#hb-sheet .btn-secondary', { hasText: '削除' }).click();
   assert.equal(await balance(), before);
   assert.equal((await todo()).routines.find(r => r.name === '歯みがき').archivedOn, '2026-10-19');
+  // 消した日課は統計にも出さない(ほかの日課は出る)
+  await p.locator('[data-tab="stats"]').click();
+  await p.waitForSelector('.td-rcal');
+  assert.equal(await p.locator('.td-rcal', { hasText: '歯みがき' }).count(), 0);
+  assert.ok(await p.locator('.td-rcal', { hasText: '降圧薬' }).count() >= 1);
+  await p.locator('[data-tab="today"]').click();
+  await p.waitForSelector('#today-view .hb-card');
 
   // 9) 再読み込みしても残る。バックアップに含まれる
   await p.reload(); await p.waitForSelector('#today-view .hb-card');
