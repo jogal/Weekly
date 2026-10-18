@@ -13,7 +13,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
-<script src="https://accounts.google.com/gsi/client" async defer></script>
 <style>
 * { box-sizing:border-box; -webkit-tap-highlight-color:transparent; }
 :root{
@@ -62,83 +61,7 @@ button{ font-family:inherit; touch-action:manipulation; -webkit-user-select:none
   border:1px solid var(--line); color:var(--txt); padding:14px 12px; font-size:14px;
   cursor:pointer; margin-bottom:10px; }
 
-#week-nav { display:flex; align-items:center; justify-content:space-between;
-  padding:8px 12px; background:var(--panel); border-bottom:1px solid var(--line); flex-shrink:0; }
-.nav-btn { background:none; border:1px solid var(--line);
-  padding:10px 14px; cursor:pointer; font-size:12px; color:var(--txt);
-  font-family:var(--cond); letter-spacing:.1em; }
-#week-label { font-weight:600; font-size:14px; color:var(--txt);
-  font-family:var(--cond); letter-spacing:.12em; }
-.badge { font-size:10px; background:var(--green); color:#fff;
-  padding:1px 8px; margin-left:6px; font-family:var(--cond); letter-spacing:.14em; }
-
 #content { flex:1; overflow:hidden; display:flex; flex-direction:column; }
-
-/* List */
-#list-view { flex:1; overflow-y:auto; padding:14px 12px; }
-.day-card { background:var(--panel); margin-bottom:12px;
-  border:1px solid var(--line); overflow:hidden; }
-.day-card.today { border-left:3px solid var(--green); }
-.day-header { display:flex; align-items:center; justify-content:space-between;
-  padding:8px 12px; background:transparent; border-bottom:1px solid var(--line); }
-.day-card.today .day-header { background:rgba(224,25,55,.06); }
-.day-label { font-weight:600; font-size:15px; font-family:var(--cond); letter-spacing:.18em; }
-.day-date { font-weight:500; font-size:11px; color:var(--dim); margin-left:6px; letter-spacing:.1em; }
-.today-badge { font-size:10px; background:var(--green); color:#fff;
-  padding:1px 7px; margin-left:8px; font-family:var(--cond); letter-spacing:.14em; }
-.add-btn { background:none; color:var(--txt); border:1px solid var(--dim);
-  padding:8px 14px; font-size:12px; cursor:pointer; font-weight:600;
-  font-family:var(--cond); letter-spacing:.14em; }
-.entry-row { display:flex; align-items:center; padding:10px;
-  border-bottom:1px solid var(--line); gap:7px; }
-.entry-row:last-child { border-bottom:none; }
-.entry-time { font-size:11px; color:var(--dim); min-width:78px; flex-shrink:0;
-  font-family:var(--cond); letter-spacing:.08em; font-size:13px; }
-.entry-name { flex:1; font-size:14px; font-weight:500;
-  overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-.entry-name.done { text-decoration:line-through; color:var(--faint); }
-.cat-chip { font-size:10px; padding:2px 8px; white-space:nowrap; flex-shrink:0;
-  letter-spacing:.06em; }
-.rec-btn { background:none; border:1px solid var(--dim);
-  padding:9px 13px; font-size:11px; cursor:pointer; color:var(--txt); flex-shrink:0;
-  font-family:var(--cond); letter-spacing:.12em; }
-.gcal-btn { background:none; border:1px solid var(--line); color:var(--dim);
-  padding:8px 10px; font-size:13px; cursor:pointer; flex-shrink:0; }
-.del-btn { background:none; border:none; color:var(--faint); cursor:pointer;
-  font-size:17px; flex-shrink:0; line-height:1; padding:10px; }
-.empty-day { padding:10px 14px; font-size:12px; color:var(--faint); margin:0; }
-.stars-r { display:inline-flex; gap:2px; flex-shrink:0; font-size:13px; }
-
-/* Calendar */
-#cal-view { flex:1; overflow:hidden; display:flex; flex-direction:column; }
-#cal-header { display:flex; background:var(--panel); border-bottom:1px solid var(--line);
-  flex-shrink:0; padding-left:36px; }
-.cal-day-hdr { flex:1; text-align:center; padding:5px 1px;
-  font-size:11px; color:var(--dim); line-height:1.4; font-family:var(--cond); letter-spacing:.1em; }
-.cal-day-hdr.today { color:var(--green); font-weight:700; }
-#cal-scroll { flex:1; overflow-y:auto; }
-#cal-grid { display:flex; }
-#hour-col { width:36px; flex-shrink:0; }
-.hour-cell { height:48px; border-bottom:1px solid #1a1a1f; display:flex;
-  align-items:flex-start; justify-content:flex-end; padding:2px 4px 0;
-  font-size:10px; color:var(--faint); font-family:var(--cond); }
-.cal-day-col { flex:1; position:relative; border-left:1px solid #1a1a1f;
-  min-height:1152px; }
-.cal-day-col.today-col { background:rgba(224,25,55,.04); }
-.cal-slot { height:48px; border-bottom:1px solid #1a1a1f; cursor:pointer; }
-.cal-event { position:absolute; left:1px; right:1px;
-  padding:2px 4px; overflow:hidden; cursor:pointer; opacity:.95;
-  border:none; border-left:3px solid rgba(255,255,255,.55);
-  touch-action:none; transition:outline .15s; }
-.cal-event.dragging { opacity:.95; z-index:50;
-  outline:1px solid #fff; transition:none; }
-.cal-event-title { font-size:10px; color:#fff; font-weight:700;
-  line-height:1.2; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
-.cal-event-time { font-size:9px; color:rgba(255,255,255,.85); }
-#cal-scroll.no-scroll { overflow:hidden; }
-#drag-hint { position:fixed; top:50%; left:50%; transform:translate(-50%,-50%);
-  background:var(--bg); color:#fff; border:1px solid #fff; padding:8px 16px;
-  font-size:14px; font-weight:700; z-index:300; display:none; pointer-events:none; }
 
 /* Stats */
 #stats-view { flex:1; overflow-y:auto; padding:14px 12px; }
@@ -293,6 +216,18 @@ textarea.field-input { height:76px; resize:vertical; }
 .hm-summary div { background:var(--panel2); border:1px solid var(--line); padding:6px 2px; text-align:center; }
 .hm-summary b { display:block; font-size:16px; font-family:var(--cond); letter-spacing:.06em; line-height:1.2; }
 .hm-summary span { font-size:9px; color:var(--dim); }
+.tr-row { display:grid; grid-template-columns:64px 1fr auto; align-items:center; gap:10px; padding:7px 0;
+  border-bottom:1px solid var(--line); font-size:12px; }
+.tr-row:last-of-type { border-bottom:none; }
+.tr-row.now .tr-lbl { color:var(--gold); }
+.tr-lbl { font-family:var(--cond); letter-spacing:.06em; color:var(--txt); }
+.tr-bar { height:8px; background:#ffffff10; position:relative; overflow:hidden; }
+.tr-bar i { position:absolute; inset:0 auto 0 0; background:var(--gold); }
+.tr-val { color:var(--dim); text-align:right; white-space:nowrap; font-size:11px; }
+.tr-val b { color:var(--txt); font-weight:600; font-size:12px; }
+.hm-jump { display:block; margin:8px 0 0 auto; min-height:36px; padding:0 14px; border-radius:999px;
+  border:1px solid var(--line); background:none; color:var(--gold); font-size:12px; cursor:pointer; }
+.hm-jump[hidden] { display:none; }
 .hm-month { display:grid; grid-template-columns:repeat(7,1fr); gap:3px; }
 .hm-cell { aspect-ratio:1; background:#0f0f12; border:1px solid #1e1e24; position:relative;
   font-size:9px; color:var(--dim); padding:2px 3px; cursor:pointer; box-sizing:border-box; }
@@ -372,6 +307,14 @@ textarea.field-input { height:76px; resize:vertical; }
 .hb-pill.shield { border-color:#2a2c32; color:var(--dim); cursor:default; }
 .hb-add { width:40px; height:40px; border-radius:50%; border:1px solid #4a4335; background:#1d1b16; color:var(--gold);
   font-size:22px; line-height:1; cursor:pointer; display:inline-flex; align-items:center; justify-content:center; }
+.hb-weeknav { display:flex; align-items:center; justify-content:space-between; gap:8px; margin:0 0 6px; }
+.hb-weeknav button { min-height:36px; padding:0 12px; border-radius:999px; border:1px solid var(--line); background:none;
+  color:var(--dim); font-size:12px; cursor:pointer; }
+.hb-weeknav button:disabled { opacity:.35; cursor:default; }
+.hb-weeknav span { font:500 12px var(--cond); letter-spacing:.08em; color:var(--dim); }
+.hb-pick { position:relative; display:inline-block; cursor:pointer; }
+.hb-pick input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; border:0; padding:0; }
+.hb-pick h1::after { content:"▾"; font-size:13px; color:var(--dim); margin-left:6px; vertical-align:middle; }
 .hb-days { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:8px; }
 .hb-day { border:0; background:none; color:var(--dim); padding:6px 0 8px; border-radius:16px; cursor:pointer;
   display:flex; flex-direction:column; align-items:center; gap:4px; min-height:64px; }
@@ -544,16 +487,9 @@ textarea.field-input { height:76px; resize:vertical; }
       </span>
     </p>
   </div>
-  <div id="week-nav">
-    <button type="button" class="nav-btn" id="prev-week">← 前週</button>
-    <span id="week-label"></span>
-    <button type="button" class="nav-btn" id="next-week">次週 →</button>
-  </div>
   <div id="content"></div>
   <div id="tabbar">
     <button class="tab-btn active" data-tab="today"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="8.5"/><path d="m8.5 12.2 2.4 2.4 4.6-5"/></svg></span>今日</button>
-    <button class="tab-btn" data-tab="schedule"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M8 4h12v16H4V8m1 4L15 2l3 3L8 15l-4 1z"/></svg></span>予定</button>
-    <button class="tab-btn" data-tab="log"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="3" width="16" height="18" rx="3"/><path d="m8 12 3 3 5-6"/></svg></span>記録</button>
     <button class="tab-btn" data-tab="status"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="m12 3 8 4v6c0 4-8 8-8 8s-8-4-8-8V7z"/><path d="m8 12 3 3 5-6"/></svg></span>育成</button>
     <button class="tab-btn" data-tab="stats"><span class="tab-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 20V10m8 10V4m8 16v-7"/></svg></span>統計</button>
   </div>
@@ -564,75 +500,10 @@ textarea.field-input { height:76px; resize:vertical; }
   <div class="modal-box">
     <h3 class="modal-title">⚙ 設定</h3>
     <button type="button" class="menu-item" id="nl-open">🧠 Neuro Learn 自動同期</button>
-    <button type="button" class="menu-item" id="gcal-open">📅 Googleカレンダー連携</button>
     <button type="button" class="menu-item" id="export-btn">💾 データを書き出す</button>
     <button type="button" class="menu-item" id="import-btn">📂 データを復元する</button>
     <div class="btn-row">
       <button class="btn btn-secondary" id="menu-close">閉じる</button>
-    </div>
-  </div>
-</div>
-
-<!-- Add Modal -->
-<div class="overlay" id="add-modal" style="display:none">
-  <div class="modal-box">
-    <h3 class="modal-title" id="add-modal-title"></h3>
-    <span class="field-label">カテゴリ</span>
-    <div class="chip-row" id="cat-chips"></div>
-    <div id="part-section" style="display:none">
-      <span class="field-label">部位</span>
-      <div class="part-row" id="part-chips"></div>
-    </div>
-    <span class="field-label">開始時間</span>
-    <input type="time" class="field-input" id="add-time" value="07:00">
-    <span class="field-label">終了時間</span>
-    <input type="time" class="field-input" id="add-endtime" value="08:00">
-    <span class="field-label">メモ（任意）</span>
-    <input type="text" class="field-input" id="add-label" placeholder="例：デッドリフト3set">
-    <div class="btn-row">
-      <button class="btn btn-secondary" id="add-cancel">キャンセル</button>
-      <button class="btn btn-primary" id="add-save">追加</button>
-    </div>
-  </div>
-</div>
-
-<!-- Record Modal -->
-<div class="overlay" id="rec-modal" style="display:none">
-  <div class="modal-box">
-    <h3 class="modal-title" id="rec-title"></h3>
-    <p class="modal-sub" id="rec-sub"></p>
-    <span class="field-label">実施時間（分）</span>
-    <input type="number" min="0" class="field-input" id="rec-duration" placeholder="例: 45">
-    <span class="field-label">評価</span>
-    <div id="rec-stars" style="margin-bottom:12px;font-size:22px;display:flex;gap:4px"></div>
-    <span class="field-label">メモ</span>
-    <textarea class="field-input" id="rec-note" placeholder="内容・気づき・体調など…"></textarea>
-    <label class="check-row">
-      <input type="checkbox" id="rec-done"> 完了としてマーク
-    </label>
-    <div class="btn-row">
-      <button class="btn btn-secondary" id="rec-cancel">キャンセル</button>
-      <button class="btn btn-primary" id="rec-save">保存</button>
-    </div>
-  </div>
-</div>
-
-<!-- Google Calendar Sync Modal -->
-<div class="overlay" id="gcal-modal" style="display:none">
-  <div class="modal-box">
-    <h3 class="modal-title">📅 Googleカレンダー連携</h3>
-    <p class="modal-sub">一度接続すれば、予定の追加・移動・削除は<b>自動で</b>専用カレンダー『週間クエスト』（非公開）に反映されます。カレンダーを開く必要はありません。設定手順はREADME参照。</p>
-    <span class="field-label">OAuthクライアントID</span>
-    <input type="text" class="field-input" id="gcal-client-id"
-      placeholder="xxxx.apps.googleusercontent.com" autocomplete="off"
-      autocapitalize="none" autocorrect="off" spellcheck="false">
-    <label class="check-row" style="margin-bottom:12px">
-      <input type="checkbox" id="gcal-auto-check" checked> 自動同期を有効にする（推奨）
-    </label>
-    <p class="modal-sub" id="gcal-status" style="min-height:1em"></p>
-    <div class="btn-row">
-      <button class="btn btn-secondary" id="gcal-close">閉じる</button>
-      <button class="btn btn-primary" id="gcal-test">保存して接続</button>
     </div>
   </div>
 </div>
@@ -667,7 +538,6 @@ textarea.field-input { height:76px; resize:vertical; }
 
 <div id="toast">✅ 保存しました</div>
 <div id="xp-toast"></div>
-<div id="drag-hint"></div>
 <div id="levelup-overlay">
   <div class="levelup-box">
     <div class="levelup-burst">★ LEVEL UP ★</div>
@@ -683,7 +553,6 @@ textarea.field-input { height:76px; resize:vertical; }
 // ── Constants ────────────────────────────────────────────────────────────────
 const DAYS    = ["月","火","水","木","金","土","日"];
 const DAY_KEYS= ["mon","tue","wed","thu","fri","sat","sun"];
-const HOUR_H  = 48;
 
 const WORKOUT_PARTS = [
   {id:"chest",    label:"胸",   color:"#EF5350"},
@@ -709,19 +578,12 @@ ALL_CATS.forEach(c=>CAT_MAP[c.id]=c);
 CAT_MAP["workout_core"]={id:"workout_core",label:"筋トレ（体幹）",icon:"💪",color:"#B71C1C",light:"#FFEBEE",part:{id:"core",label:"体幹",color:"#B71C1C"}};
 CAT_MAP["workout_full"]={id:"workout_full",label:"筋トレ（全身）",icon:"💪",color:"#FF5252",light:"#FFEBEE",part:{id:"full",label:"全身",color:"#FF5252"}};
 const catById  = id=>CAT_MAP[id];
-// Calendar display name: workout → part label only (e.g. "胸"), others → full label
-function calName(c){ return c?.part ? c.part.label : (c?.label||""); }
 
 // ── State ─────────────────────────────────────────────────────────────────────
 let tab       = "today";
-let weekKey   = getWeekKey(new Date());
-let schedules = JSON.parse(localStorage.getItem("wt_schedules")||"{}");
 let records   = JSON.parse(localStorage.getItem("wt_records")||"{}");
-let addCtx    = null;
-let recCtx    = null;
-let addCat    = "workout_chest";
-let recRating = 0;
-let statsMode = "month";              // "month" | "year"
+let statsMode = "month";              // "week" | "month" | "year"
+let statsWeek = getWeekKey(new Date()); // 週間表示の月曜日
 let statsYear = new Date().getFullYear();
 let statsMonth= new Date().getMonth();  // 0-11
 let heatTrack = "all";                 // "all" | CAL_TRACKS id
@@ -738,40 +600,15 @@ function getWeekDates(wk){
   const [y,m,d]=wk.split("-").map(Number);
   return DAY_KEYS.map((_,i)=>new Date(y,m-1,d+i));
 }
-function todayDK(){const d=new Date().getDay();return DAY_KEYS[d===0?6:d-1];}
-function timeToMin(t){const[h,m]=t.split(":").map(Number);return h*60+m;}
-function emptyWeek(){const w={};DAY_KEYS.forEach(d=>w[d]=[]);return w;}
-function getRec(dk,cat){return records?.[weekKey]?.[dk]?.[cat]||{done:false,note:"",duration:"",rating:0};}
-// Google Calendar "add event" template URL for an entry on a given date
-function gcalUrl(entry,dateObj){
-  const c=catById(entry.cat);
-  const title=((c?.icon||"")+" "+(entry.label||c?.label||"")).trim();
-  const y=dateObj.getFullYear();
-  const m=String(dateObj.getMonth()+1).padStart(2,"0");
-  const d=String(dateObj.getDate()).padStart(2,"0");
-  const s=entry.time.replace(":","")+"00";
-  const e=(entry.endTime||entry.time).replace(":","")+"00";
-  return "https://calendar.google.com/calendar/render?action=TEMPLATE"
-    +"&text="+encodeURIComponent(title)
-    +`&dates=${y}${m}${d}T${s}/${y}${m}${d}T${e}`
-    +"&ctz=Asia/Tokyo";
-}
-
 function el(tag,cls,html){
   const e=document.createElement(tag);
   if(cls)e.className=cls;
   if(html!==undefined)e.innerHTML=html;
   return e;
 }
-function starsHTML(val,interactive){
-  return[1,2,3,4,5].map(n=>
-    `<span style="color:${n<=val?"#c8a557":"#3d3d45"};cursor:${interactive?"pointer":"default"};user-select:none"
-      ${interactive?`data-n="${n}"`:""}>${n<=val?"★":"☆"}</span>`
-  ).join("");
-}
-
 // ── XP / Level system ─────────────────────────────────────────────────────────
 // XP per completed task = 10 base + duration bonus (1xp/5min, max 20) + rating bonus (rating*2)
+// 評価の入力はなくなったが、過去の記録の評価ぶんはレベルが下がらないよう残している
 function xpForRecord(rec){
   if(!rec?.done)return 0;
   let xp=10;
@@ -892,7 +729,6 @@ function getTracks(xp){
 
 // ── Save to localStorage ──────────────────────────────────────────────────────
 function persist(){
-  localStorage.setItem("wt_schedules", JSON.stringify(schedules));
   localStorage.setItem("wt_records",   JSON.stringify(records));
 }
 function saveData(){
@@ -906,397 +742,12 @@ function showToast(msg){
   setTimeout(()=>t.style.display="none",1800);
 }
 
-// ── Google Calendar auto-sync (Google Identity Services + Calendar API) ──────
-const GCAL_SCOPE="https://www.googleapis.com/auth/calendar";
-const GCAL_CAL_NAME="週間クエスト";
-let gcalToken=null, gcalTokenExp=0, gcalTokenClient=null;
-function gcalClientId(){return localStorage.getItem("wt_gcal_client_id")||"";}
-function gcalAuto(){return localStorage.getItem("wt_gcal_auto")==="1"&&!!gcalClientId();}
-function gcalGetToken(forceConsent){
-  return new Promise((resolve,reject)=>{
-    if(!forceConsent&&gcalToken&&Date.now()<gcalTokenExp-60000)return resolve(gcalToken);
-    if(!window.google?.accounts?.oauth2)return reject(new Error("Google認証ライブラリが未読み込みです"));
-    if(!gcalClientId())return reject(new Error("クライアントID未設定"));
-    if(!gcalTokenClient){
-      gcalTokenClient=google.accounts.oauth2.initTokenClient({
-        client_id:gcalClientId(), scope:GCAL_SCOPE, callback:()=>{},
-      });
-    }
-    gcalTokenClient.callback=resp=>{
-      if(resp.error)return reject(new Error(resp.error));
-      gcalToken=resp.access_token;
-      gcalTokenExp=Date.now()+(resp.expires_in||3600)*1000;
-      resolve(gcalToken);
-    };
-    // forceConsent: re-show the consent screen so newly-added scopes are actually granted
-    gcalTokenClient.requestAccessToken({prompt:forceConsent?"consent":""});
-  });
-}
-function gcalEventBody(entry,dateObj){
-  const c=catById(entry.cat);
-  const dstr=`${dateObj.getFullYear()}-${String(dateObj.getMonth()+1).padStart(2,"0")}-${String(dateObj.getDate()).padStart(2,"0")}`;
-  return {
-    summary:((c?.icon||"")+" "+(entry.label||c?.label||"")).trim(),
-    start:{dateTime:`${dstr}T${entry.time}:00`,timeZone:"Asia/Tokyo"},
-    end:{dateTime:`${dstr}T${entry.endTime||entry.time}:00`,timeZone:"Asia/Tokyo"},
-    visibility:"private",
-    // gym.htmlのbusy判定がWeekly自作イベントを除外できるようsource markerを付ける
-    extendedProperties:{private:{source:"weekly-quest"}},
-  };
-}
-async function gcalApi(path,method,body){
-  const token=await gcalGetToken();
-  const res=await fetch("https://www.googleapis.com/calendar/v3"+path,{
-    method,
-    headers:{Authorization:"Bearer "+token,"Content-Type":"application/json"},
-    body:body?JSON.stringify(body):undefined,
-  });
-  if(!res.ok&&res.status!==410){
-    // Surface Google's real reason (API disabled / insufficient scope / rate limit …)
-    let detail="";
-    try{const j=await res.json();detail=j.error?.message||j.error?.errors?.[0]?.reason||"";}catch(e){}
-    const err=new Error("Calendar API "+res.status+(detail?" — "+detail:""));
-    err.status=res.status;
-    throw err;
-  }
-  return res.status===204||res.status===410?null:res.json();
-}
-// Dedicated app calendar: find or create "週間クエスト" so events stay out of マイカレンダー.
-// Falls back to "primary" (events still marked private) if calendar management is not permitted.
-function gcalEnsureCalendar(){
-  const saved=localStorage.getItem("wt_gcal_cal_id");
-  if(saved)return Promise.resolve(saved);
-  return gcalApi("/users/me/calendarList?minAccessRole=owner","GET").then(list=>{
-    const hit=(list.items||[]).find(c=>c.summary===GCAL_CAL_NAME);
-    if(hit)return hit.id;
-    return gcalApi("/calendars","POST",{summary:GCAL_CAL_NAME,timeZone:"Asia/Tokyo"}).then(c=>c.id);
-  }).then(id=>{localStorage.setItem("wt_gcal_cal_id",id);return id;});
-}
-// Fire-and-forget sync helpers: never block the UI, toast on success/failure
-function gcalSyncInsert(entry,dateObj){
-  if(!gcalAuto())return;
-  (async()=>{
-    let cal;
-    try{ cal=await gcalEnsureCalendar(); }
-    catch(e){ cal="primary"; }   // no calendar-create permission → private event on primary
-    const ev=await gcalApi(`/calendars/${encodeURIComponent(cal)}/events`,"POST",gcalEventBody(entry,dateObj));
-    entry.gcalId=ev.id; entry.gcalCal=cal; persist();
-    showToast(cal==="primary"?"📅 カレンダーに登録（非公開）":"📅 週間クエストに登録しました");
-  })().catch(err=>showToast("⚠️ 同期失敗: "+(err.message||"")));
-}
-function gcalSyncPatch(entry,dateObj){
-  if(!gcalAuto()||!entry.gcalId)return;
-  const cal=encodeURIComponent(entry.gcalCal||"primary");
-  gcalApi(`/calendars/${cal}/events/${entry.gcalId}`,"PATCH",gcalEventBody(entry,dateObj))
-    .catch(()=>showToast("⚠️ カレンダー同期に失敗しました"));
-}
-function gcalSyncDelete(entry){
-  if(!gcalAuto()||!entry.gcalId)return;
-  const cal=encodeURIComponent(entry.gcalCal||"primary");
-  gcalApi(`/calendars/${cal}/events/${entry.gcalId}`,"DELETE")
-    .catch(()=>showToast("⚠️ カレンダー同期に失敗しました"));
-}
-
-// ── Week nav ──────────────────────────────────────────────────────────────────
-function renderNav(){
-  const dates=getWeekDates(weekKey);
-  const isNow=weekKey===getWeekKey(new Date());
-  document.getElementById("week-label").innerHTML=
-    `${dates[0].getMonth()+1}/${dates[0].getDate()} 〜 `+
-    `${dates[6].getMonth()+1}/${dates[6].getDate()}`+
-    (isNow?`<span class="badge">今週</span>`:"");
-}
-document.getElementById("prev-week").addEventListener("click",()=>{
-  const [y,m,d]=weekKey.split("-").map(Number);
-  const dt=new Date(y,m-1,d-7);weekKey=getWeekKey(dt);render();});
-document.getElementById("next-week").addEventListener("click",()=>{
-  const [y,m,d]=weekKey.split("-").map(Number);
-  const dt=new Date(y,m-1,d+7);weekKey=getWeekKey(dt);render();});
-
 // ── Tabs ──────────────────────────────────────────────────────────────────────
 document.getElementById("tabbar").addEventListener("click",e=>{
   const b=e.target.closest(".tab-btn");if(!b)return;
   tab=b.dataset.tab;
   render();
 });
-
-// ── List View ─────────────────────────────────────────────────────────────────
-function renderList(){
-  const cont=document.getElementById("content");
-  cont.innerHTML="";
-  const wrap=el("div","");wrap.id="list-view";
-  const intro=el("section","page-intro",'<p class="eyebrow">YOUR WEEKLY JOURNEY</p><h1>今週の冒険</h1><p>自分のペースで、ひとつずつ。</p>');
-  if(tab==="schedule"){
-    const cb=el("button","mini-btn cal-switch","🗓 週間カレンダー");cb.type="button";
-    cb.onclick=()=>{tab="calendar";render();};
-    intro.appendChild(cb);
-  }
-  wrap.appendChild(intro);
-  const ws=schedules[weekKey]||emptyWeek();
-  const dates=getWeekDates(weekKey);
-  const isNow=weekKey===getWeekKey(new Date());
-  const tdk=todayDK();
-
-  DAY_KEYS.forEach((dk,di)=>{
-    const isToday=isNow&&dk===tdk;
-    const entries=ws[dk]||[];
-    const card=el("div","day-card"+(isToday?" today":""));
-
-    const hdr=el("div","day-header");
-    hdr.appendChild(el("span","day-label",
-      DAYS[di]+`<span class="day-date">${dates[di].getMonth()+1}/${dates[di].getDate()}</span>`+
-      (isToday?`<span class="today-badge">今日</span>`:"")));
-    const ab=el("button","add-btn","＋ 予定");
-    ab.onclick=()=>openAdd(di,dk);
-    hdr.appendChild(ab);
-    card.appendChild(hdr);
-
-    // 予定外だが完了記録がある種目(ジムアプリ⚡からの自動記録など)は記録タブに行を出す
-    const extraRecs = tab==="log"
-      ? Object.entries(records?.[weekKey]?.[dk]||{})
-          .filter(([catId,r])=>r?.done && !entries.some(e=>e.cat===catId))
-      : [];
-    if(!entries.length&&!extraRecs.length){card.appendChild(el("p","empty-day","予定なし"));}
-    else entries.forEach((e,ei)=>{
-      const c=catById(e.cat);
-      const rec=getRec(dk,e.cat);
-      const row=el("div","entry-row");
-
-      if(tab==="log"){
-        const cb=document.createElement("input");
-        cb.type="checkbox";cb.checked=rec.done;
-        cb.style.cssText=`accent-color:${c?.color||"#999"};width:16px;height:16px;cursor:pointer;flex-shrink:0`;
-        cb.onchange=()=>toggleDone(dk,e);
-        row.appendChild(cb);
-      }
-      row.appendChild(el("span","",c?.icon||""));
-      row.appendChild(el("span","entry-time",e.time+(e.endTime?`〜${e.endTime}`:"")));
-      row.appendChild(el("span","entry-name"+(tab==="log"&&rec.done?" done":""),e.label||c?.label||""));
-      const chip=el("span","cat-chip",c?.label||"");
-      chip.style.cssText=`border:1px solid ${c?.color||"#666"};color:${c?.color||"#aaa"};background:transparent`;
-      row.appendChild(chip);
-      if(tab==="log"){
-        if(rec.rating>0)row.appendChild(el("span","stars-r",starsHTML(rec.rating,false)));
-        const rb=el("button","rec-btn",rec.note||rec.duration?"編集":"記録");
-        rb.onclick=()=>openRec(di,dk,e);row.appendChild(rb);
-      }
-      if(tab==="schedule"){
-        // Manual "open Google Calendar" button only when auto-sync is off
-        if(!gcalAuto()){
-          const gb=el("button","gcal-btn","📅");
-          gb.title="Googleカレンダーに追加";
-          gb.onclick=()=>window.open(gcalUrl(e,dates[di]),"_blank");
-          row.appendChild(gb);
-        }
-        const db=el("button","del-btn","✕");
-        db.onclick=()=>{gcalSyncDelete(e);ws[dk].splice(ei,1);schedules[weekKey]=ws;saveData();render();};
-        row.appendChild(db);
-      }
-      card.appendChild(row);
-    });
-    extraRecs.forEach(([catId,rec])=>{
-      const c=catById(catId);
-      const pseudo={cat:catId,time:"",label:""};
-      const row=el("div","entry-row");
-      const cb=document.createElement("input");
-      cb.type="checkbox";cb.checked=true;
-      cb.style.cssText=`accent-color:${c?.color||"#999"};width:16px;height:16px;cursor:pointer;flex-shrink:0`;
-      cb.onchange=()=>toggleDone(dk,pseudo);
-      row.appendChild(cb);
-      row.appendChild(el("span","",c?.icon||""));
-      row.appendChild(el("span","entry-time","予定外"));
-      row.appendChild(el("span","entry-name done",rec.note||c?.label||catId));
-      const chip=el("span","cat-chip",calName(c)||c?.label||"");
-      chip.style.cssText=`border:1px solid ${c?.color||"#666"};color:${c?.color||"#aaa"};background:transparent`;
-      row.appendChild(chip);
-      if(rec.rating>0)row.appendChild(el("span","stars-r",starsHTML(rec.rating,false)));
-      const rb=el("button","rec-btn","編集");
-      rb.onclick=()=>openRec(di,dk,pseudo);
-      row.appendChild(rb);
-      card.appendChild(row);
-    });
-    wrap.appendChild(card);
-  });
-  cont.appendChild(wrap);
-}
-
-// ── Calendar View ─────────────────────────────────────────────────────────────
-function renderCalendar(){
-  const cont=document.getElementById("content");
-  cont.innerHTML="";
-  const ws=schedules[weekKey]||emptyWeek();
-  const dates=getWeekDates(weekKey);
-  const isNow=weekKey===getWeekKey(new Date());
-  const tdk=todayDK();
-
-  const calWrap=el("div","");calWrap.id="cal-view";
-
-  const calHdr=el("div","");calHdr.id="cal-header";
-  DAY_KEYS.forEach((dk,di)=>{
-    const isToday=isNow&&dk===tdk;
-    calHdr.appendChild(el("div","cal-day-hdr"+(isToday?" today":""),
-      `${DAYS[di]}<br><span style="font-size:10px">${dates[di].getMonth()+1}/${dates[di].getDate()}</span>`));
-  });
-  calWrap.appendChild(calHdr);
-
-  const scroll=el("div","");scroll.id="cal-scroll";
-  const grid=el("div","");grid.id="cal-grid";
-  const hcol=el("div","");hcol.id="hour-col";
-  for(let h=0;h<24;h++)hcol.appendChild(el("div","hour-cell",String(h).padStart(2,"0")));
-  grid.appendChild(hcol);
-
-  DAY_KEYS.forEach((dk,di)=>{
-    const isToday=isNow&&dk===tdk;
-    const col=el("div","cal-day-col"+(isToday?" today-col":""));
-    col.dataset.dayIdx=di; col.dataset.dayKey=dk;
-    for(let h=0;h<24;h++){
-      const s=el("div","cal-slot");
-      s.addEventListener("click",()=>openAdd(di,dk,h));
-      col.appendChild(s);
-    }
-    (ws[dk]||[]).forEach((e,ei)=>{
-      const c=catById(e.cat);
-      const sm=timeToMin(e.time);
-      const em=e.endTime?timeToMin(e.endTime):sm+60;
-      const dur=Math.max(em-sm,15);
-      const top=sm/60*HOUR_H, height=Math.max(dur/60*HOUR_H-2,20);
-      const ev=el("div","cal-event");
-      ev.style.cssText=`top:${top}px;height:${height}px;background:${c?.color||"#999"}`;
-      ev.innerHTML=`<div class="cal-event-title">${c?.icon||""} ${e.label||calName(c)}</div>`+
-        (height>28?`<div class="cal-event-time">${e.time}${e.endTime?"〜"+e.endTime:""}</div>`:"");
-      ev.dataset.dayKey=dk; ev.dataset.entryIdx=ei; ev.dataset.dur=dur;
-      attachDragHandlers(ev, di, dk, e, ei);
-      col.appendChild(ev);
-    });
-    grid.appendChild(col);
-  });
-  scroll.appendChild(grid);
-  calWrap.appendChild(scroll);
-  const back=el("button","mini-btn cal-switch cal-back","☰ リスト表示に戻る");back.type="button";
-  back.onclick=()=>{tab="schedule";render();};
-  cont.appendChild(back);
-  cont.appendChild(calWrap);
-  scroll.scrollTop=6*HOUR_H;
-}
-
-// ── Drag to move events ───────────────────────────────────────────────────────
-function attachDragHandlers(ev, dayIdx, dayKey, entry, entryIdx){
-  let pressTimer=null, dragging=false, startX=0, startY=0;
-  let grid=null, dayCols=[], colW=0, dur=parseInt(ev.dataset.dur)||60;
-  let moved=false;
-
-  function pointerDown(clientX, clientY){
-    startX=clientX; startY=clientY; moved=false;
-    // Long-press (250ms) to enter drag mode
-    pressTimer=setTimeout(()=>{
-      dragging=true;
-      ev.classList.add("dragging");
-      document.getElementById("cal-scroll").classList.add("no-scroll");
-      grid=document.getElementById("cal-grid");
-      dayCols=Array.from(grid.querySelectorAll(".cal-day-col"));
-      colW=dayCols[0].getBoundingClientRect().width;
-      if(navigator.vibrate)navigator.vibrate(30);
-      showHint(entry.time+(entry.endTime?"〜"+entry.endTime:""));
-    },250);
-  }
-
-  function pointerMove(clientX, clientY){
-    if(Math.abs(clientX-startX)>8||Math.abs(clientY-startY)>8)moved=true;
-    if(!dragging){
-      // if user moves before long-press completes, cancel (let it scroll)
-      if(moved){clearTimeout(pressTimer);}
-      return;
-    }
-    // Determine target column by X
-    let targetCol=null;
-    for(const col of dayCols){
-      const r=col.getBoundingClientRect();
-      if(clientX>=r.left&&clientX<r.right){targetCol=col;break;}
-    }
-    if(!targetCol)targetCol=dayCols[parseInt(ev.dataset.curDayIdx??dayIdx)];
-    const colRect=targetCol.getBoundingClientRect();
-
-    // Determine time by Y (relative to column top), snap to 1 hour
-    let relY=clientY-colRect.top;
-    let hour=Math.round(relY/HOUR_H - 0.5*(dur/60)); // center under finger
-    hour=Math.max(0, Math.min(24-Math.ceil(dur/60), hour));
-
-    // Move the element visually into the target column
-    if(ev.parentElement!==targetCol)targetCol.appendChild(ev);
-    ev.style.top=(hour*HOUR_H)+"px";
-    ev.dataset.curDayIdx=targetCol.dataset.dayIdx;
-    ev.dataset.curHour=hour;
-
-    const sH=String(hour).padStart(2,"0");
-    const eH=String(Math.min(hour+Math.round(dur/60),24)).padStart(2,"0");
-    showHint(`${DAYS[targetCol.dataset.dayIdx]} ${sH}:00〜${eH}:00`);
-  }
-
-  function pointerUp(){
-    clearTimeout(pressTimer);
-    hideHint();
-    document.getElementById("cal-scroll").classList.remove("no-scroll");
-    if(dragging){
-      dragging=false;
-      ev.classList.remove("dragging");
-      const newDayIdx=parseInt(ev.dataset.curDayIdx??dayIdx);
-      const newHour=parseInt(ev.dataset.curHour??Math.floor(timeToMin(entry.time)/60));
-      commitMove(dayKey, entryIdx, newDayIdx, newHour, dur);
-    }else if(!moved){
-      // treat as tap → open record
-      openRec(dayIdx, dayKey, entry);
-    }
-  }
-
-  // Touch events
-  ev.addEventListener("touchstart",e=>{
-    const t=e.touches[0]; pointerDown(t.clientX,t.clientY);
-  },{passive:true});
-  ev.addEventListener("touchmove",e=>{
-    const t=e.touches[0];
-    if(dragging)e.preventDefault();
-    pointerMove(t.clientX,t.clientY);
-  },{passive:false});
-  ev.addEventListener("touchend",pointerUp);
-  ev.addEventListener("touchcancel",pointerUp);
-
-  // Mouse events (desktop testing)
-  ev.addEventListener("mousedown",e=>{
-    e.preventDefault(); pointerDown(e.clientX,e.clientY);
-    const mm=ev2=>pointerMove(ev2.clientX,ev2.clientY);
-    const mu=()=>{pointerUp();document.removeEventListener("mousemove",mm);document.removeEventListener("mouseup",mu);};
-    document.addEventListener("mousemove",mm);
-    document.addEventListener("mouseup",mu);
-  });
-}
-
-function commitMove(dayKey, entryIdx, newDayIdx, newHour, dur){
-  const ws=schedules[weekKey]||emptyWeek();
-  const entry=ws[dayKey]?.[entryIdx];
-  if(!entry)return;
-  const newDayKey=DAY_KEYS[newDayIdx];
-  const newStart=newHour*60;
-  const newEnd=Math.min(newStart+dur, 24*60);
-  entry.time=`${String(Math.floor(newStart/60)).padStart(2,"0")}:${String(newStart%60).padStart(2,"0")}`;
-  entry.endTime=`${String(Math.floor(newEnd/60)).padStart(2,"0")}:${String(newEnd%60).padStart(2,"0")}`;
-  // Remove from old day, add to new day
-  ws[dayKey].splice(entryIdx,1);
-  if(!ws[newDayKey])ws[newDayKey]=[];
-  ws[newDayKey].push(entry);
-  ws[newDayKey].sort((a,b)=>a.time.localeCompare(b.time));
-  schedules[weekKey]=ws;
-  saveData();
-  gcalSyncPatch(entry, getWeekDates(weekKey)[newDayIdx]);
-  renderCalendar();
-}
-
-function showHint(txt){
-  const h=document.getElementById("drag-hint");
-  h.textContent=txt; h.style.display="block";
-}
-function hideHint(){
-  document.getElementById("drag-hint").style.display="none";
-}
 
 // ── Job character (external PNG sprites, job × level-tier) ────────────────────
 // Same person throughout; the job comes from what you keep doing, and the
@@ -1513,7 +964,7 @@ function renderStatus(){
 // filterFn(dateObj) → true if the entry's date is in the selected period.
 function aggregateStats(filterFn){
   const st={};
-  ALL_CATS.forEach(c=>st[c.id]={done:0,total:0,totalMin:0,ratings:[]});
+  ALL_CATS.forEach(c=>st[c.id]={done:0,total:0,totalMin:0});
   // 予定の有無に関係なく、完了した記録をすべて数える(今日タブ・ジム・Neuro Learnの記録も含む)
   Object.keys(records).forEach(wk=>{
     const dates=getWeekDates(wk);
@@ -1526,7 +977,6 @@ function aggregateStats(filterFn){
         if(!st[cat]||!rec?.done)return;
         st[cat].done++;
         if(rec.duration)st[cat].totalMin+=parseInt(rec.duration)||0;
-        if(rec.rating)st[cat].ratings.push(rec.rating);
       });
     });
   });
@@ -1584,6 +1034,79 @@ function dailyDoneMap(){
     });
   });
   return map;
+}
+// 統計の表示期間 {from,to}(Date, 両端を含む)
+function statsRange(){
+  if(statsMode==="week"){
+    const [y,m,d]=statsWeek.split("-").map(Number);
+    return {from:new Date(y,m-1,d),to:new Date(y,m-1,d+6)};
+  }
+  if(statsMode==="month")return {from:new Date(statsYear,statsMonth,1),to:new Date(statsYear,statsMonth+1,0)};
+  return {from:new Date(statsYear,0,1),to:new Date(statsYear,11,31)};
+}
+// 日ごとの合計時間(分) {dateKey: 分}
+function dailyMinutesMap(){
+  const map={};
+  Object.keys(records).forEach(wk=>{
+    const dates=getWeekDates(wk);
+    DAY_KEYS.forEach((dk,di)=>{
+      const day=records[wk]?.[dk];
+      if(!day)return;
+      const key=dateKeyOf(dates[di]);
+      Object.values(day).forEach(r=>{
+        const n=r?.done?parseInt(r.duration,10)||0:0;
+        if(n>0)map[key]=(map[key]||0)+n;
+      });
+    });
+  });
+  return map;
+}
+function fmtMin(n){
+  if(!n)return "—";
+  const h=Math.floor(n/60),m=n%60;
+  return h?`${h}時間${m?m+"分":""}`:`${m}分`;
+}
+// 推移: 週間=日ごと、月間=週ごと、年間=月ごとのまとめ
+function renderTrendCard(){
+  const done=dailyDoneMap(), mins=dailyMinutesMap();
+  const {from,to}=statsRange();
+  const today=new Date(); today.setHours(0,0,0,0);
+  const buckets=[];
+  if(statsMode==="week"){
+    for(const d=new Date(from);d<=to;d.setDate(d.getDate()+1))
+      buckets.push({label:`${d.getMonth()+1}/${d.getDate()}(${DAYS[(d.getDay()+6)%7]})`,from:new Date(d),to:new Date(d)});
+  }else if(statsMode==="month"){
+    const d=new Date(from); d.setDate(d.getDate()-((d.getDay()+6)%7));
+    for(;d<=to;d.setDate(d.getDate()+7)){
+      const a=new Date(Math.max(d,from)), e=new Date(d); e.setDate(e.getDate()+6);
+      const b=new Date(Math.min(e,to));
+      buckets.push({label:`${a.getMonth()+1}/${a.getDate()}〜`,from:a,to:b});
+    }
+  }else{
+    for(let m=0;m<12;m++)buckets.push({label:`${m+1}月`,from:new Date(statsYear,m,1),to:new Date(statsYear,m+1,0)});
+  }
+  buckets.forEach(b=>{
+    b.active=0;b.total=0;b.min=0;
+    for(const d=new Date(b.from);d<=b.to;d.setDate(d.getDate()+1)){
+      const k=dateKeyOf(d), n=done[k]?.total||0;
+      if(n>0)b.active++;
+      b.total+=n; b.min+=mins[k]||0;
+    }
+    b.now=today>=b.from&&today<=b.to;
+    b.future=b.from>today;
+  });
+  const max=Math.max(1,...buckets.map(b=>b.total));
+  const card=el("div","stats-card");
+  buckets.forEach(b=>{
+    const row=el("div","tr-row"+(b.now?" now":""));
+    row.innerHTML=`<span class="tr-lbl">${b.label}</span>
+      <span class="tr-bar"><i style="width:${(b.total/max*100).toFixed(1)}%"></i></span>
+      <span class="tr-val">${b.future?"—":`<b>${b.total}</b>件${statsMode==="week"?"":` · ${b.active}日`} · ${fmtMin(b.min)}`}</span>`;
+    card.appendChild(row);
+  });
+  const sum=buckets.reduce((a,b)=>({total:a.total+b.total,active:a.active+b.active,min:a.min+b.min}),{total:0,active:0,min:0});
+  card.appendChild(el("p","hb-note",`合計 ${sum.total}件 ・ 活動 ${sum.active}日 ・ ${fmtMin(sum.min)}　（件数は完了した記録の数、時間は記録した分数の合計）`));
+  return card;
 }
 function heatCount(m,track){
   if(!m)return 0;
@@ -1657,8 +1180,7 @@ function renderHeatmapCard(){
   card.appendChild(chips);
 
   // ── Period range ──
-  const from=statsMode==="month"?new Date(statsYear,statsMonth,1):new Date(statsYear,0,1);
-  const to  =statsMode==="month"?new Date(statsYear,statsMonth+1,0):new Date(statsYear,11,31);
+  const {from,to}=statsRange();
   const sm=heatSummary(map,heatTrack,from,to);
   const summary=el("div","hm-summary");
   summary.innerHTML=
@@ -1669,21 +1191,26 @@ function renderHeatmapCard(){
   card.appendChild(summary);
 
   const info=el("div","hm-info");
+  const jump=el("button","hm-jump","この日の記録を開く ›");
+  jump.type="button";
+  jump.onclick=()=>{ if(!heatSel)return; tab="today"; window.HabitUI?.openDay(heatSel); render(); };
   const select=(key,cell)=>{
     heatSel=key;
     card.querySelectorAll(".sel").forEach(x=>x.classList.remove("sel"));
     if(cell)cell.classList.add("sel");
     info.textContent=heatInfoText(map,key);
+    jump.hidden=key>todayKey;
   };
 
-  if(statsMode==="month"){
-    // ── Month: calendar heatmap ──
+  if(statsMode!=="year"){
+    // ── Week / Month: calendar heatmap ──
     const grid=el("div","hm-month");
     DAYS.forEach(d=>grid.appendChild(el("div","mcal-hdr",d)));
     const offset=(from.getDay()+6)%7;
     for(let i=0;i<offset;i++)grid.appendChild(el("div","hm-cell empty"));
-    for(let dd=1;dd<=to.getDate();dd++){
-      const key=dateKeyOf(new Date(statsYear,statsMonth,dd));
+    for(const day=new Date(from);day<=to;day.setDate(day.getDate()+1)){
+      const dd=day.getDate();
+      const key=dateKeyOf(day);
       const n=heatCount(map[key],heatTrack);
       const cell=el("div","hm-cell"+(key===todayKey?" today":"")+(n>0?" lit":"")+(key===heatSel?" sel":""));
       const bg=heatColor(n,heatTrack);
@@ -1735,6 +1262,8 @@ function renderHeatmapCard(){
   if(heatSel)info.textContent=heatInfoText(map,heatSel);
   else info.textContent="日をタップすると内訳を表示";
   card.appendChild(info);
+  jump.hidden=!heatSel||heatSel>todayKey;
+  card.appendChild(jump);
   return card;
 }
 
@@ -1745,11 +1274,11 @@ function renderStats(){
 
   // ── Mode toggle ──
   const toggle=el("div","mode-toggle");
-  const mBtn=el("button",statsMode==="month"?"active":"","月間");
-  const yBtn=el("button",statsMode==="year"?"active":"","年間");
-  mBtn.onclick=()=>{statsMode="month";heatSel=null;renderStats();};
-  yBtn.onclick=()=>{statsMode="year";heatSel=null;renderStats();};
-  toggle.appendChild(mBtn);toggle.appendChild(yBtn);
+  [["week","週間"],["month","月間"],["year","年間"]].forEach(([m,label])=>{
+    const b=el("button",statsMode===m?"active":"",label);
+    b.onclick=()=>{statsMode=m;heatSel=null;renderStats();};
+    toggle.appendChild(b);
+  });
   wrap.appendChild(toggle);
 
   // ── Period nav ──
@@ -1758,7 +1287,14 @@ function renderStats(){
   const prevB=el("button",null,"←");
   const nextB=el("button",null,"→");
   const lbl=el("span","period-label");
-  if(statsMode==="month"){
+  if(statsMode==="week"){
+    const {from,to}=statsRange();
+    lbl.textContent=`${from.getMonth()+1}/${from.getDate()} 〜 ${to.getMonth()+1}/${to.getDate()}`;
+    const step=n=>{const d=new Date(from);d.setDate(d.getDate()+7*n);statsWeek=getWeekKey(d);heatSel=null;renderStats();};
+    prevB.onclick=()=>step(-1);
+    nextB.onclick=()=>step(1);
+    if(statsWeek>=getWeekKey(now))nextB.disabled=true;
+  }else if(statsMode==="month"){
     lbl.textContent=`${statsYear}年 ${statsMonth+1}月`;
     prevB.onclick=()=>{statsMonth--;if(statsMonth<0){statsMonth=11;statsYear--;}heatSel=null;renderStats();};
     nextB.onclick=()=>{statsMonth++;if(statsMonth>11){statsMonth=0;statsYear++;}heatSel=null;renderStats();};
@@ -1775,15 +1311,15 @@ function renderStats(){
   wrap.appendChild(pNav);
 
   // ── Filter ──
-  const filterFn=(d)=>{
-    if(statsMode==="month")return d.getFullYear()===statsYear&&d.getMonth()===statsMonth;
-    return d.getFullYear()===statsYear;
-  };
+  const range=statsRange();
+  const filterFn=(d)=>d>=range.from&&d<=range.to;
   const st=aggregateStats(filterFn);
 
   // ── Heatmap (month calendar / year grid) ──
   wrap.appendChild(el("p","section-label","ヒートマップ"));
   wrap.appendChild(renderHeatmapCard());
+  wrap.appendChild(el("p","section-label",statsMode==="week"?"日ごとのまとめ":statsMode==="month"?"週ごとのまとめ":"月ごとのまとめ"));
+  wrap.appendChild(renderTrendCard());
   window.HabitUI?.renderHabitStats(wrap);
 
   // ── Monthly achievement dot calendar ──
@@ -1872,7 +1408,6 @@ function renderStats(){
   // Base categories
   BASE_CATS.forEach(c=>{
     const s=st[c.id];
-    const avg=s.ratings.length?(s.ratings.reduce((a,b)=>a+b,0)/s.ratings.length).toFixed(1):"—";
     const card=el("div","stats-card");
     card.innerHTML=`<div style="display:flex;align-items:center;gap:8px">
       <span style="font-size:18px">${c.icon}</span>
@@ -1881,7 +1416,6 @@ function renderStats(){
     </div>
     <div class="stats-meta" style="margin-top:6px">
       ${s.totalMin>0?`<span>合計 ${s.totalMin} 分</span>`:""}
-      <span>平均評価 ${avg}</span>
     </div>`;
     wrap.appendChild(card);
   });
@@ -1889,100 +1423,6 @@ function renderStats(){
   cont.appendChild(wrap);
 }
 
-// ── Add Modal ─────────────────────────────────────────────────────────────────
-function buildCatChips(){
-  const row=document.getElementById("cat-chips");row.innerHTML="";
-  const isW=addCat.startsWith("workout_");
-  const wb=el("button","chip");
-  wb.style.cssText=`border-color:#E57373;background:${isW?"#E57373":"transparent"};color:${isW?"#fff":"#E57373"};font-weight:${isW?700:400}`;
-  wb.textContent="💪 筋トレ";
-  wb.onclick=()=>{addCat=`workout_${addCat.startsWith("workout_")?addCat.replace("workout_",""):"chest"}`;buildCatChips();buildPartChips();};
-  row.appendChild(wb);
-  BASE_CATS.forEach(c=>{
-    const active=addCat===c.id;
-    const b=el("button","chip");
-    b.style.cssText=`border-color:${c.color};background:${active?c.color:"transparent"};color:${active?"#fff":c.color};font-weight:${active?700:400}`;
-    b.textContent=c.icon+" "+c.label;
-    b.onclick=()=>{addCat=c.id;buildCatChips();buildPartChips();};
-    row.appendChild(b);
-  });
-}
-function buildPartChips(){
-  const sec=document.getElementById("part-section");
-  const isW=addCat.startsWith("workout_");
-  sec.style.display=isW?"":"none";
-  if(!isW)return;
-  const row=document.getElementById("part-chips");row.innerHTML="";
-  const cur=addCat.replace("workout_","");
-  WORKOUT_PARTS.forEach(p=>{
-    const a=cur===p.id;
-    const b=el("button","part-chip");
-    b.style.cssText=`border-color:${p.color};background:${a?p.color:"transparent"};color:${a?"#fff":p.color};font-weight:${a?700:400}`;
-    b.textContent=p.label;
-    b.onclick=()=>{addCat=`workout_${p.id}`;buildPartChips();};
-    row.appendChild(b);
-  });
-}
-function openAdd(dayIdx,dayKey,hour){
-  addCtx={dayIdx,dayKey};addCat="workout_chest";
-  document.getElementById("add-modal-title").textContent=DAYS[dayIdx]+"曜日に予定を追加";
-  const hh=hour!==undefined?String(hour).padStart(2,"0"):"07";
-  const eh=hour!==undefined?String(Math.min(hour+1,23)).padStart(2,"0"):"08";
-  document.getElementById("add-time").value=`${hh}:00`;
-  document.getElementById("add-endtime").value=`${eh}:00`;
-  document.getElementById("add-label").value="";
-  buildCatChips();buildPartChips();
-  document.getElementById("add-modal").style.display="flex";
-}
-document.getElementById("add-time").addEventListener("change",e=>{
-  const t=e.target.value;if(!t)return;
-  const[h,m]=t.split(":").map(Number);
-  const eh=(h+1)%24;
-  document.getElementById("add-endtime").value=String(eh).padStart(2,"0")+":"+String(m).padStart(2,"0");
-});
-document.getElementById("add-cancel").onclick=()=>document.getElementById("add-modal").style.display="none";
-document.getElementById("add-modal").addEventListener("click",e=>{if(e.target===e.currentTarget)e.currentTarget.style.display="none";});
-document.getElementById("add-save").onclick=()=>{
-  if(!addCtx)return;
-  const time=document.getElementById("add-time").value;
-  const endTime=document.getElementById("add-endtime").value;
-  const label=document.getElementById("add-label").value.trim();
-  if(!time)return;
-  if(!schedules[weekKey])schedules[weekKey]=emptyWeek();
-  const dk=addCtx.dayKey;
-  const newEntry={cat:addCat,time,endTime,label,id:Date.now()};
-  schedules[weekKey][dk].push(newEntry);
-  schedules[weekKey][dk].sort((a,b)=>a.time.localeCompare(b.time));
-  document.getElementById("add-modal").style.display="none";
-  saveData();render();
-  gcalSyncInsert(newEntry, getWeekDates(weekKey)[addCtx.dayIdx]);
-};
-
-// ── Record Modal ──────────────────────────────────────────────────────────────
-function renderRecStars(){
-  const el=document.getElementById("rec-stars");
-  el.innerHTML=starsHTML(recRating,true);
-  el.querySelectorAll("span").forEach(s=>{
-    s.addEventListener("click",()=>{
-      const n=parseInt(s.dataset.n);
-      recRating=recRating===n?0:n;
-      renderRecStars();
-    });
-  });
-}
-function openRec(dayIdx,dayKey,entry){
-  recCtx={dayIdx,dayKey,entry};
-  const c=catById(entry.cat);
-  const rec=getRec(dayKey,entry.cat);
-  recRating=rec.rating||0;
-  document.getElementById("rec-title").textContent=(c?.icon||"")+" "+(entry.label||c?.label||"");
-  document.getElementById("rec-sub").textContent=DAYS[dayIdx]+" "+entry.time+(entry.endTime?"〜"+entry.endTime:"");
-  document.getElementById("rec-duration").value=rec.duration||"";
-  document.getElementById("rec-note").value=rec.note||"";
-  document.getElementById("rec-done").checked=rec.done||false;
-  renderRecStars();
-  document.getElementById("rec-modal").style.display="flex";
-}
 function snapshotLevels(){
   const xp=computeXP();
   const tracks=getTracks(xp);
@@ -2003,40 +1443,6 @@ function checkLevelUp(before, gainedXP){
   if(leveledTrack)showLevelUp(leveledTrack);
   else if(gainedXP>0)showXPToast(gainedXP);
 }
-
-function toggleDone(dk,entry){
-  const rec=getRec(dk,entry.cat);
-  const before=snapshotLevels();
-  const wasDone=rec.done;
-  if(!records[weekKey])records[weekKey]={};
-  if(!records[weekKey][dk])records[weekKey][dk]={};
-  records[weekKey][dk][entry.cat]={...rec,done:!rec.done};
-  const gained = !wasDone ? xpForRecord(records[weekKey][dk][entry.cat]) : 0;
-  saveData();render();
-  if(!wasDone)checkLevelUp(before, gained);
-}
-document.getElementById("rec-cancel").onclick=()=>document.getElementById("rec-modal").style.display="none";
-document.getElementById("rec-modal").addEventListener("click",e=>{if(e.target===e.currentTarget)e.currentTarget.style.display="none";});
-document.getElementById("rec-save").onclick=()=>{
-  if(!recCtx)return;
-  const{dayKey,entry}=recCtx;
-  const before=snapshotLevels();
-  const prevRec=getRec(dayKey,entry.cat);
-  const prevXP=xpForRecord(prevRec);
-  if(!records[weekKey])records[weekKey]={};
-  if(!records[weekKey][dayKey])records[weekKey][dayKey]={};
-  const newRec={
-    done:document.getElementById("rec-done").checked,
-    note:document.getElementById("rec-note").value,
-    duration:document.getElementById("rec-duration").value,
-    rating:recRating,
-  };
-  records[weekKey][dayKey][entry.cat]=newRec;
-  const gained=xpForRecord(newRec)-prevXP;
-  document.getElementById("rec-modal").style.display="none";
-  saveData();render();
-  checkLevelUp(before, gained);
-};
 
 // ── Level-up celebration ──────────────────────────────────────────────────────
 function showLevelUp(track){
@@ -2084,7 +1490,7 @@ document.getElementById("menu-modal").addEventListener("click",e=>{
 document.getElementById("export-btn").onclick=()=>{
   const habitData={};
   ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1"].forEach(k=>{try{const v=JSON.parse(localStorage.getItem(k));if(v!==null)habitData[k]=v;}catch(e){}});
-  const blob=new Blob([JSON.stringify({schedules,records,habitData})],{type:"application/json"});
+  const blob=new Blob([JSON.stringify({records,habitData})],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
   a.download="weekly-quest-data.json";
@@ -2099,9 +1505,8 @@ document.getElementById("import-btn").onclick=()=>{
     f.text().then(t=>{
       try{
         const d=JSON.parse(t);
-        if(!d.schedules&&!d.records)throw new Error("bad format");
-        if(d.schedules)schedules=d.schedules;
-        if(d.records)records=d.records;
+        if(!d.records)throw new Error("bad format");
+        records=d.records;
         if(d.habitData&&typeof d.habitData==="object")
           ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1"].forEach(k=>{if(d.habitData[k]!==undefined)localStorage.setItem(k,JSON.stringify(d.habitData[k]));});
         saveData();render();
@@ -2109,49 +1514,6 @@ document.getElementById("import-btn").onclick=()=>{
     });
   };
   inp.click();
-};
-
-// ── Google Calendar sync settings modal ───────────────────────────────────────
-function setGcalStatus(msg){document.getElementById("gcal-status").textContent=msg;}
-document.getElementById("gcal-open").onclick=()=>{
-  document.getElementById("gcal-client-id").value=gcalClientId();
-  document.getElementById("gcal-auto-check").checked=localStorage.getItem("wt_gcal_auto")!=="0";
-  setGcalStatus(gcalAuto()?"✅ 自動同期ON: 週間クエスト（非公開）に同期中":(gcalClientId()?"設定済み（自動同期OFF）":""));
-  document.getElementById("gcal-modal").style.display="flex";
-};
-document.getElementById("gcal-close").onclick=()=>document.getElementById("gcal-modal").style.display="none";
-document.getElementById("gcal-modal").addEventListener("click",e=>{if(e.target===e.currentTarget)e.currentTarget.style.display="none";});
-document.getElementById("gcal-test").onclick=()=>{
-  // Normalize: strip all whitespace/newlines that sneak in when copying between devices
-  const id=document.getElementById("gcal-client-id").value.replace(/\s+/g,"");
-  const auto=document.getElementById("gcal-auto-check").checked;
-  localStorage.setItem("wt_gcal_client_id",id);
-  localStorage.setItem("wt_gcal_auto",auto?"1":"0");
-  gcalTokenClient=null; gcalToken=null;
-  if(!id){setGcalStatus("クライアントIDを入力してください");return;}
-  if(!/^[\w-]+\.apps\.googleusercontent\.com$/.test(id)){
-    setGcalStatus("❌ IDの形式が違います。「数字-英数字.apps.googleusercontent.com」の形の文字列全体を貼り付けてください（クライアントシークレットではありません）");
-    return;
-  }
-  document.getElementById("gcal-client-id").value=id;
-  setGcalStatus("接続中…（許可画面が出たら承認してください）");
-  // forceConsent=true so the newly-added full calendar scope is actually granted
-  gcalGetToken(true)
-    .then(()=>gcalEnsureCalendar())
-    .then(cal=>{
-      if(cal==="primary")
-        setGcalStatus("✅ 接続OK（マイカレンダーに非公開で同期）。専用カレンダーを使うにはCalendar APIの有効化が必要です");
-      else
-        setGcalStatus("✅ 接続できました！専用カレンダー『週間クエスト』に非公開で同期されます");
-    })
-    .catch(err=>{
-      let hint="";
-      if(String(err.message).includes("403")){
-        hint="（403）Google Cloudで①Calendar APIが有効か ②OAuth同意画面のスコープ に問題がある可能性。"
-            +"Calendar APIの有効化: console.cloud.google.com のAPIライブラリで『Google Calendar API』を有効化してください";
-      }
-      setGcalStatus("❌ 接続失敗: "+err.message+" "+hint);
-    });
 };
 
 // ── PWA service worker ────────────────────────────────────────────────────────
@@ -2162,13 +1524,12 @@ document.getElementById("gcal-test").onclick=()=>{
 // 画面に戻ってきた時・他タブが書いた時に必ず読み直す。
 function reloadFromStorage(){
   try{
-    schedules=JSON.parse(localStorage.getItem("wt_schedules")||"{}");
     records  =JSON.parse(localStorage.getItem("wt_records")||"{}");
   }catch(e){ return; }
   render();
 }
 window.addEventListener("storage",e=>{
-  if(["wt_records","wt_schedules","wt_habits_v1","wt_habit_log_v1","wt_reward_v1"].includes(e.key))reloadFromStorage();
+  if(["wt_records","wt_habits_v1","wt_habit_log_v1","wt_reward_v1"].includes(e.key))reloadFromStorage();
 });
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)reloadFromStorage();});
 window.addEventListener("pageshow",e=>{if(e.persisted)reloadFromStorage();});
@@ -2350,17 +1711,13 @@ document.getElementById("nl-save").onclick=async()=>{
 
 // ── Render ────────────────────────────────────────────────────────────────────
 function render(){
-  renderNav();
-  document.querySelectorAll(".tab-btn").forEach(x=>x.classList.toggle("active",x.dataset.tab===(tab==="calendar"?"schedule":tab)));
-  document.getElementById("week-nav").style.display=["today","status","stats"].includes(tab)?"none":"";
+  document.querySelectorAll(".tab-btn").forEach(x=>x.classList.toggle("active",x.dataset.tab===tab));
   if(tab==="today"){
     if(window.HabitUI)window.HabitUI.renderToday();
     else document.getElementById("content").innerHTML='<div id="today-view"></div>';
   }
-  else if(tab==="calendar")renderCalendar();
   else if(tab==="stats")renderStats();
   else if(tab==="status")renderStatus();
-  else renderList();
   window.HabitUI?.updateQuestBadge();
 }
 render();
@@ -2381,14 +1738,6 @@ function handleQuestParam(){
   const wk=getWeekKey(today);
   const dk=DAY_KEYS[(today.getDay()+6)%7];
   const before=snapshotLevels();
-  // その日の予定が無ければ自動で1件作る(リスト画面に見えるように)
-  if(!schedules[wk])schedules[wk]=emptyWeek();
-  if(!schedules[wk][dk].some(e=>e.cat===cat)){
-    const hh=String(today.getHours()).padStart(2,"0");
-    const mm=String(today.getMinutes()).padStart(2,"0");
-    schedules[wk][dk].push({cat,time:`${hh}:${mm}`,endTime:`${hh}:${mm}`,label,id:Date.now()});
-    schedules[wk][dk].sort((a,b)=>a.time.localeCompare(b.time));
-  }
   if(!records[wk])records[wk]={};
   if(!records[wk][dk])records[wk][dk]={};
   const prev=records[wk][dk][cat]||{done:false,note:"",duration:"",rating:0};
@@ -2401,7 +1750,6 @@ function handleQuestParam(){
     rating:prev.rating,
   };
   const gained=xpForRecord(records[wk][dk][cat])-prevXP;
-  weekKey=wk;
   saveData();render();
   checkLevelUp(before,gained);
 }
@@ -2418,7 +1766,7 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 const fmt = n => Math.round(n).toLocaleString("ja-JP");
 const GOAL_LABEL = { check: "チェック", count: "回数", minutes: "時間" };
 const FREQ_LABEL = { daily: "毎日", days: "曜日指定", weekly: "週N回" };
-let selDay = null, lastToday = null;
+let selDay = null, stripEnd = null, lastToday = null;
 
 // ── state ──────────────────────────────────────────────────────────────────
 function ctxOf(s) {
@@ -2440,14 +1788,32 @@ function loadState() {
 }
 function saveHabits(list) { write(H.KEYS.habits, { habits: list }); }
 function curDay(s) {
-  if (lastToday !== s.today) { selDay = null; lastToday = s.today; }
-  return selDay && selDay <= s.today && selDay >= H.addDays(s.today, -6) ? selDay : s.today;
+  if (lastToday !== s.today) { selDay = null; stripEnd = null; lastToday = s.today; }
+  return selDay && selDay <= s.today ? selDay : s.today;
+}
+// 日付ストリップの右端。選んだ日が必ず7日の中に入るようにする
+function stripEndOf(s, day) {
+  const end = stripEnd && stripEnd <= s.today ? stripEnd : s.today;
+  return day <= end && day > H.addDays(end, -7) ? end : (H.addDays(day, 3) < s.today ? H.addDays(day, 3) : s.today);
+}
+function showDay(k, today) {
+  selDay = k > today ? today : k;
+  stripEnd = null;
+  renderToday();
+}
+function shiftWeek(n, s, day, end) {
+  const t = s.today;
+  const e = H.addDays(end, 7 * n);
+  stripEnd = e > t ? t : e;
+  const d = H.addDays(day, 7 * n);
+  selDay = d > t ? t : d;
+  renderToday();
 }
 function dayLabel(k, today) {
   if (k === today) return "今日";
   if (k === H.addDays(today, -1)) return "昨日";
-  const [, m, d] = k.split("-").map(Number);
-  return `${m}/${d}(${H.WEEKDAY_LABELS[H.weekdayIdx(k)]})`;
+  const [y, m, d] = k.split("-").map(Number);
+  return `${y !== Number(today.slice(0, 4)) ? y + "/" : ""}${m}/${d}(${H.WEEKDAY_LABELS[H.weekdayIdx(k)]})`;
 }
 const totalXP = () => Object.values(computeXP()).reduce((a, b) => a + b, 0);
 
@@ -2528,7 +1894,8 @@ function renderToday() {
   const active = s.habits.filter(h => !h.archived);
 
   const top = el("div", "hb-top");
-  top.innerHTML = `<div><p class="eyebrow">HABITS</p><h1>${dayLabel(day, s.today)}</h1></div>
+  top.innerHTML = `<div><p class="eyebrow">HABITS</p><label class="hb-pick"><h1>${dayLabel(day, s.today)}</h1>
+      <input type="date" max="${s.today}" value="${day}" aria-label="記録する日を選ぶ"></label></div>
     <div class="hb-wallet">
       <button type="button" class="hb-pill gold" aria-label="ゴールド ${fmt(H.balance(s.reward))}。ショップを開く">🪙 ${fmt(H.balance(s.reward))}</button>
       <span class="hb-pill shield" title="まもりの護符" aria-label="まもりの護符 ${H.shieldCount(s.reward)}個">🧿 ${H.shieldCount(s.reward)}</span>
@@ -2538,19 +1905,31 @@ function renderToday() {
   top.querySelector(".gold").onclick = () => openShop();
   top.querySelector(".tk")?.addEventListener("click", () => openTickets());
   top.querySelector(".hb-add").onclick = () => openEditor(null);
+  top.querySelector(".hb-pick input").onchange = e => { if (e.target.value) showDay(e.target.value, s.today); };
   v.appendChild(top);
 
-  // 直近7日の日付ストリップ(リング = 予定の習慣の達成割合)
+  // 7日の日付ストリップ(リング = 予定の習慣の達成割合)。週単位でいくらでもさかのぼれる
+  const end = stripEndOf(s, day), start = H.addDays(end, -6);
+  const nav = el("div", "hb-weeknav");
+  const md = k => { const [, m, d] = k.split("-").map(Number); return `${m}/${d}`; };
+  nav.innerHTML = `<button type="button" class="prev" aria-label="前の7日">‹ 前へ</button>
+    <span>${md(start)} 〜 ${md(end)}</span>
+    ${end === s.today ? `<button type="button" class="next" disabled aria-label="次の7日">次へ ›</button>`
+      : `<button type="button" class="back">今日へ</button><button type="button" class="next" aria-label="次の7日">次へ ›</button>`}`;
+  nav.querySelector(".prev").onclick = () => shiftWeek(-1, s, day, end);
+  nav.querySelector(".next").onclick = () => shiftWeek(1, s, day, end);
+  nav.querySelector(".back")?.addEventListener("click", () => showDay(s.today, s.today));
+  v.appendChild(nav);
   const strip = el("div", "hb-days");
   for (let i = 6; i >= 0; i--) {
-    const k = H.addDays(s.today, -i), dc = H.dayCompletion(active, k, ctx);
+    const k = H.addDays(end, -i), dc = H.dayCompletion(active, k, ctx);
     const b = el("button", "hb-day" + (k === day ? " sel" : "") + (k === s.today ? " today" : ""));
     b.type = "button";
     b.setAttribute("aria-label", `${dayLabel(k, s.today)} ${dc.done}/${dc.due}達成`);
     if (k === day) b.setAttribute("aria-current", "date");
     b.innerHTML = `<span class="hb-dow">${H.WEEKDAY_LABELS[H.weekdayIdx(k)]}</span>
       <span class="hb-dnum">${ringSvg(36, 3, dc.due ? dc.done / dc.due : 0, "#dfbd7c")}${Number(k.slice(8))}</span>`;
-    b.onclick = () => { selDay = k; renderToday(); };
+    b.onclick = () => { selDay = k; stripEnd = end; renderToday(); };
     strip.appendChild(b);
   }
   v.appendChild(strip);
@@ -2562,7 +1941,7 @@ function renderToday() {
   const g = H.goldOn(s.reward, day);
   const sum = el("div", "hb-sum");
   sum.innerHTML = `<span>達成 <b>${dc.done}/${dc.due}</b></span>${g ? `<span>この日 <b>+${g}G</b></span>` : ""}`
-    + (day !== s.today ? `<span>過去${H.SETTLE_WINDOW - 1}日までさかのぼって記録できます</span>` : "");
+    + (day < H.addDays(s.today, -(H.SETTLE_WINDOW - 1)) ? `<span>${H.SETTLE_WINDOW}日以上前の記録はゴールドには入りません（XP・統計・クエストには反映）</span>` : "");
   v.appendChild(sum);
 
   // クエスト: 受け取れる報酬があれば最優先、なければ「あと少し」のクエスト
@@ -3160,8 +2539,7 @@ function openShop(kind = "wish") {
 // ── 統計タブ: 習慣ごとの達成度 ────────────────────────────────────────────
 function renderHabitStats(wrap) {
   const s = loadState(), ctx = ctxOf(s);
-  const from = statsMode === "month" ? H.keyOfDate(new Date(statsYear, statsMonth, 1)) : `${statsYear}-01-01`;
-  const to = statsMode === "month" ? H.keyOfDate(new Date(statsYear, statsMonth + 1, 0)) : `${statsYear}-12-31`;
+  const range = statsRange(), from = H.keyOfDate(range.from), to = H.keyOfDate(range.to);
   if (from > s.today) return;
   const list = s.habits.filter(h => !h.archived || (h.archivedOn && h.archivedOn > from));
   if (!list.length) return;
@@ -3182,7 +2560,7 @@ function renderHabitStats(wrap) {
   wrap.appendChild(card);
 }
 
-window.HabitUI = { renderToday, renderRewardCard, renderHabitStats, updateQuestBadge: () => updateQuestBadge() };
+window.HabitUI = { renderToday, openDay: k => { selDay = k; stripEnd = null; }, renderRewardCard, renderHabitStats, updateQuestBadge: () => updateQuestBadge() };
 if (["today", "status", "stats"].includes(tab)) render();
 </script>
 <script src="js/pwa-update.js"></script>

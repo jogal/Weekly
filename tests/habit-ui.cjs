@@ -49,10 +49,11 @@ function seedRecords() {
   const gold = () => p.evaluate(() => { const r = JSON.parse(localStorage.getItem('wt_reward_v1')); return r; });
   const balance = async () => p.$eval('#today-view .hb-pill.gold', e => Number(e.textContent.replace(/[^\d]/g, '')));
 
-  // 1) 起動すると今日タブ。5トラック連動の初期習慣・はじめてボーナス100G・週バー非表示
+  // 1) 起動すると今日タブ。5トラック連動の初期習慣・はじめてボーナス100G。予定・記録タブはない
   assert.equal(await p.locator('.tab-btn.active').getAttribute('data-tab'), 'today');
   assert.equal(await p.locator('#today-view .hb-card').count(), 5);
-  assert.equal(await p.locator('#week-nav').isVisible(), false);
+  assert.deepEqual(await p.locator('.tab-btn').evaluateAll(b => b.map(x => x.dataset.tab)), ['today', 'status', 'stats']);
+  assert.equal(await p.locator('#gcal-open').count(), 0);
   assert.equal(await balance(), 100);
   assert.match(await p.locator('.hb-card', { hasText: '専門医勉強' }).innerText(), /🔥6日/);
   if (shots) await p.screenshot({ path: path.join(shots, 'habit-today-start.png') });
@@ -107,6 +108,24 @@ function seedRecords() {
   assert.equal(await p.locator('.hb-top h1').innerText(), '昨日');
   assert.ok(await p.locator('.hb-card', { hasText: '専門医勉強' }).evaluate(e => e.classList.contains('done')));
   await p.locator('.hb-day').nth(6).click();
+
+  // 6b) 「前へ」で何週でもさかのぼれる。古い日の記録も書ける(ゴールドは確定済みなので増えない)
+  await p.locator('.hb-weeknav .prev').click();
+  assert.equal(await p.locator('.hb-top h1').innerText(), '10/11(日)');
+  await p.locator('.hb-weeknav .prev').click();
+  await p.locator('.hb-weeknav .prev').click();
+  assert.equal(await p.locator('.hb-top h1').innerText(), '9/27(日)');
+  assert.match(await p.locator('.hb-weeknav span').innerText(), /9\/21 〜 9\/27/);
+  assert.match(await p.locator('.hb-sum').innerText(), /ゴールドには入りません/);
+  const oldGold = await balance();
+  await p.locator('.hb-card', { hasText: '自炊' }).locator('.hb-ring').click();
+  assert.equal(await balance(), oldGold);
+  assert.equal((await p.evaluate(() => JSON.parse(localStorage.getItem('wt_records'))))['2026-09-21'].sun.cooking.done, true);
+  await p.locator('.hb-day').nth(2).click();
+  assert.equal(await p.locator('.hb-top h1').innerText(), '9/23(水)');
+  await p.locator('.hb-weeknav .back').click();
+  assert.equal(await p.locator('.hb-top h1').innerText(), '今日');
+  assert.equal(await p.locator('.hb-weeknav .next').isDisabled(), true);
   if (shots) await p.screenshot({ path: path.join(shots, 'habit-today-after.png') });
 
   // 7) 画面幅ごとのはみ出しなし
@@ -140,17 +159,28 @@ function seedRecords() {
   await p.locator('[data-tab="stats"]').click();
   await p.waitForSelector('.hs-row');
   assert.ok(await p.locator('.hs-row', { hasText: 'ストレッチ' }).count() === 1);
-  const medicineCount = await p.locator('.stats-card').filter({ hasText: '専門医勉強' }).filter({ hasText: '平均評価' }).innerText();
+  const medicineCount = await p.locator('.stats-card').filter({ hasText: '専門医勉強' }).filter({ hasText: '合計' }).innerText();
   assert.match(medicineCount, /7回/);
   if (shots) { await p.locator('.hs-row').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'habit-stats.png') }); }
 
-  // 10) 予定タブから週間カレンダーへ行き来できる
-  await p.locator('[data-tab="schedule"]').click();
-  await p.locator('.cal-switch').click();
-  await p.waitForSelector('#cal-view');
-  assert.equal(await p.locator('.tab-btn.active').getAttribute('data-tab'), 'schedule');
-  await p.locator('.cal-back').click();
-  await p.waitForSelector('#list-view');
+  assert.equal(await p.locator('#stats-view').innerText().then(t => t.includes('平均評価')), false);
+
+  // 10) 統計: 週間=日ごと、月間=週ごとのまとめ。ヒートマップの日から今日タブのその日へ
+  await p.locator('.mode-toggle button', { hasText: '週間' }).click();
+  assert.equal(await p.locator('.period-label').innerText(), '10/12 〜 10/18');
+  assert.equal(await p.locator('.tr-row').count(), 7);
+  assert.match(await p.locator('.tr-row', { hasText: '10/13(火)' }).innerText(), /2件 · 30分/);
+  assert.equal(await p.locator('.period-nav button').last().isDisabled(), true);
+  await p.locator('.period-nav button').first().click();
+  assert.equal(await p.locator('.period-label').innerText(), '10/5 〜 10/11');
+  await p.locator('.mode-toggle button', { hasText: '月間' }).click();
+  assert.match(await p.locator('.section-label', { hasText: 'まとめ' }).innerText(), /週ごと/);
+  assert.match(await p.locator('.tr-row', { hasText: '10/12〜' }).innerText(), /7日/);
+  if (shots) { await p.locator('.tr-row').first().scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'habit-stats-trend.png') }); }
+  await p.locator('.hm-cell', { hasText: /^14/ }).first().click();
+  await p.locator('.hm-jump').click();
+  assert.equal(await p.locator('.tab-btn.active').getAttribute('data-tab'), 'today');
+  assert.equal(await p.locator('.hb-top h1').innerText(), '10/14(水)');
 
   // 11) 再読み込みしても状態が残り、ゴールドが二重に増えない
   await p.locator('[data-tab="today"]').click();
