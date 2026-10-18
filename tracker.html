@@ -482,8 +482,6 @@ textarea.field-input { height:76px; resize:vertical; }
       <span>Weekly <span class="t-red">Quest</span><span class="t-jp">週間クエスト</span></span>
       <span>
         <a class="mini-btn" href="gym.html" style="text-decoration:none">GYM</a>
-        <a class="mini-btn" href="music.html" style="text-decoration:none">MUSIC</a>
-        <a class="mini-btn" href="spots.html" style="text-decoration:none">TOUR</a>
         <button type="button" class="mini-btn" id="nl-import" title="Neuro Learnの学習を取り込む">🧠</button>
         <button type="button" class="mini-btn" id="menu-open">設定</button>
       </span>
@@ -1489,10 +1487,16 @@ document.getElementById("menu-modal").addEventListener("click",e=>{
 });
 
 // ── Data export / import ──────────────────────────────────────────────────────
+// 廃止した音楽・めぐり画面の記録。画面はないが端末には残っているので、書き出しに入れて失わないようにする
+const ARCHIVED_KEYS=["mus_logs","mus_custom","spot_logs","spot_cats"];
 document.getElementById("export-btn").onclick=()=>{
   const habitData={};
   ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1"].forEach(k=>{try{const v=JSON.parse(localStorage.getItem(k));if(v!==null)habitData[k]=v;}catch(e){}});
-  const blob=new Blob([JSON.stringify({records,habitData})],{type:"application/json"});
+  const archivedData={};
+  ARCHIVED_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v!==null)archivedData[k]=v;});
+  const out={records,habitData};
+  if(Object.keys(archivedData).length)out.archivedData=archivedData;
+  const blob=new Blob([JSON.stringify(out)],{type:"application/json"});
   const a=document.createElement("a");
   a.href=URL.createObjectURL(blob);
   a.download="weekly-quest-data.json";
@@ -1511,6 +1515,8 @@ document.getElementById("import-btn").onclick=()=>{
         records=d.records;
         if(d.habitData&&typeof d.habitData==="object")
           ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1"].forEach(k=>{if(d.habitData[k]!==undefined)localStorage.setItem(k,JSON.stringify(d.habitData[k]));});
+        if(d.archivedData&&typeof d.archivedData==="object")
+          ARCHIVED_KEYS.forEach(k=>{if(typeof d.archivedData[k]==="string")localStorage.setItem(k,d.archivedData[k]);});
         saveData();render();
       }catch(err){ alert("データを読み込めませんでした"); }
     });

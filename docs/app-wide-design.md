@@ -1,6 +1,6 @@
 # App-wide visual refresh
 
-Gym Quest (PR #18) の黒〜チャコール・柔らかなカード・控えめなゴールドを4画面で共有する。
+Gym Quest (PR #18) の黒〜チャコール・柔らかなカード・控えめなゴールドを週クエとGymで共有する（音楽・めぐりの画面は2026-10に廃止）。
 
 - `css/weekly-theme.css`: 共通トークン、ヘッダー、カード、入力、モーダル、下部ナビ、レスポンシブと reduced motion。
 - 既存インラインCSSの後に読み込み、Gym固有CSSはさらに後に読み込む。`body[data-app]` で音楽のラベンダー、めぐりのセージを限定。予定カテゴリ色は従来通り。
@@ -24,6 +24,6 @@ Chromium: 320/375/390/430/1024pxで4画面の全タブを確認。予定追加�
 
 スクリーンショットはテスト用データであり、実際のユーザーログではない。
 
-| Weekly | 育成 | 音楽 | めぐり |
-| --- | --- | --- | --- |
-| ![Weekly](screenshots/weekly-mobile.png) | ![育成](screenshots/weekly-growth-mobile.png) | ![音楽](screenshots/music-mobile.png) | ![めぐり](screenshots/spots-mobile.png) |
+| Weekly | 育成 |
+| --- | --- |
+| ![Weekly](screenshots/weekly-mobile.png) | ![育成](screenshots/weekly-growth-mobile.png) |

@@ -27,8 +27,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_PATH ? { executablePath: process.env.BROWSER_PATH } : {}), args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
   const errors = [];
 
-  // 4画面とも共通スクリプトで登録され、ステータスバーは不透明の black
-  for (const page of ['tracker', 'gym', 'music', 'spots']) {
+  // 2画面とも共通スクリプトで登録され、ステータスバーは不透明の black
+  for (const page of ['tracker', 'gym']) {
     const html = fs.readFileSync(path.join(root, page + '.html'), 'utf8');
     assert.match(html, /apple-mobile-web-app-status-bar-style" content="black"/, page);
     assert.match(html, /<script src="js\/pwa-update\.js"><\/script>/, page);
@@ -76,6 +76,6 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   assert.equal(await loads(), 3);
 
   assert.deepEqual(errors, []);
-  console.log('PWA update: solid status bar on four pages, no reload on first install, waits for open sheet, reloads once on new version.');
+  console.log('PWA update: solid status bar on both pages, no reload on first install, waits for open sheet, reloads once on new version.');
   await browser.close(); server.close();
 })().catch(e => { console.error(e); server.close(); process.exit(1); });

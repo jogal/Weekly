@@ -45,8 +45,9 @@ const server = http.createServer((req,res)=>{
   }
   const shots=process.env.QA_SCREENSHOTS;
   if(shots)fs.mkdirSync(shots,{recursive:true});
+  // 廃止した めぐり画面の記録。週クエの書き出しに入り、復元で戻ることを確かめる
   const seed={spot_logs:[{t:'2026-09-27T09:00:00+09:00',cat:'cafe',place:'近所のカフェ',memo:'窓辺の席',rating:4}]};
-  for(const page of ['tracker','music','spots','gym']) {
+  for(const page of ['tracker','gym']) {
     console.log('Checking',page);
     const p=await pageAt(page,390,seed);
     for(const width of [320,375,390,430,1024]) {
@@ -67,28 +68,24 @@ const server = http.createServer((req,res)=>{
     if(page==='tracker') {
       await p.locator('.hb-card',{hasText:'自炊'}).locator('.hb-ring').click();
       assert.match(await p.evaluate(()=>localStorage.getItem('wt_records')),/cooking/);
+      await p.locator('#menu-open').click();
+      const [dl]=await Promise.all([p.waitForEvent('download'),p.locator('#export-btn').click()]);
+      const backup=JSON.parse(fs.readFileSync(await dl.path(),'utf8'));
+      assert.match(backup.archivedData.spot_logs,/窓辺の席/);
+      assert.equal(backup.archivedData.mus_logs,undefined);
+      await p.evaluate(()=>localStorage.removeItem('spot_logs'));
+      const file=path.join(require('node:os').tmpdir(),'weekly-backup-test.json');fs.writeFileSync(file,JSON.stringify(backup));
+      await p.locator('#menu-open').click();
+      const [chooser]=await Promise.all([p.waitForEvent('filechooser'),p.locator('#import-btn').click()]);
+      await chooser.setFiles(file);
+      await p.waitForFunction(()=>!!localStorage.getItem('spot_logs'));
+      assert.match(await p.evaluate(()=>localStorage.getItem('spot_logs')),/窓辺の席/);
       await p.clock.runFor(3000);await p.evaluate(()=>document.fonts.ready);
       if(shots)await p.screenshot({path:path.join(shots,'weekly-mobile.png')});
       await p.locator('[data-tab="status"]').click();
       await p.waitForFunction(()=>document.querySelector('#status-view .hero-sprite')?.naturalWidth>0);
       assert.ok(await p.locator('#status-view .hero-sprite').evaluate(img=>img.naturalWidth>0));
       if(shots)await p.screenshot({path:path.join(shots,'weekly-growth-mobile.png')});
-    }
-    if(page==='music') {
-      await p.locator('#log-btn').click();
-      assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('mus_logs')).length),1);
-      assert.match(await p.evaluate(()=>localStorage.getItem('wt_records')),/instrument/);
-      await p.locator('#timer-btn').click();
-      assert.ok(await p.evaluate(()=>JSON.parse(localStorage.getItem('mus_timer'))));
-      await p.reload();assert.ok(await p.locator('#timer-btn').evaluate(e=>e.classList.contains('running')));
-      if(shots)await p.screenshot({path:path.join(shots,'music-mobile.png')});
-    }
-    if(page==='spots') {
-      await p.locator('.place-btn').first().click();await p.locator('#memo-input').fill('また来たい');await p.locator('#log-btn').click();
-      const logs=await p.evaluate(()=>JSON.parse(localStorage.getItem('spot_logs')));
-      assert.equal(logs.length,2);assert.equal(logs[0].memo,'窓辺の席');assert.equal(logs[1].memo,'また来たい');
-      await p.reload();assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('spot_logs')).length),2);
-      if(shots)await p.screenshot({path:path.join(shots,'spots-mobile.png')});
     }
     await p.locator('#menu-open').click();await p.locator('#menu-close').click();
     await p.evaluate(async()=>{await navigator.serviceWorker.register('./sw.js');await navigator.serviceWorker.ready;});
@@ -98,6 +95,6 @@ const server = http.createServer((req,res)=>{
     await p.context().close();
   }
   assert.deepEqual(errors,[]);
-  console.log('All four apps: five widths, every tab, settings, recording, timer resume, Weekly link, offline passed.');
+  console.log('Weekly and Gym: five widths, every tab, settings, recording, offline passed.');
   await browser.close();server.close();
 })().catch(e=>{console.error(e);server.close();process.exit(1);});
