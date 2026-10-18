@@ -6,8 +6,6 @@
   --accent:var(--gold); --surface:linear-gradient(135deg,#16181d,#111216);
 }
 body[data-app="tracker"] { --green:var(--gold); }
-body[data-app="music"] { --note:#b4b3de; --accent:var(--note); }
-body[data-app="spots"] { --acc:#9ac8b8; --accent:var(--acc); }
 #app { max-width:760px; margin-inline:auto; min-width:0; }
 /* 高さの単位(100vh/100dvh)に頼らず、画面の四辺に固定して全高を使う。
    iPhoneのホーム画面アプリで下に帯が残る主な原因は透過ステータスバーなので、
@@ -36,8 +34,6 @@ body:not([data-app="tracker"]) #content { padding:8px 16px 24px; }
 .btn,.nav-btn,.add-btn,.rec-btn,.gcal-btn,.period-nav button,.step-btn,.item-btn,.place-btn,.menu-item,#timer-btn { border-radius:10px; }
 .btn,.nav-btn,.add-btn,.rec-btn,.menu-item { min-height:40px; }
 .btn-primary,#log-btn { background:linear-gradient(120deg,#eed4a2,#d1aa6b); border:0; color:#19160f; letter-spacing:.08em; border-radius:12px; }
-body[data-app="music"] #log-btn { background:linear-gradient(120deg,#d2cde9,#aaa6d3); }
-body[data-app="spots"] #log-btn:not(:disabled) { background:linear-gradient(120deg,#c2ddd1,#91bbac); }
 #log-btn:disabled { background:var(--panel2); color:var(--faint); }
 .step-btn,.item-btn,.place-btn { background:#ffffff04; }
 #input-card { border-top:1px solid var(--accent); }
