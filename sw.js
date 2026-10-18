@@ -1,6 +1,10 @@
-const CACHE = "weekly-quest-v79";
+const CACHE = "weekly-quest-v80";
 const ASSETS = [
   "./tracker.html",
+  "./css/private-sync.css",
+  "./js/private-sync-client.mjs",
+  "./js/private-sync-protocol.mjs",
+  "./js/private-sync-ui.mjs",
   "./gym.html",
   "./css/gym-quest.css",
   "./css/weekly-theme.css",
@@ -57,24 +61,42 @@ self.addEventListener("install", e => {
   );
 });
 
+const isPrivateRoute = url => /^\/(?:api|auth)(?:\/|$)/.test(new URL(url).pathname);
+
 self.addEventListener("activate", e => {
   e.waitUntil(
     caches.keys()
       .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      // Also scrub private responses from the retained cache (older workers cached every GET).
+      .then(() => caches.open(CACHE))
+      .then(async cache => {
+        const requests = await cache.keys();
+        await Promise.all(requests.filter(request => isPrivateRoute(request.url)).map(request => cache.delete(request)));
+      })
       .then(() => self.clients.claim())
   );
 });
 
+// Prove to the new frontend that a legacy cache-all worker is no longer in control.
+self.addEventListener("message", e => {
+  if (e.data?.type === "weekly-private-sync-cache-check" && e.data.version === 1) {
+    e.ports?.[0]?.postMessage({ type: "weekly-private-sync-cache-safe", version: 1 });
+  }
+});
+
 // Cache-first with background refresh; fonts and same-origin GETs get cached at runtime
 self.addEventListener("fetch", e => {
+  // Never read from or write to a cache for OAuth, session, or sync routes.
+  // Let the browser use the network even when an old cache has a matching response.
+  if (isPrivateRoute(e.request.url)) return;
   if (e.request.method !== "GET") return;
-  const cacheable = e.request.url.startsWith(self.location.origin)
+  const cacheable = new URL(e.request.url).origin === self.location.origin
     || e.request.url.includes("fonts.googleapis.com")
     || e.request.url.includes("fonts.gstatic.com");
   e.respondWith(
     caches.match(e.request).then(hit => {
       const net = fetch(e.request).then(res => {
-        if (res.ok && cacheable) {
+        if (res.ok && cacheable && !res.redirected && !/(?:private|no-store)/i.test(res.headers.get("Cache-Control") || "")) {
           const copy = res.clone();
           caches.open(CACHE).then(c => c.put(e.request, copy)).catch(() => {});
         }

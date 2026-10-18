@@ -9,6 +9,7 @@
 <meta name="theme-color" content="#08090b">
 <title>週間クエスト</title>
 <link rel="manifest" href="manifest.json">
+<link rel="stylesheet" href="css/private-sync.css">
 <link rel="apple-touch-icon" href="icons/avatar/novice.png" id="home-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -617,6 +618,7 @@ textarea.field-input { height:76px; resize:vertical; }
   <div class="modal-box">
     <h3 class="modal-title">⚙ 設定</h3>
     <button type="button" class="menu-item" id="nl-open">🧠 Neuro Learn 自動同期</button>
+    <button type="button" class="menu-item" id="private-sync-open">☁ Drive に選んだ記録を同期</button>
     <button type="button" class="menu-item" id="export-btn">💾 データを書き出す</button>
     <button type="button" class="menu-item" id="import-btn">📂 データを復元する</button>
     <div class="btn-row">
@@ -845,6 +847,7 @@ function getTracks(xp){
 // ── Save to localStorage ──────────────────────────────────────────────────────
 function persist(){
   localStorage.setItem("wt_records",   JSON.stringify(records));
+  window.dispatchEvent(new CustomEvent("weekly:local-saved", { detail: { key: "wt_records" } }));
 }
 function saveData(){
   persist();
@@ -1703,7 +1706,10 @@ import * as T from "./js/todo-core.mjs";
 import * as RC from "./js/reading-core.mjs";
 
 const read = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
-const write = (k, v) => localStorage.setItem(k, JSON.stringify(v));
+const write = (k, v) => {
+  localStorage.setItem(k, JSON.stringify(v));
+  window.dispatchEvent(new CustomEvent("weekly:local-saved", { detail: { key: k } }));
+};
 const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
 const fmt = n => Math.round(n).toLocaleString("ja-JP");
 const GOAL_LABEL = { check: "チェック", count: "回数", minutes: "時間" };
@@ -3277,6 +3283,7 @@ function renderStatsOverview(wrap) {
 window.HabitUI = { renderToday, openDay: k => { selDay = k; stripFocus = true; }, renderRewardCard, renderHabitStats, renderRoutineStats, renderStatsOverview, updateQuestBadge: () => updateQuestBadge() };
 if (["today", "status", "stats"].includes(tab)) render();
 </script>
+<script type="module" src="js/private-sync-ui.mjs"></script>
 <script src="js/backup-file.js"></script>
 <script src="js/pwa-update.js"></script>
 </body>
