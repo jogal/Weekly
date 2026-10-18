@@ -9,7 +9,7 @@
 <meta name="theme-color" content="#08090b">
 <title>週間クエスト</title>
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon-180.png">
+<link rel="apple-touch-icon" href="icons/avatar/novice.png" id="home-icon">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow+Condensed:wght@500;600;700&family=Noto+Sans+JP:wght@400;500;700&display=swap" rel="stylesheet">
@@ -893,6 +893,20 @@ window.addEventListener('resize',()=>{
     if(img.complete&&img.naturalWidth&&img.getClientRects().length)sizeHeroSprite(img);
   });
 });
+// Home-screen icon = the hero's face for the current job × tier
+// (icons/avatar/, made by tools/make_home_icon.py). iPhone copies the
+// apple-touch-icon once, when "Add to Home Screen" is tapped, so the icon shows
+// the avatar as of that moment; it does not follow later level-ups.
+const AVATAR_ICONS=new Set(["bard","bard_lv1","bard_lv10","bard_lv20","bard_lv30","bard_lv40","blackmage","chef","monk","monk_lv1","monk_lv10","monk_lv20","monk_lv30","monk_lv40","novice","redmage_lv1","redmage_lv10","redmage_lv20","redmage_lv30","redmage_lv40","whitemage","whitemage_lv1","whitemage_lv10","whitemage_lv20","whitemage_lv30","whitemage_lv40"]);
+function updateHomeIcon(){
+  const link=document.getElementById("home-icon");
+  if(!link)return;
+  const name=spriteCandidates(jobState(getTracks(computeXP())))
+    .map(p=>p.match(/^sprites\/(\w+?)(_lv\d+)?(?:x2)?\.png$/))
+    .filter(Boolean).map(m=>m[1]+(m[2]||"")).find(n=>AVATAR_ICONS.has(n));
+  const href=`icons/avatar/${name||"novice"}.png`;
+  if(link.getAttribute("href")!==href)link.setAttribute("href",href);
+}
 // Fullscreen character viewer
 function openHeroZoom(src,jobName,lvl){
   const ov=document.getElementById("hero-zoom");
@@ -1773,6 +1787,7 @@ function render(){
   else if(tab==="stats")renderStats();
   else if(tab==="status")renderStatus();
   window.HabitUI?.updateQuestBadge();
+  updateHomeIcon();
 }
 render();
 
