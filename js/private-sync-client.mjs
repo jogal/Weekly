@@ -3,14 +3,15 @@
 export const SYNC_KEY = "wt_private_sync_v1";
 export const STOP_KEY = "wt_private_sync_stop_v1";
 export const SOURCE_KEYS = new Set(["wt_records", "wt_habits_v1", "wt_habit_log_v1", "wt_todo_v1", "wt_reading_v1"]);
-export const CONSENT_VERSION = 2;
+export const CONSENT_VERSION = 3;
 const clone = value => JSON.parse(JSON.stringify(value));
 const err = code => Object.assign(new Error(code), { code });
-const BLOCKING = new Set(["CONFLICT", "DEVICE_MISMATCH", "RECONNECT_REQUIRED", "UNAUTHENTICATED", "REVIEW_REQUIRED", "INVALID_LOCAL_DATA", "NOT_CONFIGURED", "SYNC_DISABLED", "PENDING_DISABLED", "SCOPE_REVIEW_REQUIRED", "LEGACY_PENDING_REVIEW_REQUIRED", "PAYLOAD_TOO_LARGE"]);
+const BLOCKING = new Set(["CONFLICT", "DEVICE_MISMATCH", "RECONNECT_REQUIRED", "UNAUTHENTICATED", "REVIEW_REQUIRED", "INVALID_LOCAL_DATA", "NOT_CONFIGURED", "SYNC_DISABLED", "PENDING_DISABLED", "SCOPE_REVIEW_REQUIRED", "LEGACY_PENDING_REVIEW_REQUIRED", "PAYLOAD_TOO_LARGE", "SNAPSHOT_LIMIT"]);
 const ERROR_CODES = { not_configured: "NOT_CONFIGURED", auth_required: "UNAUTHENTICATED", reconnect_required: "RECONNECT_REQUIRED",
   device_conflict: "DEVICE_MISMATCH", revision_conflict: "CONFLICT", operation_conflict: "CONFLICT", pending_operation: "CONFLICT",
   external_change: "CONFLICT", sync_disabled: "SYNC_DISABLED", pending_disabled: "PENDING_DISABLED", csrf_failed: "UNAUTHENTICATED", owner_forbidden: "OWNER_FORBIDDEN",
   scope_review_required: "SCOPE_REVIEW_REQUIRED", invalid_payload: "INVALID_LOCAL_DATA", invalid_request: "INVALID_REQUEST", store_unavailable: "SERVER_ERROR",
+  snapshot_limit: "SNAPSHOT_LIMIT", provider_rate_limited: "RATE_LIMITED",
   provider_unavailable: "SERVER_ERROR", retry_later: "SERVER_ERROR", origin_forbidden: "ORIGIN_FORBIDDEN" };
 const codeOf = e => ERROR_CODES[e?.code] || e?.code || (e?.name === "AbortError" ? "PAUSED" : "NETWORK_ERROR");
 
@@ -69,7 +70,9 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
   const defaults = () => ({ version: 2, deviceId: null, enabled: false, consentVersion: null,
     consentToken: null, revision: 0, lastSyncedAt: null, lastPayload: null, queue: null, blocked: null });
   const assertInterface = () => { if (uiConsentVersion !== CONSENT_VERSION) throw err("UPDATE_REQUIRED"); };
-  const legacyPending = state => !!state.queue && (state.version !== 2 || state.queue.payload?.schemaVersion !== 2);
+  // Consent identifies the destination as well as scope. A Drive queue must never
+  // become a Notion write, even when its payload already uses schema 2.
+  const legacyPending = state => !!state.queue && (state.version !== 2 || state.consentVersion !== CONSENT_VERSION || state.queue.payload?.schemaVersion !== 2);
   function decode(saved) {
     if (!saved) return defaults();
     const m = JSON.parse(saved);
@@ -78,7 +81,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
       (m.queue && (!["upload", "enable"].includes(m.queue.action) || typeof m.queue.operationId !== "string" ||
         !Number.isInteger(m.queue.baseRevision) || m.queue.baseRevision < 0 || !m.queue.payload))) throw err("LOCAL_STATE_INVALID");
     if (m.queue) {
-      if (legacyPending(m)) validateLegacyPayload(m.queue.payload);
+      if (m.queue.payload.schemaVersion === 1) validateLegacyPayload(m.queue.payload);
       else validatePayload(m.queue.payload);
     }
     const next = Object.fromEntries(Object.entries(defaults()).map(([key, fallback]) => [key, m[key] ?? fallback]));
@@ -146,7 +149,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
   }
   function pendingReview() {
     if (!meta.queue) throw err("NO_PENDING_OPERATION");
-    if (legacyPending(meta)) validateLegacyPayload(meta.queue.payload);
+    if (meta.queue.payload.schemaVersion === 1) validateLegacyPayload(meta.queue.payload);
     else validatePayload(meta.queue.payload);
     return { kind: "pending", incompatible: legacyPending(meta), operationId: meta.queue.operationId, payload: clone(meta.queue.payload),
       json: JSON.stringify(meta.queue.payload, null, 2) };
@@ -211,7 +214,7 @@ export function createPrivateSyncClient({ storage, fetch: request, buildPayload,
     const queued = meta.queue;
     if (queued?.payload?.schemaVersion !== 2) throw err("LEGACY_PENDING_REVIEW_REQUIRED");
     validatePayload(queued.payload);
-    const response = await api(queued.action, { deviceId: meta.deviceId, baseRevision: queued.baseRevision,
+    const response = await api(queued.action, { consentVersion: CONSENT_VERSION, deviceId: meta.deviceId, baseRevision: queued.baseRevision,
       operationId: queued.operationId, payload: queued.payload });
     if (response.deviceId !== meta.deviceId || !Number.isInteger(response.revision) || response.revision <= queued.baseRevision ||
       typeof response.lastSyncedAt !== "string" || typeof response.enabled !== "boolean") throw err("INVALID_RESPONSE");

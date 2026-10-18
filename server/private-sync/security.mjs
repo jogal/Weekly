@@ -27,11 +27,16 @@ export function readConfig(env = process.env) {
     if (!clientId?.endsWith('.apps.googleusercontent.com') || !clientSecret ||
       !/^[A-Za-z0-9_-]{1,255}$/.test(ownerSub || '') || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail || '') ||
       !env.UPSTASH_REDIS_REST_TOKEN) return null;
+    const notionToken = env.PRIVATE_SYNC_NOTION_TOKEN;
+    const notionPageId = env.PRIVATE_SYNC_NOTION_PAGE_ID;
+    if (typeof notionToken !== 'string' || !notionToken || notionToken.length > 8192 || /[\r\n]/.test(notionToken) ||
+      !/^[a-f0-9]{32}$|^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i.test(notionPageId || '') ||
+      env.PRIVATE_SYNC_NOTION_PRIVATE_CONFIRMED !== '1') return null;
     const namespace = env.PRIVATE_SYNC_REDIS_PREFIX || 'weekly:private-sync';
     if (!/^[A-Za-z0-9:_-]{1,80}$/.test(namespace)) return null;
-    const binding = digest(JSON.stringify([origin, clientId, ownerSub, ownerEmail.toLowerCase()]));
+    const binding = digest(JSON.stringify(['notion-v1', origin, clientId, ownerSub, ownerEmail.toLowerCase(), notionPageId.replaceAll('-', '').toLowerCase()]));
     return { origin, callback: `${origin}/api/private-sync?action=callback`, clientId, clientSecret,
-      ownerSub, ownerEmail: ownerEmail.toLowerCase(), key, binding,
+      ownerSub, ownerEmail: ownerEmail.toLowerCase(), key, binding, notionToken, notionPageId,
       prefix: `${namespace}:${binding}:`, redisUrl: redisUrl.origin, redisToken: env.UPSTASH_REDIS_REST_TOKEN };
   } catch { return null; }
 }

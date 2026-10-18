@@ -3,14 +3,14 @@ import { validatePayload, MAX_PAYLOAD_BYTES } from '../../js/private-sync-protoc
 import { readConfig, token, digest, equals, identifier, SyncError } from './security.mjs';
 import { createStore } from './store.mjs';
 import { createGoogle } from './google.mjs';
+import { createNotion } from './notion.mjs';
 
 const COOKIE = '__Host-weekly-sync';
 const SESSION_SECONDS = 30 * 24 * 60 * 60;
 const ANON_SECONDS = 10 * 60;
 const MAX_BODY_BYTES = MAX_PAYLOAD_BYTES + 4 * 1024;
-// Category-wide v2 sharing is a new consent boundary. An old selective opt-in
-// must never authorize automatic uploads under the expanded schema.
-const CONSENT_VERSION = 2;
+// Notion is a new destination/consent boundary; old Drive clients cannot upload.
+const CONSENT_VERSION = 3;
 const emptyStatus = { configured: false, connected: false, csrfToken: null, enabled: false, deviceId: null, revision: 0, lastSyncedAt: null, authError: null };
 
 function json(res, status, value) { return res.status(status).json(value); }
@@ -54,7 +54,7 @@ function sameContent(a, b) { return digest(JSON.stringify(a)) === digest(JSON.st
 
 // Dependencies are injected only by local tests. The production entry point below
 // always uses validated server environment variables and the encrypted Redis store.
-export function createHandler({ config, store, google, now = Date.now }) {
+export function createHandler({ config, store, google, notion, now = Date.now }) {
   async function getSession(req) {
     const id = cookieId(req);
     if (!id) return { name: null, raw: null, value: null };
@@ -72,24 +72,13 @@ export function createHandler({ config, store, google, now = Date.now }) {
     cookie(res, sid, seconds);
     return { name, value };
   }
-  async function ownerWithToken(session) {
-    for (let attempt = 0; attempt < 4; attempt++) {
-      const record = await store.get('owner');
-      authenticate(session, record.value);
-      if (record.value.credentials.expiresAt > now() + 60000) return record;
-      let refreshed;
-      try { refreshed = await google.refresh(record.value.credentials); }
-      catch (error) {
-        if (error.code === 'auth_required') {
-          await store.cas('owner', record.raw, { ...record.value, credentials: null, enabled: false });
-        }
-        throw error;
-      }
-      if (await store.cas('owner', record.raw, { ...record.value, credentials: refreshed })) continue;
-    }
-    throw new SyncError('retry_later', 503);
+  async function authenticatedOwner(session) {
+    const record = await store.get('owner');
+    authenticate(session, record.value);
+    return record;
   }
   async function synchronize(session, data, enabling) {
+    if (data.consentVersion !== CONSENT_VERSION) throw new SyncError('scope_review_required', 409);
     if (!identifier(data.deviceId) || !identifier(data.operationId) || !Number.isSafeInteger(data.baseRevision) || data.baseRevision < 0) {
       throw new SyncError('invalid_request', 400);
     }
@@ -99,7 +88,7 @@ export function createHandler({ config, store, google, now = Date.now }) {
     const hash = digest(JSON.stringify(payload));
     let reserved = null;
     for (let attempt = 0; attempt < 5; attempt++) {
-      const record = await ownerWithToken(session); const owner = record.value;
+      const record = await authenticatedOwner(session); const owner = record.value;
       if (owner.deviceId !== data.deviceId) throw new SyncError('device_conflict', 409);
       if (owner.lastOperation?.operationId === data.operationId) {
         if (owner.lastOperation.hash !== hash || owner.lastOperation.baseRevision !== data.baseRevision) throw new SyncError('operation_conflict', 409);
@@ -124,34 +113,31 @@ export function createHandler({ config, store, google, now = Date.now }) {
       // definite non-application for this operation. Uncertain pending writes use
       // pending_disabled below instead.
       if (!enabling && !owner.enabled) throw new SyncError('sync_disabled', 409);
-      const fileId = owner.fileId || await google.reserveId(owner.credentials.accessToken);
-      const next = { ...owner, fileId, pending: { operationId: data.operationId, hash, payload,
-        baseRevision: owner.revision, revision: owner.revision + 1, expectedETag: owner.fileETag,
+      const next = { ...owner, pending: { operationId: data.operationId, hash, payload,
+        baseRevision: owner.revision, revision: owner.revision + 1, notion: null,
         syncedAt: new Date(now()).toISOString() } };
       if (await store.cas('owner', record.raw, next)) { reserved = next; break; }
     }
     if (!reserved) throw new SyncError('retry_later', 503);
     const expected = envelopeFor(reserved);
-    const accessToken = reserved.credentials.accessToken;
-    let remote = await google.inspect(accessToken, reserved.fileId);
-    if (!remote || !sameContent(remote.content, expected)) {
-      if ((!remote && reserved.revision !== 0) || (remote && remote.etag !== reserved.pending.expectedETag)) {
-        throw new SyncError('external_change', 409);
-      }
-      if (!enabling && !reserved.enabled) throw new SyncError('pending_disabled', 409);
-      // Verify the durable authorization fence immediately before the only Drive
-      // write. Disconnect invalidates the generation; a request already on the
-      // wire can still finish, which cannot be undone atomically across services.
-      const fence = (await store.get('owner')).value;
+    const authorize = async () => {
+      const record = await store.get('owner'); const fence = record.value;
       authenticate(session, fence);
-      if (fence.pending?.operationId !== data.operationId || fence.pending?.hash !== hash) throw new SyncError('revision_conflict', 409);
+      if (fence.pending?.operationId !== data.operationId || fence.pending?.hash !== hash ||
+          fence.revision !== data.baseRevision) throw new SyncError('revision_conflict', 409);
       if (!enabling && !fence.enabled) throw new SyncError('pending_disabled', 409);
-      await google.write(accessToken, reserved.fileId, expected, remote?.etag || null);
-      // Includes successful responses, 409 duplicate creates and 412 races. A
-      // timeout throws while keeping the pending operation durably retryable.
-      remote = await google.inspect(accessToken, reserved.fileId);
-      if (!remote || !sameContent(remote.content, expected)) throw new SyncError('external_change', 409);
-    }
+      return record;
+    };
+    const remote = await notion.publish(expected, {
+      state: reserved.pending.notion || null,
+      authorize,
+      checkpoint: async (previous, next) => {
+        const record = await authorize();
+        if (!sameContent(record.value.pending.notion || null, previous)) return false;
+        return store.cas('owner', record.raw, { ...record.value,
+          pending: { ...record.value.pending, notion: next } });
+      },
+    });
     for (let attempt = 0; attempt < 5; attempt++) {
       const record = await store.get('owner'); const owner = record.value;
       authenticate(session, owner);
@@ -159,7 +145,7 @@ export function createHandler({ config, store, google, now = Date.now }) {
       if (owner.pending?.operationId !== data.operationId || owner.pending?.hash !== hash || owner.revision !== data.baseRevision) {
         throw new SyncError('revision_conflict', 409);
       }
-      const next = { ...owner, pending: null, revision: expected.revision, fileETag: remote.etag,
+      const next = { ...owner, pending: null, revision: expected.revision, snapshotId: remote.snapshotId,
         lastSyncedAt: expected.syncedAt, enabled: enabling || owner.enabled,
         consentVersion: enabling ? CONSENT_VERSION : owner.consentVersion,
         lastOperation: { operationId: data.operationId, hash, baseRevision: data.baseRevision } };
@@ -204,7 +190,7 @@ export function createHandler({ config, store, google, now = Date.now }) {
         for (let attempt = 0; attempt < 5; attempt++) {
           const record = await store.get('owner'); const owner = record.value;
           if (owner && owner.deviceId !== oauth.value.deviceId) throw new SyncError('device_conflict', 409);
-          const next = { ...(owner || { fileId: null, fileETag: null, revision: 0, lastSyncedAt: null, lastOperation: null, pending: null }),
+          const next = { ...(owner || { snapshotId: null, revision: 0, lastSyncedAt: null, lastOperation: null, pending: null }),
             deviceId: oauth.value.deviceId, generation: token(), credentials, enabled: false };
           if (await store.cas('owner', record.raw, next)) { connected = next; break; }
         }
@@ -242,7 +228,7 @@ export function createHandler({ config, store, google, now = Date.now }) {
         }
         throw new SyncError('retry_later', 503);
       }
-      const data = body(req, ['deviceId', 'baseRevision', 'operationId', 'payload']);
+      const data = body(req, ['deviceId', 'baseRevision', 'operationId', 'payload', 'consentVersion']);
       return json(res, 200, await synchronize(session.value, data, action === 'enable'));
     } catch (error) {
       // No upstream response, request URL, token, payload, or exception is logged.
@@ -264,5 +250,5 @@ export function createHandler({ config, store, google, now = Date.now }) {
 
 export default async function handler(req, res) {
   const config = readConfig();
-  return createHandler({ config, store: config && createStore(config), google: config && createGoogle(config) })(req, res);
+  return createHandler({ config, store: config && createStore(config), google: config && createGoogle(config), notion: config && createNotion(config) })(req, res);
 }

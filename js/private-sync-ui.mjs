@@ -3,15 +3,17 @@ import { createPrivateSyncClient, SOURCE_KEYS, SYNC_KEY, STOP_KEY } from "./priv
 
 const messages = {
   NOT_CONFIGURED: "同期サーバーは未設定です。この端末の保存と書き出しはそのまま使えます。",
-  UNAUTHENTICATED: "接続を確認できません。Google に再接続し、内容を確認してから同期を有効にしてください。",
-  RECONNECT_REQUIRED: "Google への再接続が必要です。端末の記録と送信待ちは残っています。",
+  UNAUTHENTICATED: "接続を確認できません。Google で再度本人確認し、内容を確認してから同期を有効にしてください。",
+  RECONNECT_REQUIRED: "Google での本人確認が必要です。端末の記録と送信待ちは残っています。",
   DEVICE_MISMATCH: "別の端末に結び付いた同期です。この端末から上書きできません。元の端末を使ってください。",
-  CONFLICT: "Drive 側の更新と競合しました。自動上書きは停止しています。端末の書き出しを保存し、前回の送信待ちを確認して再試行してください。競合が続く場合は、Drive の変更と元の端末を確認し、同期サーバーの管理者に復旧を依頼してください。",
+  CONFLICT: "Notion 側の記録や同期状態と競合しました。自動送信は停止しています。端末の書き出しを保存し、前回の送信待ちを確認して再試行してください。競合が続く場合は、Notion の変更と元の端末を確認し、同期サーバーの管理者に復旧を依頼してください。",
   REVIEW_REQUIRED: "確認後に送信内容が変わったか、同期が停止しています。最新の JSON を確認してから再度有効にしてください。",
-  SCOPE_REVIEW_REQUIRED: "同期の対象範囲が更新されました。以前の許可では送信しません。4 種類すべての進捗と今後追加する項目が対象になることを確認し、改めて有効にしてください。",
-  LEGACY_PENDING_REVIEW_REQUIRED: "旧方式の未確認の送信が残っています。内容を変更せず端末に保持し、自動送信も新しい同期の有効化も停止しています。下の前回の JSON を確認し、同期サーバーの管理者に復旧を依頼してください。",
+  SCOPE_REVIEW_REQUIRED: "保存先を Notion に変更しました。以前の Drive 同期の許可では送信しません。Notion の保存先と共有設定、4 種類の進捗と今後追加する項目を確認し、改めて有効にしてください。",
+  LEGACY_PENDING_REVIEW_REQUIRED: "以前の Drive 同期など、旧方式の未確認の送信が残っています。Notion には転送しません。内容を変更せず端末に保持し、自動送信も新しい同期の有効化も停止しています。下の前回の JSON を確認し、同期サーバーの管理者に復旧を依頼してください。",
   INVALID_LOCAL_DATA: "対象の記録が未作成・空・破損、または対応できない形式です。端末の記録を確認してください。確認できないデータは送信しません。",
   PAYLOAD_TOO_LARGE: "同期対象の履歴が安全に送信できる容量を超えています。端末の記録は変更していません。一部を切り捨てたり送信したりせず、同期を停止しています。端末の書き出しを保存し、同期サーバーの管理者に確認してください。",
+  SNAPSHOT_LIMIT: "Notion スナップショットの件数または容量の上限に達したため、自動送信を停止しました。端末の記録と送信待ちは保持しています。保存先を確認し、同期サーバーの管理者に相談してから再試行してください。",
+  RATE_LIMITED: "Notion の一時的な利用制限で送信できませんでした。送信待ちは保持しています。少し時間を置いて再試行してください。",
   LOCAL_STATE_INVALID: "同期の設定を読み込めませんでした。自動同期はオフです。端末の記録は変更していません。",
   STOP_NOT_SAVED: "この画面の送信は止めましたが、停止状態を端末に保存できませんでした。再起動すると同期が再開する可能性があります。空き容量・保存設定を確認し、再度停止してください。",
   LOCAL_QUEUE_FAILED: "送信待ちを端末に保存できないため、送信していません。端末の空き容量を確認してください。",
@@ -35,10 +37,13 @@ const stamp = value => value ? new Date(value).toLocaleString("ja-JP") : "まだ
 const overlay = document.createElement("div");
 overlay.className = "overlay ps-overlay"; overlay.id = "private-sync-modal"; overlay.hidden = true;
 overlay.innerHTML = `<section class="modal-box ps-box" role="dialog" aria-modal="true" aria-labelledby="ps-title" tabindex="-1">
-  <h3 class="modal-title" id="ps-title">Drive に進捗を自動同期</h3>
+  <h3 class="modal-title" id="ps-title">Notion に進捗を自動同期</h3>
   <p class="ps-intro">初期設定はオフです。有効にすると、現在使っているタスク・習慣・日課・本の進捗をまとめて同期します。正本はこの端末に残ります。</p>
   <div class="ps-notice">
-    <p>保存先は自分の My Drive にある通常の非公開 JSON ファイルです。共有リンクは作成しません。対象データは同期サーバー（Vercel）と Google Drive で処理されます。未確認の送信データは暗号化してサーバーの保存先（Upstash）にも一時保持されます。</p>
+    <p>保存先は設定済みの自分の Notion ページです。タスク・習慣・日課・本の進捗を、見出しと項目ごとの記録で読めるスナップショットとして追加します。対象データは同期サーバー（Vercel）と Notion で処理されます。未確認の送信データは暗号化してサーバーの保存先（Upstash）にも一時保持されます。</p>
+    <p>Notion には直近 30 日分の日付別の記録と、それ以前の履歴も含む集計・件数を表示します。確認用 JSON は同期サーバーへ送る、対象項目だけに絞った元データです。Notion の表示内容そのものではなく、サーバーで読みやすい要約に変換します。</p>
+    <p>送信前に、所有者自身が Notion の保存先ページと親ページの共有設定を確認し、公開や他の人への共有がないことを確かめてください。Notion API だけでは非公開を確認できません。Google ログインは所有者の本人確認だけに使い、Drive へのアクセスは要求しません。</p>
+    <p>スナップショットはまず「STAGING（未完了）」として作成し、内容の書き込みが終わると「COMPLETE（完了）」と表示します。複数回の書き込みで作るため、途中の状態が見える場合があります。版番号が最も大きい「COMPLETE（完了）」のスナップショットを参照してください。ページ全体を一度に置き換える方式ではありません。自動作成した完了版は原則として直近 3 件を残し、それ以前の未編集の版を自動でアーカイブします。</p>
     <p>送るのは名前・期限・実績・進捗・統計です。メモ・説明・感想、体重・痛みなどの健康データ、ジムの種目・重量・セットなどの詳細、過去のアーカイブ、認証情報は送りません。標準の筋トレ習慣は、実施回数などの集計だけを含みます。</p>
     <p>名前や書名、タスク名に個人情報や健康に関する内容を書いている場合、その文字も送信対象になります。名前の機微な情報は自動で取り除かれません。送信してよい名前になっているか確認してください。</p>
     <p>これは進捗を読むための限定的な同期です。完全なバックアップや複数端末の統合ではありません。「データを書き出す」も引き続き使ってください。</p>
@@ -48,10 +53,10 @@ overlay.innerHTML = `<section class="modal-box ps-box" role="dialog" aria-modal=
     <div><dt>自動同期</dt><dd id="ps-enabled">オフ</dd></div>
     <div><dt>送信待ち</dt><dd id="ps-pending">なし</dd></div>
     <div><dt>最終同期</dt><dd id="ps-last">まだありません</dd></div>
-    <div><dt>Google 接続</dt><dd id="ps-connection">未確認</dd></div>
+    <div><dt>Google 本人確認</dt><dd id="ps-connection">未確認</dd></div>
   </dl>
   <p class="ps-message" id="ps-message" role="status"></p>
-  <p class="ps-hint">同期の試行は、アプリ起動時・画面に戻ったとき・オンラインに戻ったとき・記録の保存後です。iPhone で画面を閉じている間の同期は保証できません。</p>
+  <p class="ps-hint">同期の試行は、アプリ起動時・画面に戻ったとき・オンラインに戻ったとき・記録の保存後です。短時間に続けて編集した場合は、最後の保存から約 1.5 秒後にまとめて送信します。iPhone で画面を閉じている間の同期は保証できません。</p>
   <h4 class="ps-scope-title">同期する 4 種類</h4>
   <dl id="ps-categories" aria-label="同期対象と件数"></dl>
   <p class="ps-hint">4 種類をまとめて有効にします。今後追加する項目や変更した名前も、自動で同期します。個別の項目選択はありません。日付が変わると統計の対象期間も更新されます。</p>
@@ -63,23 +68,23 @@ overlay.innerHTML = `<section class="modal-box ps-box" role="dialog" aria-modal=
     <p class="ps-hint" id="ps-pending-explanation" hidden>前回の未確認の送信を、同じ内容・同じ識別子で確認します。停止中の場合は、この 1 回の送信を再許可します。現在の端末記録と異なる場合もあるため、名前を含めて確認してください。これだけでは継続的な自動同期は再開しません。</p>
     <p class="ps-hint">接続・有効化の前に、実際に送る JSON を確認してください。有効化前に内容や集計日が変わった場合は、最新の JSON をもう一度確認します。</p>
     <pre id="ps-preview" tabindex="0" aria-label="送信する JSON"></pre>
-    <label class="ps-consent"><input type="checkbox" id="ps-consent"><span id="ps-consent-label">この JSON と対象範囲を確認しました。4 種類すべての進捗と、今後追加・名前変更する項目を同期サーバーと自分の Google Drive に自動送信することに同意します。名前・書名に書いた内容もそのまま送信されることを理解しました。</span></label>
+    <label class="ps-consent"><input type="checkbox" id="ps-consent"><span id="ps-consent-label">この JSON と対象範囲を確認し、Notion の保存先と親ページが非公開で他の人に共有されていないことを自分で確認しました。4 種類すべての進捗と、今後追加・名前変更する項目を同期サーバーと設定済みの自分の Notion ページに自動送信し、古い未編集の自動作成版をアーカイブすることに同意します。名前・書名に書いた内容もそのまま送信されることを理解しました。</span></label>
   </section>
   <div class="ps-actions">
-    <button type="button" class="btn btn-secondary" id="ps-connect" disabled>Google に接続</button>
+    <button type="button" class="btn btn-secondary" id="ps-connect" disabled>Google で本人確認</button>
     <button type="button" class="btn btn-primary" id="ps-enable" disabled>この内容で同期を有効にする</button>
     <button type="button" class="btn btn-secondary" id="ps-retry" hidden>送信待ちを再試行</button>
     <button type="button" class="btn btn-secondary" id="ps-disable" hidden>自動同期を停止</button>
-    <button type="button" class="btn btn-secondary" id="ps-disconnect" hidden>Google との接続を解除</button>
+    <button type="button" class="btn btn-secondary" id="ps-disconnect" hidden>ログインと同期の接続を解除</button>
   </div>
-  <p class="ps-hint">接続だけでは送信しません。Google から戻った後、再びこの画面を開いて内容を確認し「有効にする」を押してください。停止・解除しても端末の記録と Drive のファイルは削除されません。停止前に送信済みの処理は完了する場合がありますが、その後の自動送信は止まります。競合した未確認の送信は自動では上書きしません。</p>
+  <p class="ps-hint">接続だけでは送信しません。Google から戻った後、再びこの画面を開いて内容を確認し「有効にする」を押してください。停止・解除しても端末の記録と Notion のスナップショットは削除されません。停止前に送信済みの処理は完了する場合がありますが、その後の自動送信は止まります。競合した未確認の送信は自動では上書きしません。</p>
   <div class="btn-row"><button type="button" class="btn btn-secondary" id="ps-close">閉じる</button></div>
 </section>`;
 document.body.appendChild(overlay);
 const $ = id => document.getElementById(id);
 let preview = null, reviewError = null, opener = null, viewEpoch = 0;
 const scopeConsent = $("ps-consent-label").textContent;
-const client = createPrivateSyncClient({ storage: localStorage, uiConsentVersion: 2, fetch: (...args) => fetch(...args), buildPayload, validatePayload, validateLegacyPayload,
+const client = createPrivateSyncClient({ storage: localStorage, uiConsentVersion: 3, fetch: (...args) => fetch(...args), buildPayload, validatePayload, validateLegacyPayload,
   onChange: () => updateStatus() });
 
 function updateStatus() {
@@ -92,7 +97,7 @@ function updateStatus() {
   $("ps-message").textContent = reviewError || (state.error ? messageFor(state.error) : state.blocked ? messageFor(state.blocked) : !state.online ? messages.OFFLINE : "");
   const ready = !!preview && !preview.incompatible && !state.legacyPending && $("ps-consent").checked && !state.busy && (!state.enabled || preview.kind === "pending") && state.online;
   $("ps-connect").disabled = !ready || state.configured !== true || state.connected;
-  $("ps-connect").textContent = state.lastSyncedAt || state.blocked ? "Google に再接続" : "Google に接続";
+  $("ps-connect").textContent = state.lastSyncedAt || state.blocked ? "Google で再度本人確認" : "Google で本人確認";
   $("ps-enable").disabled = !ready || !state.connected || (state.serverDeviceId && state.serverDeviceId !== state.deviceId);
   $("ps-enable").textContent = preview?.kind === "pending" ? "この前回の送信を再開して確認" : state.blocked === "CONFLICT" ? "確認した内容で再度有効にする" : "この内容で同期を有効にする";
   $("ps-disable").hidden = !state.enabled && !state.busy;
@@ -160,7 +165,7 @@ $("ps-pending-review-button").addEventListener("click", () => {
     $("ps-preview-title").textContent = "前回の未確認の送信 JSON"; $("ps-pending-explanation").hidden = false;
     $("ps-pending-explanation").textContent = preview.incompatible ? messages.LEGACY_PENDING_REVIEW_REQUIRED :
       "前回の未確認の送信を、同じ内容・同じ識別子で確認します。停止中の場合は、この 1 回の送信を再許可します。現在の端末記録と異なる場合もあるため、名前を含めて確認してください。これだけでは継続的な自動同期は再開しません。";
-    $("ps-consent-label").textContent = "この前回の JSON を確認し、同期サーバーと自分の Google Drive への同じ内容の送信を 1 回だけ許可します。自動同期は再開しません。"; }
+    $("ps-consent-label").textContent = "この前回の JSON と Notion の保存先・親ページの非公開設定を自分で確認し、同期サーバーと設定済みの自分の Notion ページへの同じ内容の送信を 1 回だけ許可します。自動同期は再開しません。"; }
   catch (e) { reviewError = messageFor(e); }
   updateStatus();
 });
@@ -179,13 +184,28 @@ $("ps-enable").addEventListener("click", () => run(async () => {
 $("ps-disable").addEventListener("click", () => run(() => { const stop = client.disable(); invalidatePreview(); return stop; }));
 $("ps-disconnect").addEventListener("click", () => run(async () => { await client.disconnect(); invalidatePreview(); renderCategories(); }));
 $("ps-retry").addEventListener("click", () => run(() => client.attempt()));
+// Records are already durable in the local stores when these events arrive.
+// Coalesce rapid foreground edits; a later resume reads the latest source data
+// if the page hides before this timer fires. Never mutate a queued operation.
+let saveTimer = null;
+function cancelSavedSync() {
+  if (saveTimer !== null) clearTimeout(saveTimer);
+  saveTimer = null;
+}
+function scheduleSavedSync(key) {
+  cancelSavedSync();
+  if (document.hidden) return;
+  saveTimer = setTimeout(() => { saveTimer = null; client.localSaved(key); }, 1500);
+}
+function resumeSync() { cancelSavedSync(); return client.resume(); }
+function pauseSync() { cancelSavedSync(); client.pause(); }
 window.addEventListener("weekly:local-saved", event => {
   if (!SOURCE_KEYS.has(event.detail?.key)) return;
   if (!overlay.hidden) {
     if (preview && preview.kind !== "pending") { invalidatePreview(); reviewError = "端末の記録が更新されました。送信する JSON をもう一度確認してください。"; }
     renderCategories(); updateStatus();
   }
-  client.localSaved(event.detail.key);
+  scheduleSavedSync(event.detail.key);
 });
 window.addEventListener("storage", event => {
   if (event.key === SYNC_KEY || event.key === STOP_KEY || event.key === null) {
@@ -197,12 +217,12 @@ window.addEventListener("storage", event => {
       if (preview && preview.kind !== "pending") invalidatePreview();
       renderCategories(); updateStatus();
     }
-    client.localSaved(event.key);
+    scheduleSavedSync(event.key);
   }
 });
-window.addEventListener("online", () => client.resume());
+window.addEventListener("online", resumeSync);
 window.addEventListener("offline", updateStatus);
-window.addEventListener("pageshow", () => client.resume());
-window.addEventListener("pagehide", () => client.pause());
-document.addEventListener("visibilitychange", () => { if (document.hidden) client.pause(); else client.resume(); });
+window.addEventListener("pageshow", resumeSync);
+window.addEventListener("pagehide", pauseSync);
+document.addEventListener("visibilitychange", () => { if (document.hidden) pauseSync(); else resumeSync(); });
 client.resume();
