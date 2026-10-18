@@ -1,3 +1,9 @@
 art-inbox/done/
 art-inbox/REJECTED_*.png
 tools/__pycache__/
+# Private sync configuration: server-only, never commit credentials.
+.env
+.env.*
+!.env.example
+.vercel/
+node_modules/

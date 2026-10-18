@@ -16,7 +16,10 @@ function load() {
   try { raw = JSON.parse(localStorage.getItem(R.KEY)); } catch { raw = null; }
   return R.normalize(raw, today());
 }
-function save(data) { localStorage.setItem(R.KEY, JSON.stringify(data)); }
+function save(data) {
+  localStorage.setItem(R.KEY, JSON.stringify(data));
+  window.dispatchEvent(new CustomEvent("weekly:local-saved", { detail: { key: R.KEY } }));
+}
 function updateBook(id, fn) {
   const data = load();
   data.books = data.books.map(b => (b.id === id ? fn(b) : b));
