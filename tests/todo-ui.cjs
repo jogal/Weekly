@@ -38,7 +38,7 @@ const server = http.createServer((req, res) => {
   // 1) ＋ で「習慣・日課・大きなタスク」を選べる。最初はどちらも空
   assert.match(await p.locator('#today-view').innerText(), /大きなタスク[\s\S]*習慣[\s\S]*日課/);
   await p.locator('.hb-add').click();
-  assert.deepEqual(await p.locator('#hb-sheet .td-choice .hb-name').allInnerTexts(), ['習慣', '日課', '大きなタスク']);
+  assert.deepEqual(await p.locator('#hb-sheet .td-choice .hb-name').allInnerTexts(), ['習慣', '日課', 'やめたいこと', '大きなタスク']);
   if (shots) await p.screenshot({ path: path.join(shots, 'todo-chooser.png') });
 
   // 2) 日課を2つ追加(朝の歯みがき、夜の薬) → 時間帯ごとに並ぶ
@@ -103,6 +103,36 @@ const server = http.createServer((req, res) => {
   await p.waitForSelector('.td-rcal-grid');
   await p.locator('[data-tab="today"]').click();
   await p.waitForSelector('#today-view .td-routine');
+
+  // 3c) やめたいこと: やってしまった日だけタップ(✕)。ゴールドは動かず、日課の数にも入らない。統計で守れた日を数える
+  const gA = await balance();
+  await p.locator('.hb-add').click();
+  await p.locator('#hb-sheet .td-choice', { hasText: 'やめたいこと' }).click();
+  assert.equal(await p.locator('#hb-sheet .hb-seg').count(), 0, 'no time slot for avoid items');
+  await p.locator('#hb-sheet input.field-input').first().fill('夜中のスマホ');
+  await p.locator('#hb-sheet .btn-primary', { hasText: '保存' }).click();
+  assert.match(await p.locator('.td-slot').last().innerText(), /やめたいこと/);
+  const phone = () => p.locator('.td-routine.avoid', { hasText: '夜中のスマホ' });
+  assert.match(await p.locator('.td-head', { hasText: '日課' }).innerText(), /日課 2\/2/);
+  await phone().click(); await p.clock.runFor(400);
+  assert.equal(await phone().getAttribute('aria-pressed'), 'true');
+  assert.equal(await phone().locator('.td-check').innerText(), '✕');
+  assert.equal(await balance(), gA, 'a slip costs no gold');
+  assert.match(await p.locator('.td-head', { hasText: '日課' }).innerText(), /日課 2\/2/);
+  await p.locator('[data-tab="stats"]').click();
+  await p.waitForSelector('.td-rcal.avoid');
+  assert.match(await p.locator('#stats-view').innerText(), /やめたいこと（守れた日）/);
+  const av = p.locator('.td-rcal.avoid');
+  assert.match(await av.innerText(), /連続なし[\s\S]*最長 0日 ・ 直近30日 守れた 0\/1日/);
+  assert.equal(await av.locator('.td-rcal-day.today').evaluate(e => e.classList.contains('slip')), true);
+  assert.equal(await p.locator('.td-rcal:not(.avoid)').count(), 2);
+  await p.locator('[data-tab="today"]').click();
+  await phone().click(); await p.clock.runFor(400); // 取り消すと今日は守れた日
+  await p.locator('[data-tab="stats"]').click();
+  assert.match(await p.locator('.td-rcal.avoid').innerText(), /🛡1日連続で守れた/);
+  if (shots) { await p.locator('.td-rcal.avoid').scrollIntoViewIfNeeded(); await p.screenshot({ path: path.join(shots, 'todo-avoid-stats.png') }); }
+  await p.locator('[data-tab="today"]').click();
+  if (shots) await p.screenshot({ path: path.join(shots, 'todo-avoid-today.png') });
 
   // 4) ダブルタップで編集(済みの状態は変わらない) → 名前を変える。長押しでは何も起きない
   const med = p.locator('.td-routine', { hasText: '薬' });
