@@ -15,25 +15,25 @@ const MAX_HISTORY_DAYS = 3650;
 //   activeDays / habitTotal / perfectDays / medals
 export const QUEST_LINES = [
   { id: "workout_days", icon: "💪", name: "鍛錬の道", metric: "track:workout", unit: "日", desc: "筋トレを{n}",
-    tiers: [{ n: 10, g: 50 }, { n: 30, g: 150 }, { n: 100, g: 500, item: "t_iron_body" }, { n: 300, g: 1500 }] },
+    tiers: [{ n: 10, g: 50 }, { n: 30, g: 150 }, { n: 100, g: 500 }, { n: 300, g: 1500 }] },
   { id: "leg_days", icon: "🦵", name: "脚の日", metric: "part:leg", unit: "日", desc: "脚を{n}鍛える",
-    tiers: [{ n: 5, g: 40 }, { n: 20, g: 120, item: "t_legs" }, { n: 60, g: 400 }] },
+    tiers: [{ n: 5, g: 40 }, { n: 20, g: 120 }, { n: 60, g: 400 }] },
   { id: "medicine_hours", icon: "🧠", name: "知識の泉", metric: "minutes:medicine", unit: "時間", desc: "専門医勉強を累計{n}",
-    tiers: [{ n: 600, g: 60 }, { n: 3000, g: 200 }, { n: 9000, g: 600, item: "t_scholar" }, { n: 30000, g: 2000 }] },
+    tiers: [{ n: 600, g: 60 }, { n: 3000, g: 200 }, { n: 9000, g: 600 }, { n: 30000, g: 2000 }] },
   { id: "english_hours", icon: "🌐", name: "ことばの旅", metric: "minutes:english", unit: "時間", desc: "英語学習を累計{n}",
-    tiers: [{ n: 600, g: 60 }, { n: 1800, g: 150, item: "t_linguist" }, { n: 6000, g: 500 }, { n: 18000, g: 1500 }] },
+    tiers: [{ n: 600, g: 60 }, { n: 1800, g: 150 }, { n: 6000, g: 500 }, { n: 18000, g: 1500 }] },
   { id: "instrument_days", icon: "🎵", name: "音色を磨く", metric: "track:instrument", unit: "日", desc: "楽器を{n}練習する",
-    tiers: [{ n: 10, g: 50 }, { n: 30, g: 150, item: "bg_hall" }, { n: 100, g: 500 }, { n: 300, g: 1500 }] },
+    tiers: [{ n: 10, g: 50 }, { n: 30, g: 150 }, { n: 100, g: 500 }, { n: 300, g: 1500 }] },
   { id: "cooking_days", icon: "🍳", name: "台所の主", metric: "track:cooking", unit: "日", desc: "自炊を{n}",
-    tiers: [{ n: 10, g: 50 }, { n: 50, g: 200, item: "bg_kitchen" }, { n: 150, g: 600 }, { n: 365, g: 1500 }] },
+    tiers: [{ n: 10, g: 50 }, { n: 50, g: 200 }, { n: 150, g: 600 }, { n: 365, g: 1500 }] },
   { id: "active_days", icon: "🗺️", name: "冒険の日々", metric: "activeDays", unit: "日", desc: "何かひとつ達成した日を{n}",
-    tiers: [{ n: 30, g: 100 }, { n: 100, g: 300 }, { n: 365, g: 1000, item: "t_traveler" }] },
+    tiers: [{ n: 30, g: 100 }, { n: 100, g: 300 }, { n: 365, g: 1000 }] },
   { id: "habit_total", icon: "📚", name: "積み重ね", metric: "habitTotal", unit: "回", desc: "習慣の目標を合計{n}達成",
-    tiers: [{ n: 50, g: 80 }, { n: 200, g: 250, item: "t_stacker" }, { n: 1000, g: 1000 }] },
+    tiers: [{ n: 50, g: 80 }, { n: 200, g: 250 }, { n: 1000, g: 1000 }] },
   { id: "perfect_days", icon: "🌟", name: "パーフェクトデイ", metric: "perfectDays", unit: "日", desc: "予定の習慣をすべて達成した日を{n}",
-    tiers: [{ n: 3, g: 80 }, { n: 10, g: 200, item: "bg_dawn" }, { n: 50, g: 800 }] },
+    tiers: [{ n: 3, g: 80 }, { n: 10, g: 200 }, { n: 50, g: 800 }] },
   { id: "medals", icon: "🏅", name: "メダルコレクター", metric: "medals", unit: "個", desc: "連続記録のメダルを{n}集める",
-    tiers: [{ n: 1, g: 50 }, { n: 3, g: 150 }, { n: 10, g: 600, item: "t_collector" }] },
+    tiers: [{ n: 1, g: 50 }, { n: 3, g: 150 }, { n: 10, g: 600 }] },
 ];
 // 自分で追加した習慣には、それぞれ専用のクエストが付く
 export const HABIT_TIERS = [{ n: 7, g: 40 }, { n: 30, g: 120 }, { n: 100, g: 400 }, { n: 365, g: 1200 }];
@@ -131,14 +131,7 @@ export function claimQuest(reward, board, id, today) {
   const r = JSON.parse(JSON.stringify(reward));
   r.quests = { claimed: { ...(r.quests?.claimed || {}), [id]: today } };
   r.grants.push({ g: q.reward.g, reason: "quest:" + id, on: today });
-  let item = null;
-  if (q.reward.item && !r.owned.includes(q.reward.item)) {
-    item = q.reward.item;
-    r.owned.push(item);
-    const it = H.shopItem(item);
-    if (it && !r.equipped[it.kind]) r.equipped[it.kind] = item;   // 空きスロットなら自動で装備
-  }
-  return { ok: true, state: r, gold: q.reward.g, item };
+  return { ok: true, state: r, gold: q.reward.g };
 }
 
 // ── 表示用 ───────────────────────────────────────────────────────────────────
@@ -156,16 +149,7 @@ export function progressText(q) {
   return `${fmtAmount(q.line.unit, q.value)}/${fmtAmount(q.line.unit, q.target)}${q.line.unit}`;
 }
 export function rewardText(q) {
-  const it = q.reward.item ? H.shopItem(q.reward.item) : null;
-  return `${q.reward.g}G` + (it ? ` ＋ ${it.icon}${it.name}` : "");
-}
-// ショップで「どのクエストの報酬か」を出す
-export function questForItem(itemId) {
-  for (const line of QUEST_LINES) {
-    const i = line.tiers.findIndex(t => t.item === itemId);
-    if (i >= 0) return `${line.name} ${ROMAN[i]}`;
-  }
-  return null;
+  return `${q.reward.g}G`;
 }
 // 受け取り履歴(新しい順)
 export function claimedHistory(reward, habits = []) {

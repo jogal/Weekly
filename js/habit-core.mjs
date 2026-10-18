@@ -283,8 +283,7 @@ export function newRewardState(todayKey) {
     v: 1, startedOn: todayKey, settledThrough: null,
     bank: 0, medals: [], days: {},
     grants: [{ g: GOLD.welcome, reason: "welcome", on: todayKey }],
-    purchases: [], freezes: {}, owned: [],
-    equipped: { title: null, bg: null },
+    purchases: [], freezes: {},
     quests: { claimed: {} },
     wishes: defaultWishes(), tickets: [],
   };
@@ -297,11 +296,9 @@ export function normalizeReward(r, todayKey) {
     medals: Array.isArray(r.medals) ? r.medals : [],
     days: r.days && typeof r.days === "object" ? r.days : {},
     grants: Array.isArray(r.grants) ? r.grants : [],
-    // おともは休止中: 以前に買ったおともは購入ごと取り消してゴールドを返す
-    purchases: (Array.isArray(r.purchases) ? r.purchases : []).filter(p => !RETIRED_ITEMS.has(p.item)),
+    // 称号・おとも・背景は廃止: 以前に買った分は購入ごと取り消してゴールドを返す
+    purchases: (Array.isArray(r.purchases) ? r.purchases : []).filter(isLivePurchase),
     freezes: r.freezes && typeof r.freezes === "object" ? r.freezes : {},
-    owned: (Array.isArray(r.owned) ? r.owned : []).filter(id => !RETIRED_ITEMS.has(id)),
-    equipped: { title: r.equipped?.title || null, bg: r.equipped?.bg || null },
     quests: { claimed: { ...(r.quests?.claimed || {}) } },
     // ごほうびリストが未設定なら初期の3つ。自分で全部消した([])ならそのまま
     wishes: Array.isArray(r.wishes) ? r.wishes.map(normalizeWish) : defaultWishes(),
@@ -384,59 +381,19 @@ export const SHIELD_MAX = 3;
 export const SHOP = [
   { id: "shield", kind: "shield", name: "まもりの護符", icon: "🧿", price: 100,
     desc: "記録を忘れた日も連続記録を守る。自動で使われ、3つまで持てる" },
-  { id: "t_steady", kind: "title", name: "コツコツの達人", icon: "📜", price: 300, desc: "称号" },
-  { id: "t_iron", kind: "title", name: "鋼の意志", icon: "📜", price: 800, desc: "称号" },
-  { id: "t_sage", kind: "title", name: "習慣の賢者", icon: "📜", price: 2000, desc: "称号" },
-  { id: "t_legend", kind: "title", name: "伝説の継続者", icon: "📜", price: 5000, desc: "称号" },
-  { id: "bg_meadow", kind: "bg", name: "草原", icon: "🌿", price: 400, desc: "背景",
-    css: "radial-gradient(ellipse at 15% 110%,#4f8a5a66,transparent 65%),linear-gradient(160deg,#1a231c,#111614)" },
-  { id: "bg_dusk", kind: "bg", name: "夕焼け", icon: "🌇", price: 700, desc: "背景",
-    css: "radial-gradient(ellipse at 85% 0,#d9825466,transparent 65%),linear-gradient(170deg,#2a1c1e,#14111a)" },
-  { id: "bg_night", kind: "bg", name: "星空", icon: "🌌", price: 1200, desc: "背景",
-    css: "radial-gradient(1px 1px at 20% 30%,#fff9,transparent),radial-gradient(1px 1px at 70% 20%,#fff8,transparent),radial-gradient(1.5px 1.5px at 85% 60%,#fffa,transparent),radial-gradient(1px 1px at 40% 75%,#fff7,transparent),linear-gradient(170deg,#141a33,#0b0d18)" },
-  { id: "bg_castle", kind: "bg", name: "王城", icon: "🏰", price: 2500, desc: "背景",
-    css: "radial-gradient(ellipse at 50% 0,#dfbd7c55,transparent 60%),linear-gradient(170deg,#2a2338,#16131d)" },
-  // クエスト報酬でしか手に入らないもの(quest-core.mjs の QUEST_LINES が配る)
-  { id: "t_iron_body", kind: "title", name: "鋼の肉体", icon: "📜", quest: true, desc: "クエスト報酬" },
-  { id: "t_scholar", kind: "title", name: "知の探究者", icon: "📜", quest: true, desc: "クエスト報酬" },
-  { id: "t_traveler", kind: "title", name: "一年の冒険者", icon: "📜", quest: true, desc: "クエスト報酬" },
-  { id: "t_collector", kind: "title", name: "メダルコレクター", icon: "📜", quest: true, desc: "クエスト報酬" },
-  { id: "t_legs", kind: "title", name: "健脚の旅人", icon: "📜", quest: true, desc: "クエスト報酬" },
-  { id: "t_linguist", kind: "title", name: "ことばの使い手", icon: "📜", quest: true, desc: "クエスト報酬" },
-  { id: "t_stacker", kind: "title", name: "積み重ねの人", icon: "📜", quest: true, desc: "クエスト報酬" },
-  { id: "bg_kitchen", kind: "bg", name: "灯りの台所", icon: "🍲", quest: true, desc: "クエスト報酬",
-    css: "radial-gradient(ellipse at 80% 100%,#e0954a55,transparent 60%),linear-gradient(165deg,#2a2018,#15110e)" },
-  { id: "bg_hall", kind: "bg", name: "音楽堂", icon: "🎻", quest: true, desc: "クエスト報酬",
-    css: "radial-gradient(ellipse at 50% 0,#f0d7a333,transparent 55%),linear-gradient(90deg,#3a1418,#1c1013 28%,#1c1013 72%,#3a1418)" },
-  { id: "bg_dawn", kind: "bg", name: "夜明け", icon: "🌅", quest: true, desc: "クエスト報酬",
-    css: "radial-gradient(ellipse at 50% 115%,#f2b36a66,transparent 60%),linear-gradient(180deg,#1b2238,#2a2232 70%,#3a2a2a)" },
 ];
-export const SHOP_KINDS = [
-  { kind: "wish", label: "ごほうび" }, { kind: "shield", label: "どうぐ" },
-  { kind: "title", label: "称号" }, { kind: "bg", label: "背景" },
-];
-// 休止中のアイテム(おとも)。保存データに残っていても読み込み時に取り除く
-export const RETIRED_ITEMS = new Set(["p_chick", "p_cat", "p_owl", "p_fox", "p_dragon",
-  "p_kangaroo", "p_parrot", "p_bird", "p_turtle"]);
+export const SHOP_KINDS = [{ kind: "wish", label: "ごほうび" }, { kind: "shield", label: "どうぐ" }];
+// 今も有効な購入(護符とごほうびチケット)。廃止したアイテムの購入は読み込み時に取り除く
+const isLivePurchase = p => !!p && (p.item === "shield" || String(p.item).startsWith("ticket:"));
 export function shopItem(id) { return SHOP.find(i => i.id === id) || null; }
 export function purchase(r, itemId, today) {
   const it = shopItem(itemId);
   if (!it) return { ok: false, reason: "unknown" };
-  if (it.quest) return { ok: false, reason: "quest" };
-  if (it.kind !== "shield" && r.owned.includes(it.id)) return { ok: false, reason: "owned" };
-  if (it.kind === "shield" && shieldCount(r) >= SHIELD_MAX) return { ok: false, reason: "max" };
+  if (shieldCount(r) >= SHIELD_MAX) return { ok: false, reason: "max" };
   if (balance(r) < it.price) return { ok: false, reason: "gold" };
   const n = clone(r);
   n.purchases.push({ item: it.id, price: it.price, on: today });
-  if (it.kind !== "shield") { n.owned.push(it.id); n.equipped[it.kind] = it.id; }
   return { ok: true, state: n };
-}
-export function equip(r, kind, itemId) {
-  if (!(kind in r.equipped)) return r;
-  if (itemId && !r.owned.includes(itemId)) return r;
-  const n = clone(r);
-  n.equipped[kind] = itemId || null;
-  return n;
 }
 
 // ── ごほうびチケット(リアルの自分へのごほうび) ──────────────────────────────

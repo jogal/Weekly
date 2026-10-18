@@ -76,20 +76,21 @@ function seedRecords() {
   assert.match(await p.locator('.hb-celebrate').innerText(), /QUEST CLEAR[\s\S]*台所の主 I[\s\S]*\+50G/);
   await p.locator('.hb-celebrate').click();
   const kitchen2 = p.locator('#hb-sheet .qb-row', { hasText: '台所の主 II' });
-  assert.match(await kitchen2.innerText(), /12\/50日[\s\S]*200G ＋ 🍲灯りの台所/);
+  assert.match(await kitchen2.innerText(), /12\/50日[\s\S]*200G/);
   assert.ok(await kitchen2.locator('.qb-btn').isDisabled());
 
-  // 3) ことばの旅 I → II を続けて受け取ると、称号「ことばの使い手」が手に入り装備される
+  // 3) ことばの旅 I → II を続けて受け取る。報酬はゴールドだけ
   await p.locator('#hb-sheet .qb-row', { hasText: 'ことばの旅 I' }).first().locator('.qb-btn').click();
   await p.locator('.hb-celebrate').click();
   await p.locator('#hb-sheet .qb-row', { hasText: 'ことばの旅 II' }).locator('.qb-btn').click();
-  assert.match(await p.locator('.hb-celebrate').innerText(), /ことばの使い手を手に入れた（装備しました）/);
+  assert.match(await p.locator('.hb-celebrate').innerText(), /\+150G/);
+  assert.doesNotMatch(await p.locator('.hb-celebrate').innerText(), /手に入れた/);
   if (shots) await p.screenshot({ path: path.join(shots, 'quest-clear.png') });
   await p.locator('.hb-celebrate').click();
   assert.match(await p.locator('#hb-sheet .qb-row', { hasText: 'ことばの旅 III' }).innerText(), /31\/100時間/);
   let r = await reward();
   assert.deepEqual(Object.keys(r.quests.claimed).sort(), ['cooking_days:0', 'english_hours:0', 'english_hours:1']);
-  assert.equal(r.equipped.title, 't_linguist');
+  assert.equal('equipped' in r, false);
 
   // 4) 達成の記録
   await p.locator('#hb-sheet .hb-seg button', { hasText: '達成の記録' }).click();
@@ -97,16 +98,12 @@ function seedRecords() {
   await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click();
   assert.equal(await balance(), gold0 + 50 + 60 + 150);
 
-  // 5) 育成タブ: 称号が表示され、クエストカードがある。ショップでは限定品は買えない
+  // 5) 育成タブ: クエストカードがある。ショップに称号・背景はない
   await p.locator('[data-tab="status"]').click();
   await p.waitForSelector('#status-view .qb-row');
-  assert.match(await p.locator('#status-view .hero-title').innerText(), /ことばの使い手/);
+  assert.equal(await p.locator('#status-view .hero-title').count(), 0);
   await p.locator('#status-view .btn-primary', { hasText: 'ショップ' }).click();
-  await p.locator('#hb-sheet .hb-seg button', { hasText: '称号' }).click();
-  assert.match(await p.locator('#hb-sheet .shop-row', { hasText: 'ことばの使い手' }).innerText(), /ことばの旅 II[\s\S]*はずす/);
-  const legs = p.locator('#hb-sheet .shop-row', { hasText: '健脚の旅人' });
-  assert.match(await legs.innerText(), /脚の日 II/);
-  assert.ok(await legs.locator('.shop-btn').isDisabled());
+  assert.deepEqual(await p.locator('#hb-sheet .hb-seg button').allInnerTexts(), ['ごほうび', 'どうぐ']);
   await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click();
   if (shots) await p.screenshot({ path: path.join(shots, 'quest-growth.png'), fullPage: false });
 
@@ -143,6 +140,6 @@ function seedRecords() {
   }
 
   assert.deepEqual(errors, []);
-  console.log('Quest board: ready strip, badge, claim chain, item reward and equip, history, shop lock, badge clear, reload, widths passed.');
+  console.log('Quest board: ready strip, badge, claim chain, gold-only reward, history, shop tabs, badge clear, reload, widths passed.');
   await browser.close(); server.close();
 })().catch(e => { console.error(e); server.close(); process.exit(1); });
