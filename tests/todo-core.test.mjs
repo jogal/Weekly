@@ -107,3 +107,18 @@ test('tasks: completion gold can be set per task (old data uses the default)', (
   s = T.setTaskDone(s, 'big', TODAY);
   assert.deepEqual(T.dayGoldItems(s, TODAY), { 'todo:big': { g: 200 } });
 });
+
+test('routines: streaks, rate and weekly calendar (view only, no gold)', () => {
+  let s = T.saveRoutine(empty(), { id: 'r', name: '薬', createdOn: '2026-10-05' }, TODAY);
+  ['2026-10-10', '2026-10-11', '2026-10-12', '2026-10-14', '2026-10-15', '2026-10-16', '2026-10-17'].forEach(k => { s = T.toggleRoutine(s, k, 'r'); });
+  assert.equal(T.routineStreak(s, 'r', TODAY), 4, 'today not done yet keeps the streak from yesterday');
+  s = T.toggleRoutine(s, TODAY, 'r');
+  assert.equal(T.routineStreak(s, 'r', TODAY), 5);
+  assert.equal(T.routineBestStreak(s, 'r'), 5);
+  assert.deepEqual(T.routineRate(s, 'r', TODAY, 30), { done: 8, total: 14 }, 'days before the routine existed are not counted');
+  const w = T.routineWeeks(s, 'r', TODAY, 3);
+  assert.deepEqual(w.map(x => x.monday), ['2026-10-12', '2026-10-05', '2026-09-28']);
+  assert.deepEqual(w[0].days.map(d => d.state), ['done', 'miss', 'done', 'done', 'done', 'done', 'done']);
+  assert.equal(w[2].days[0].state, 'off');
+  assert.equal(T.routineWeeks(s, 'r', '2026-10-15', 1)[0].days[6].state, 'future');
+});

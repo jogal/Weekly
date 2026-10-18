@@ -5,7 +5,7 @@
 //   tasks    … 大きなタスク(期限と小さなステップ付き)。ステップ・完了した日にゴールド
 // ゴールドは習慣と同じく記録から日ごとに計算し直す(habit-core の settle に dayGoldItems を渡す)。
 // だからチェックを外せばゴールドも戻り、直近7日より前は確定する。HPのような罰はない。
-import { addDays } from "./habit-core.mjs";
+import { addDays, mondayOf } from "./habit-core.mjs";
 
 export const KEY = "wt_todo_v1";
 export const SLOTS = [
@@ -118,6 +118,48 @@ export function archiveRoutine(state, id, today) {
 export function routineCount(state, key) {
   const list = routinesOn(state, key);
   return { done: list.filter(r => isRoutineDone(state, key, r.id)).length, total: list.length };
+}
+
+// 連続達成(見るだけ。ゴールドやメダルは付けない)。今日まだなら昨日までで数える
+export function routineStreak(state, id, today) {
+  const r = state.routines.find(x => x.id === id);
+  if (!r) return 0;
+  let k = isRoutineDone(state, today, id) ? today : addDays(today, -1), n = 0;
+  while (routineActiveOn(r, k) && isRoutineDone(state, k, id)) { n++; k = addDays(k, -1); }
+  return n;
+}
+export function routineBestStreak(state, id) {
+  const r = state.routines.find(x => x.id === id);
+  if (!r) return 0;
+  const days = Object.keys(state.rlog).filter(k => state.rlog[k][id] && routineActiveOn(r, k)).sort();
+  let best = 0, run = 0, prev = null;
+  days.forEach(k => { run = prev && addDays(prev, 1) === k ? run + 1 : 1; best = Math.max(best, run); prev = k; });
+  return best;
+}
+// 直近 n 日(表示していた日だけ)のうちやった割合
+export function routineRate(state, id, today, n = 30) {
+  const r = state.routines.find(x => x.id === id);
+  if (!r) return { done: 0, total: 0 };
+  let done = 0, total = 0;
+  for (let i = 0; i < n; i++) {
+    const k = addDays(today, -i);
+    if (!routineActiveOn(r, k)) continue;
+    total++; if (isRoutineDone(state, k, id)) done++;
+  }
+  return { done, total };
+}
+// 週ごとのカレンダー: 新しい週が上。各日は done / miss / off(表示していない日) / future
+export function routineWeeks(state, id, today, weeks = 8) {
+  const r = state.routines.find(x => x.id === id);
+  const mon = mondayOf(today);
+  return Array.from({ length: weeks }, (_, w) => {
+    const m = addDays(mon, -7 * w);
+    return { monday: m, days: Array.from({ length: 7 }, (_, d) => {
+      const k = addDays(m, d);
+      const st = k > today ? "future" : !r || !routineActiveOn(r, k) ? "off" : isRoutineDone(state, k, id) ? "done" : "miss";
+      return { key: k, state: st };
+    }) };
+  });
 }
 
 // ── タスク ───────────────────────────────────────────────────────────────────
