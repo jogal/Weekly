@@ -20,6 +20,14 @@ Grit 風の「今日」画面を週クエの主画面にし、習慣ごとの目
 - ゴールドは読み込みのたびに「未確定の日〜今日」を記録から計算し直す。7日より前は合計に畳み込んで確定する
 - 既存キーのスキーマは変更しない。バックアップ（書き出し／復元）に3キーを追加
 
+## 日課と大きなタスク
+
+- `js/todo-core.mjs`: 日課とタスクの純粋ロジック。保存先は `wt_todo_v1`（`routines`・`rlog`・`tasks`）
+- 日課は作った日から消した日の前日まで表示する（今日まだやっていなければ今日から消える）。`rlog` に日ごとの済みを持つ
+- タスクのステップと完了は、それぞれやった日（`doneOn`）を持つ。完了のゴールドはタスクごとの `reward`（0〜9999、未設定なら30）
+- 日付ストリップのリングは習慣だけを数え、`daySegments` で達成した習慣ごとにその色の区切りを並べる
+- ゴールドは `dayGoldItems(state, key)` が日ごとに返し、`settle` の `ctx.extraGold` で習慣のゴールドと同じ日の内訳に入る。だから取り消すと戻り、7日より前は確定する。連続記録・メダル・パーフェクトデイには関係しない
+
 ## クエスト掲示板
 
 - `js/quest-core.mjs`: クエストの定義（`QUEST_LINES`、独自習慣ごとの専用ライン）、記録からの進捗集計、掲示板の状態、受け取り
@@ -46,6 +54,7 @@ node --test tests/*.test.mjs
 BROWSER_PATH=<chromium> node tests/habit-ui.cjs
 BROWSER_PATH=<chromium> node tests/quest-ui.cjs
 BROWSER_PATH=<chromium> node tests/ticket-ui.cjs
+BROWSER_PATH=<chromium> node tests/todo-ui.cjs
 BROWSER_PATH=<chromium> node tests/app-ui.cjs
 ```
 

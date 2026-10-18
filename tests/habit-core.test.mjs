@@ -322,3 +322,19 @@ test('price estimate uses the last seven full days of gold', () => {
   assert.equal(H.daysOfEffort(700, 100), 7);
   assert.equal(H.daysOfEffort(700, 0), null);
 });
+
+test('daySegments: one segment per counted habit, with its color, matching dayCompletion', () => {
+  const day = '2026-10-18';
+  const habits = [
+    H.normalizeHabit({ id: 'a', name: 'A', color: '#111111', createdOn: '2026-10-01' }),
+    H.normalizeHabit({ id: 'b', name: 'B', color: '#222222', createdOn: '2026-10-01' }),
+    H.normalizeHabit({ id: 'w', name: 'W', color: '#333333', createdOn: '2026-10-01', freq: { type: 'weekly', times: 3 } }),
+  ];
+  const ctx = { records: {}, log: { [day]: { a: { v: 1 } } }, freezes: {}, floorKey: null, today: day };
+  const segs = H.daySegments(habits, day, ctx);
+  const dc = H.dayCompletion(habits, day, ctx);
+  assert.deepEqual(segs.map(x => x.id), ['a', 'b'], 'a weekly habit not done today is left out');
+  assert.equal(segs.length, dc.due);
+  assert.equal(segs.filter(x => x.done).length, dc.done);
+  assert.ok(segs.every(x => /^#\d{6}$/.test(x.color)));
+});
