@@ -6,6 +6,8 @@ import { createHandler } from '../server/private-sync/handler.mjs';
 import { readConfig, seal, unseal, SyncError } from '../server/private-sync/security.mjs';
 import { createStore } from '../server/private-sync/store.mjs';
 import { createGoogle, DRIVE_SCOPE } from '../server/private-sync/google.mjs';
+import { buildPayload, MAX_PAYLOAD_BYTES } from '../js/private-sync-protocol.mjs';
+import { addDays } from '../js/habit-core.mjs';
 
 const ORIGIN = 'https://weekly.example.test';
 const DEVICE = 'test-device-0123456789';
@@ -19,9 +21,27 @@ const ENV = {
   UPSTASH_REDIS_REST_URL: 'https://synthetic.upstash.io', UPSTASH_REDIS_REST_TOKEN: 'synthetic-redis-token',
 };
 const CONFIG = readConfig(ENV);
-const PAYLOAD = { schemaVersion: 1, habits: [{ id: 'habit1', name: 'Synthetic habit', unit: 'check',
-  entries: [{ date: '2026-10-18', value: 1, completed: true }] }], reading: [], tasks: [] };
+const SOURCES = {
+  wt_habits_v1: { habits: [{ id: 'habit1', name: 'Synthetic habit', link: null,
+    goal: { type: 'check', target: 1 }, freq: { type: 'daily', days: [], times: 1 },
+    createdOn: '2026-10-18', archived: false }] },
+  wt_habit_log_v1: { '2026-10-18': { habit1: { n: 1 } } },
+};
+const PAYLOAD = buildPayload({ getItem: key => key in SOURCES ? JSON.stringify(SOURCES[key]) : null },
+  { asOf: '2026-10-18', timeZone: 'Asia/Tokyo' });
 const clone = value => structuredClone(value);
+let largeFixture;
+function largePayload() {
+  if (largeFixture) return largeFixture;
+  const habits = Array.from({ length: 12 }, (_, n) => ({ ...SOURCES.wt_habits_v1.habits[0],
+    id: 'large_' + n, name: 'Synthetic long history ' + n, createdOn: '2024-01-01' }));
+  const log = Object.fromEntries(Array.from({ length: 1000 }, (_, day) => [addDays('2024-01-01', day),
+    Object.fromEntries(habits.map(h => [h.id, { n: 1 }]))]));
+  const values = { wt_habits_v1: { habits }, wt_habit_log_v1: log };
+  largeFixture = buildPayload({ getItem: key => key in values ? JSON.stringify(values[key]) : null },
+    { asOf: '2026-10-18', timeZone: 'Asia/Tokyo' });
+  return largeFixture;
+}
 function fakeRedis() {
   const values = new Map(); const commands = [];
   const fetcher = async (url, options) => {
@@ -173,9 +193,87 @@ test('strict payload rejects extra private fields and empty feeds before any Dri
   }
   assert.equal(h.google.writes, 0);
 });
+test('legacy server consent cannot authorize category-wide v2 uploads', async () => {
+  const h = harness(); await h.browser.login();
+  assert.equal((await h.browser.call('enable', initial())).statusCode, 200);
+  const before = await h.redis.store.get('owner');
+  assert.equal(before.value.consentVersion, 2);
+  const old = clone(before.value); delete old.consentVersion;
+  await h.redis.store.cas('owner', before.raw, old);
+  const update = initial({ operationId: 'new-scope-operation-012345', baseRevision: 1 });
+  const blocked = await h.browser.call('upload', update);
+  assert.equal(blocked.statusCode, 409); assert.equal(blocked.body.error, 'scope_review_required');
+  assert.equal(h.google.writes, 1);
+  assert.equal((await h.browser.call('enable', update)).statusCode, 200);
+  assert.equal((await h.redis.store.get('owner')).value.consentVersion, 2);
+  assert.equal(h.google.writes, 2);
+});
+test('v1 uploads and arbitrary routine/statistics objects are rejected before Drive writes', async () => {
+  const h = harness(); await h.browser.login();
+  for (const payload of [
+    { schemaVersion: 1, habits: [{ id: 'h', name: 'Old scope', unit: 'check', entries: [{ date: '2026-10-18', value: 1, completed: true }] }], reading: [], tasks: [] },
+    { ...PAYLOAD, routines: [{ name: 'Synthetic', notes: 'PRIVATE_CANARY' }] },
+    { ...PAYLOAD, statistics: { secret: 'PRIVATE_CANARY' } },
+    { ...PAYLOAD, statistics: { ...PAYLOAD.statistics, tasks: { ...PAYLOAD.statistics.tasks, total: 99 } } },
+    { ...PAYLOAD, health: { pain: 'PRIVATE_CANARY' } },
+  ]) {
+    const res = await h.browser.call('enable', initial({ payload }));
+    assert.equal(res.statusCode, 400); assert.equal(res.body.error, 'invalid_payload');
+  }
+  assert.equal(h.google.writes, 0);
+});
+test('authenticated v2 enable writes all four approved projections without free-text canaries', async () => {
+  const sources = { ...SOURCES,
+    wt_reading_v1: { books: [{ id: 'b_one', title: 'Synthetic book', pages: 200, status: 'reading',
+      notes: 'PRIVATE_CANARY', review: 'PRIVATE_CANARY', log: { '2026-10-18': { page: 12, note: 'PRIVATE_CANARY' } } }] },
+    wt_todo_v1: { tasks: [{ id: 't_one', name: 'Synthetic task', createdOn: '2026-10-17', due: '2026-10-20',
+      description: 'PRIVATE_CANARY', steps: [{ name: 'PRIVATE_CANARY', doneOn: '2026-10-18' }] }],
+      routines: [{ id: 'r_one', name: 'Synthetic routine', createdOn: '2026-10-17', avoid: false, notes: 'PRIVATE_CANARY' }],
+      rlog: { '2026-10-18': { r_one: 1 } } },
+  };
+  const payload = buildPayload({ getItem: key => key in sources ? JSON.stringify(sources[key]) : null },
+    { asOf: '2026-10-18', timeZone: 'Asia/Tokyo' });
+  const h = harness(); await h.browser.login();
+  assert.equal((await h.browser.call('enable', initial({ payload }))).statusCode, 200);
+  const file = [...h.google.files.values()][0].content;
+  for (const category of ['habits', 'routines', 'reading', 'tasks']) assert.equal(file.payload[category].length, 1);
+  assert.equal(file.payload.statistics.tasks.completedSteps, 1);
+  assert.equal(file.payload.statistics.reading.recent.pages, 12);
+  assert.ok(!JSON.stringify(file).includes('PRIVATE_CANARY'));
+});
+test('large automatic history survives encrypted durable reservation and lost-ACK recovery intact', async () => {
+  const h = harness(); await h.browser.login();
+  const payload = largePayload();
+  assert.ok(Buffer.byteLength(JSON.stringify(payload)) > 600_000);
+  assert.ok(Buffer.byteLength(JSON.stringify(payload)) < MAX_PAYLOAD_BYTES);
+  h.google.flags.timeoutAfterWrite = true;
+  const request = initial({ payload });
+  assert.equal((await h.browser.call('enable', request)).statusCode, 503);
+  const pending = await h.redis.store.get('owner');
+  assert.ok(Buffer.byteLength(pending.raw) > 600_000);
+  assert.deepEqual(pending.value.pending.payload, payload);
+  h.restart();
+  const recovered = await h.browser.call('enable', request);
+  assert.equal(recovered.statusCode, 200); assert.equal(recovered.body.revision, 1);
+  assert.equal(h.google.writes, 1);
+  assert.deepEqual([...h.google.files.values()][0].content.payload, payload);
+  const commands = h.redis.commands.filter(command => command[0] === 'EVAL');
+  assert.ok(commands.every(command => Buffer.byteLength(JSON.stringify(command)) < 4.1 * 1024 * 1024));
+});
+test('request and encrypted-record size bounds still reject excessive data before external writes', async () => {
+  const h = harness(); await h.browser.login();
+  const result = await h.browser.call('enable', initial({ payload: 'x'.repeat(MAX_PAYLOAD_BYTES + 4096) }));
+  assert.equal(result.statusCode, 400); assert.equal(result.body.error, 'invalid_request');
+  assert.equal(h.google.writes, 0);
+  const redis = fakeRedis();
+  await assert.rejects(redis.store.cas('oversize', null, { data: 'x'.repeat(2 * 1024 * 1024) }), /store_unavailable/);
+  assert.equal(redis.commands.length, 0);
+  redis.values.set(CONFIG.prefix + 'oversize', 'x'.repeat(2 * 1024 * 1024 + 1));
+  await assert.rejects(redis.store.get('oversize'), /store_unavailable/);
+});
 test('enable/upload persist revisions; exact repeats do not rewrite and stale writes fail', async () => {
   const h = harness(); await h.browser.login();
-  assert.equal((await h.browser.call('upload', initial())).body.error, 'sync_disabled');
+  assert.equal((await h.browser.call('upload', initial())).body.error, 'scope_review_required');
   const first = await h.browser.call('enable', initial());
   assert.equal(first.statusCode, 200); assert.equal(first.body.revision, 1); assert.equal(first.body.enabled, true);
   assert.equal((await h.browser.call('enable', initial())).body.revision, 1); assert.equal(h.google.writes, 1);
@@ -315,6 +413,15 @@ test('Drive reads reject files changing between metadata and media reads', async
     return Response.json(meta(++count === 1 ? '"before"' : '"after"'));
   });
   await assert.rejects(google.inspect('synthetic-access-token', 'file1'), /external_change/);
+});
+test('Drive media reads support bounded v2 history and reject an oversized response', async () => {
+  const content = { schemaVersion: 1, deviceId: DEVICE, revision: 1, operationId: OP,
+    syncedAt: '2026-10-18T12:00:00Z', payload: largePayload() };
+  const google = createGoogle(CONFIG, async url => Response.json(url.includes('alt=media') ? content : meta('"etag-a"')));
+  assert.deepEqual((await google.inspect('synthetic-access-token', 'file1')).content, content);
+  const oversized = createGoogle(CONFIG, async url => url.includes('alt=media')
+    ? Response.json({ data: 'x'.repeat(MAX_PAYLOAD_BYTES + 4096) }) : Response.json(meta('"etag-a"')));
+  await assert.rejects(oversized.inspect('synthetic-access-token', 'file1'), /provider_unavailable/);
 });
 
 function deferred() { let resolve; const promise = new Promise(r => { resolve = r; }); return { promise, resolve }; }

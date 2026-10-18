@@ -12,13 +12,18 @@
 .ps-status dd { margin: 0; overflow-wrap: anywhere; }
 .ps-message { color: var(--gold); min-height: 1.5em; }
 .ps-hint { color: var(--dim); }
-#ps-items fieldset { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin: 12px 0; min-width: 0; }
-#ps-items legend { color: var(--gold); padding: 0 4px; font-size: 13px; }
-.ps-item, .ps-consent { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 10px 0; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
-.ps-item input, .ps-consent input { flex: 0 0 auto; margin: 4px 0 0; width: 19px; height: 19px; accent-color: var(--gold); }
+.ps-scope-title { margin: 18px 0 8px; color: var(--gold); font-size: 14px; }
+#ps-categories { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; margin: 0; }
+#ps-categories > div { display: flex; justify-content: space-between; align-items: center; gap: 8px; min-height: 48px; border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; font-size: 13px; }
+#ps-categories dt { color: var(--txt); }
+#ps-categories dd { color: var(--gold); margin: 0; text-align: right; overflow-wrap: anywhere; }
+.ps-consent { display: flex; align-items: flex-start; gap: 10px; min-height: 44px; padding: 10px 0; font-size: 13px; line-height: 1.7; overflow-wrap: anywhere; }
+.ps-consent input { flex: 0 0 auto; margin: 4px 0 0; width: 19px; height: 19px; accent-color: var(--gold); }
 #ps-preview-section h4 { font-size: 14px; color: var(--gold); margin-bottom: 8px; }
 #ps-preview { padding: 12px; border: 1px solid var(--line); background: var(--bg); border-radius: 7px; max-height: 300px; overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; font-size: 11px; line-height: 1.6; user-select: text; }
 .ps-actions { display: flex; flex-direction: column; gap: 9px; margin-top: 12px; }
 .ps-box button { min-height: 44px; white-space: normal; }
 .ps-box button:disabled { opacity: .45; cursor: default; }
 .ps-box [hidden] { display: none !important; }
+
+@media (max-width: 360px) { #ps-categories { grid-template-columns: 1fr; } }

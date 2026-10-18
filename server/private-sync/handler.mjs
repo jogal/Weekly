@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { validatePayload } from '../../js/private-sync-protocol.mjs';
+import { validatePayload, MAX_PAYLOAD_BYTES } from '../../js/private-sync-protocol.mjs';
 import { readConfig, token, digest, equals, identifier, SyncError } from './security.mjs';
 import { createStore } from './store.mjs';
 import { createGoogle } from './google.mjs';
@@ -7,7 +7,10 @@ import { createGoogle } from './google.mjs';
 const COOKIE = '__Host-weekly-sync';
 const SESSION_SECONDS = 30 * 24 * 60 * 60;
 const ANON_SECONDS = 10 * 60;
-const MAX_BODY_BYTES = 132 * 1024;
+const MAX_BODY_BYTES = MAX_PAYLOAD_BYTES + 4 * 1024;
+// Category-wide v2 sharing is a new consent boundary. An old selective opt-in
+// must never authorize automatic uploads under the expanded schema.
+const CONSENT_VERSION = 2;
 const emptyStatus = { configured: false, connected: false, csrfToken: null, enabled: false, deviceId: null, revision: 0, lastSyncedAt: null, authError: null };
 
 function json(res, status, value) { return res.status(status).json(value); }
@@ -100,10 +103,11 @@ export function createHandler({ config, store, google, now = Date.now }) {
       if (owner.deviceId !== data.deviceId) throw new SyncError('device_conflict', 409);
       if (owner.lastOperation?.operationId === data.operationId) {
         if (owner.lastOperation.hash !== hash || owner.lastOperation.baseRevision !== data.baseRevision) throw new SyncError('operation_conflict', 409);
-        if (enabling && !owner.enabled) {
+        if (enabling && (!owner.enabled || owner.consentVersion !== CONSENT_VERSION)) {
           if (owner.pending) throw new SyncError('pending_operation', 409);
-          if (!(await store.cas('owner', record.raw, { ...owner, enabled: true }))) continue;
+          if (!(await store.cas('owner', record.raw, { ...owner, enabled: true, consentVersion: CONSENT_VERSION }))) continue;
           owner.enabled = true;
+          owner.consentVersion = CONSENT_VERSION;
         }
         return status(session, owner);
       }
@@ -112,6 +116,9 @@ export function createHandler({ config, store, google, now = Date.now }) {
         if (owner.pending.hash !== hash || owner.pending.baseRevision !== data.baseRevision) throw new SyncError('operation_conflict', 409);
         reserved = owner; break;
       }
+      // Exact pending/applied operations above remain reconcilable without
+      // silently authorizing a new snapshot under the expanded scope.
+      if (!enabling && owner.consentVersion !== CONSENT_VERSION) throw new SyncError('scope_review_required', 409);
       if (data.baseRevision !== owner.revision) throw new SyncError('revision_conflict', 409);
       // With no pending/applied match and an exact current base, this error is a
       // definite non-application for this operation. Uncertain pending writes use
@@ -154,6 +161,7 @@ export function createHandler({ config, store, google, now = Date.now }) {
       }
       const next = { ...owner, pending: null, revision: expected.revision, fileETag: remote.etag,
         lastSyncedAt: expected.syncedAt, enabled: enabling || owner.enabled,
+        consentVersion: enabling ? CONSENT_VERSION : owner.consentVersion,
         lastOperation: { operationId: data.operationId, hash, baseRevision: data.baseRevision } };
       if (await store.cas('owner', record.raw, next)) return status(session, next);
     }

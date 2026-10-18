@@ -2,7 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import vm from 'node:vm';
-import { createPrivateSyncClient, ensurePrivateSyncTransport, SYNC_KEY, STOP_KEY } from '../js/private-sync-client.mjs';
+import { createPrivateSyncClient, ensurePrivateSyncTransport, SYNC_KEY, STOP_KEY, CONSENT_VERSION } from '../js/private-sync-client.mjs';
 const tick = () => new Promise(resolve => setImmediate(resolve));
 const deferred = () => { let resolve, reject; const promise = new Promise((a,b) => { resolve=a; reject=b; }); return { promise, resolve, reject }; };
 function fixture(existing) {
@@ -10,15 +10,15 @@ function fixture(existing) {
   const store = { getItem: k => map.get(k) ?? null, setItem: (k,v) => {
     if (f.failSave || (f.quotaFull && (!map.has(k) || v.length > map.get(k).length))) throw new Error('quota'); map.set(k,v);
   }, removeItem: k => { if(f.failRemove) throw new Error('denied'); map.delete(k); } };
-  const source = { value: 1, name: '英語' };
+  const source = { value: 1, name: '英語', extraItems: [] };
   const calls = [], receipts = new Map();
   const server = { configured: true, connected: true, deviceId: null, revision: 0, enabled: false, lastSyncedAt: null, csrfToken: 'memory-csrf-secret' };
-  const f = { map, store, source, calls, server, receipts, failSave: false, online: true, visible: true, hook: null };
+  const f = { map, store, source, calls, server, receipts, failSave: false, online: true, visible: true, hook: null, now: '2026-10-18T12:00:00Z', zone: 'UTC' };
   const response = (data,status=200) => ({ ok: status < 400, status, json: async () => data });
   f.respond = response;
   let lock = Promise.resolve();
   const withLock = run => { const result = lock.then(run); lock = result.catch(() => {}); return result; };
-  f.make = () => createPrivateSyncClient({ withLock, ensureTransport:()=>f.transport ? f.transport() : Promise.resolve(), storage: store, fetch: async (url, options) => {
+  f.make = (options = {}) => createPrivateSyncClient({ uiConsentVersion: CONSENT_VERSION, withLock, ensureTransport:()=>f.transport ? f.transport() : Promise.resolve(), storage: store, fetch: async (url, options) => {
     const action = new URL(url, 'https://example.test').searchParams.get('action'), body = options.body && JSON.parse(options.body);
     const call = { action, body, options }; calls.push(call);
     if (f.hook) { const result = await f.hook(call); if (result) return result; }
@@ -36,22 +36,25 @@ function fixture(existing) {
     const result = { ...server }; receipts.set(body.operationId, result);
     if (f.loseResponse) { f.loseResponse = false; throw new TypeError('lost response'); }
     return response(result);
-  }, buildPayload: (_store, selection) => {
-    if (!selection.habitIds.length || source.value === null) throw Object.assign(new Error('empty'), { code: 'EMPTY_PAYLOAD' });
-    return { schemaVersion: 1, value: source.value, name: source.name };
-  }, listSelectableItems: () => ({ habits: [{ id: 'h_english', name: source.name }], reading: [], tasks: [] }),
-  validatePayload: payload => { assert.equal(payload.schemaVersion, 1); },
-  online: () => f.online, visible: () => f.visible, uuid: () => `operation-${String(++serial).padStart(26,"0")}`, now: () => '2026-10-18T12:00:00Z' });
+  }, buildPayload: (_store, { asOf, timeZone }) => {
+    if (source.value === null) throw Object.assign(new Error('empty'), { code: 'EMPTY_PAYLOAD' });
+    return { schemaVersion: 2, asOf, timeZone, value: source.value, name: source.name,
+      habits: [{ id: 'h_english', name: source.name }, ...source.extraItems], reading: [], tasks: [], routines: [] };
+  }, validatePayload: payload => { assert.equal(payload.schemaVersion, 2); },
+  validateLegacyPayload: payload => { assert.equal(payload.schemaVersion, 1); },
+  online: () => f.online, visible: () => f.visible, uuid: () => `operation-${String(++serial).padStart(26,"0")}`,
+  now: () => f.now, timeZone: () => f.zone, ...options });
   f.client = f.make();
-  f.approval = () => ({ ...f.client.review({ habitIds: ['h_english'], readingIds: [], taskIds: [] }), confirmed: true });
+  f.approval = () => ({ ...f.client.review(), confirmed: true });
   f.enable = () => f.client.enable(f.approval());
   return f;
 }
 
-test('off by default: no network on launch, resume, or local changes; no automatic selection', async () => {
+test('off by default: no network on launch, resume, or local changes; category consent is not implied', async () => {
   const f=fixture(); await f.client.resume(); await f.client.localSaved('wt_habit_log_v1');
   assert.equal(f.calls.length,0); assert.equal(f.client.getState().enabled,false);
-  assert.deepEqual(f.client.getState().selection,{habitIds:[],readingIds:[],taskIds:[]});
+  assert.equal(f.client.getState().consentVersion,null); assert.equal(f.client.getState().version,2);
+  assert.equal(f.client.getState().selection,undefined);
 });
 test('connection requires reviewed consent; connects without enabling or uploading', async () => {
   const f=fixture();
@@ -127,10 +130,11 @@ test('post-success save hooks never fire when the local source write fails', () 
     assert.throws(()=>vm.runInNewContext(script,ctx),/disk full/); assert.equal(events,0);
   }
 });
-test('names changed after consent block pending upload rather than transmit newly sensitive text', async () => {
-  const f=fixture(); await f.enable(); f.source.name='changed private name'; f.source.value=2;
-  const count=f.calls.length; await f.client.localSaved('wt_habits_v1');
-  assert.equal(f.calls.length,count); assert.equal(f.client.getState().blocked,'REVIEW_REQUIRED');
+test('category-wide consent includes renamed items automatically without per-name approval', async () => {
+  const f=fixture(); await f.enable(); f.source.name='名前の変更'; f.source.value=2;
+  await f.client.localSaved('wt_habits_v1');
+  assert.equal(f.client.getState().blocked,null); assert.equal(f.calls.at(-1).body.payload.name,'名前の変更');
+  assert.equal(f.client.getState().consentVersion,CONSENT_VERSION);
 });
 test('hidden app does not attempt, and foreground resume retries persisted data', async () => {
   const f=fixture(); await f.enable(); f.visible=false; f.source.value=2;
@@ -174,7 +178,7 @@ test('lost enable acknowledgment cannot be replaced by a new snapshot; exact pen
   await f.enable(); assert.equal(f.client.getState().enabled,true);
   assert.equal(f.calls.filter(c=>c.action==='enable').at(-1).body.payload.value,3);
 });
-test('old pending snapshot can be explicitly reviewed after a selected source is renamed', async () => {
+test('current-format pending snapshot can be explicitly reviewed after a source is renamed', async () => {
   const f=fixture(); await f.enable(); f.source.value=2; f.loseResponse=true;
   await f.client.localSaved('wt_habit_log_v1'); const original=f.client.getState().queue;
   await f.client.disable(); f.source.name='new private label';
@@ -239,10 +243,10 @@ test('stop marker wins even if another tab stops exactly between metadata read a
   const reloaded=f.make(); assert.equal(reloaded.getState().enabled,false);
 });
 test('missing browser lock support fails closed without writing an outbox or sending network', async () => {
-  const f=fixture(); const c=createPrivateSyncClient({storage:f.store,withLock:()=>{throw Object.assign(new Error('missing lock'),{code:'LOCK_UNAVAILABLE'});},fetch:()=>{throw new Error('must not send')},
-    buildPayload:()=>({value:1}),listSelectableItems:()=>({habits:[{id:'h',name:'safe'}],reading:[],tasks:[]}),
+  const f=fixture(); const c=createPrivateSyncClient({uiConsentVersion:CONSENT_VERSION,storage:f.store,withLock:()=>{throw Object.assign(new Error('missing lock'),{code:'LOCK_UNAVAILABLE'});},fetch:()=>{throw new Error('must not send')},
+    buildPayload:()=>({schemaVersion:2,value:1}),
     online:()=>true,visible:()=>true,uuid:()=> 'safe-device'});
-  const approved={...c.review({habitIds:['h'],readingIds:[],taskIds:[]}),confirmed:true};
+  const approved={...c.review(),confirmed:true};
   await assert.rejects(c.enable(approved),{code:'LOCK_UNAVAILABLE'});
   assert.equal(c.getState().enabled,false); assert.equal(f.map.get(SYNC_KEY),undefined);
 });
@@ -329,4 +333,169 @@ test('safe page controller cannot mask a legacy active worker for the OAuth call
   const safe={postMessage(_message,ports){ports[0].postMessage({type:'weekly-private-sync-cache-safe',version:1});}}, old={postMessage(){}};
   await assert.rejects(ensurePrivateSyncTransport({serviceWorker:{controller:safe,getRegistration:async url=>({active:url.includes('/api/')?old:safe})},
     pageUrl:'https://weekly.test/tracker.html',timeoutMs:5}),{code:'UPDATE_REQUIRED'});
+});
+
+test('newly added items automatically join the next snapshot under category consent', async () => {
+  const f=fixture(); await f.enable(); f.source.extraItems.push({id:'h_new',name:'新しい習慣'});
+  await f.client.localSaved('wt_habits_v1');
+  assert.deepEqual(f.calls.at(-1).body.payload.habits.map(h=>h.id),['h_english','h_new']);
+  assert.equal(f.client.getState().blocked,null);
+});
+test('initial approval must be fresh, exact, and explicitly versioned for category-wide scope', async () => {
+  const f=fixture(), approved=f.approval();
+  await assert.rejects(f.client.enable({...approved,consentVersion:1}),{code:'REVIEW_REQUIRED'});
+  f.source.name='変更後'; await assert.rejects(f.client.enable(approved),{code:'REVIEW_REQUIRED'});
+  assert.equal(f.calls.length,0); assert.equal(f.client.getState().queue,null);
+  await f.enable(); assert.equal(f.client.getState().consentVersion,2);
+});
+function legacyState(queue=null) {
+  return { version:1,deviceId:'legacy-device',enabled:true,selection:{habitIds:['old'],readingIds:[],taskIds:[]},
+    approvedNames:{habitIds:[{id:'old',name:'旧名'}],readingIds:[],taskIds:[]},consentToken:'legacy-consent',
+    revision:3,lastSyncedAt:'2026-10-17T12:00:00Z',lastPayload:null,queue,blocked:null };
+}
+test('v1 opt-in without pending data stays off until a fresh v2 scope review', async () => {
+  const raw=JSON.stringify(legacyState()), map=new Map([[SYNC_KEY,raw],[STOP_KEY,'legacy-consent']]), f=fixture(map);
+  assert.equal(f.client.getState().blocked,'SCOPE_REVIEW_REQUIRED');
+  await f.client.resume(); await f.client.localSaved('wt_habits_v1');
+  assert.equal(f.calls.length,0); assert.equal(map.get(SYNC_KEY),raw);
+  const approval=f.approval(); await f.client.connect(approval);
+  assert.equal(f.client.getState().enabled,false);
+  f.client=f.make(); await f.client.resume();
+  assert.equal(f.calls.filter(c=>c.action==='enable'||c.action==='upload').length,0,'OAuth return does not grant consent');
+  await f.enable(); assert.equal(f.client.getState().version,2); assert.equal(f.client.getState().consentVersion,2);
+  assert.equal(f.client.getState().deviceId,'legacy-device');
+  assert.equal('selection' in JSON.parse(map.get(SYNC_KEY)),false);
+});
+test('legacy pending remains byte-for-byte intact across review, stop, reload, reconnect, and rejected activation', async () => {
+  const pending={action:'upload',operationId:'legacy-uncertain',baseRevision:3,payload:{schemaVersion:1,value:7,name:'旧名'}},
+    raw=JSON.stringify(legacyState(pending),null,3), map=new Map([[SYNC_KEY,raw],[STOP_KEY,'legacy-consent']]), f=fixture(map);
+  const approved={...f.client.pendingReview(),confirmed:true};
+  assert.equal(approved.incompatible,true); assert.deepEqual(JSON.parse(approved.json),pending.payload);
+  await f.client.resume(); await f.client.localSaved('wt_habits_v1');
+  await assert.rejects(f.client.retryPending(approved),{code:'LEGACY_PENDING_REVIEW_REQUIRED'});
+  await assert.rejects(f.client.connect(approved),{code:'LEGACY_PENDING_REVIEW_REQUIRED'});
+  await assert.rejects(f.enable(),{code:'LEGACY_PENDING_REVIEW_REQUIRED'});
+  await f.client.disable(); f.client=f.make(); await f.client.resume();
+  assert.equal(map.get(SYNC_KEY),raw); assert.deepEqual(f.client.getState().queue,pending);
+  assert.equal(f.calls.length,0); assert.equal(f.client.getState().enabled,false);
+});
+test('corrupt saved metadata cannot be replaced by enabling a new snapshot', async () => {
+  const raw='{broken', f=fixture(new Map([[SYNC_KEY,raw]]));
+  await assert.rejects(f.enable(),{code:'LOCAL_STATE_INVALID'});
+  await assert.rejects(f.client.connect(f.approval()),{code:'LOCAL_STATE_INVALID'});
+  assert.equal(f.map.get(SYNC_KEY),raw); assert.equal(f.calls.length,0);
+});
+test('server scope rejection retains uncertain queue and waits for explicit review', async () => {
+  const f=fixture(); await f.enable(); f.hook=async c=>c.action==='upload'?f.respond({error:'scope_review_required'},409):undefined;
+  f.source.value=2; await f.client.localSaved('wt_habit_log_v1'); const pending=f.client.getState().queue;
+  assert.equal(f.client.getState().blocked,'SCOPE_REVIEW_REQUIRED');
+  const calls=f.calls.length; await f.client.resume(); assert.equal(f.calls.length,calls);
+  assert.deepEqual(f.client.getState().queue,pending);
+});
+test('date and timezone changes refresh snapshots without new per-item consent', async () => {
+  const f=fixture(); f.now='2026-10-18T23:30:00Z'; await f.enable();
+  f.zone='Asia/Tokyo'; await f.client.resume();
+  assert.equal(f.calls.at(-1).body.payload.asOf,'2026-10-19'); assert.equal(f.calls.at(-1).body.payload.timeZone,'Asia/Tokyo');
+  f.now='2026-10-19T23:30:00Z'; f.client=f.make(); await f.client.resume();
+  assert.equal(f.calls.at(-1).body.payload.asOf,'2026-10-20');
+});
+test('approval for yesterday cannot activate today without a refreshed preview', async () => {
+  const f=fixture(), approved=f.approval(); f.now='2026-10-19T12:00:00Z';
+  await assert.rejects(f.client.enable(approved),{code:'REVIEW_REQUIRED'}); assert.equal(f.calls.length,0);
+});
+test('renames, additions, and date rollovers never rewrite an already queued snapshot', async () => {
+  const f=fixture(); await f.enable(); f.online=false; f.source.value=2;
+  await f.client.localSaved('wt_habit_log_v1'); const pending=f.client.getState().queue;
+  f.source.name='新しい名前'; f.source.extraItems.push({id:'h_added',name:'追加'}); f.now='2026-10-19T12:00:00Z';
+  await f.client.localSaved('wt_habits_v1'); assert.deepEqual(f.client.getState().queue,pending);
+  f.online=true; await f.client.resume();
+  const posts=f.calls.filter(c=>c.action==='upload');
+  assert.deepEqual(posts[0].body.payload,pending.payload); assert.equal(posts[0].body.operationId,pending.operationId);
+  assert.equal(posts[1].body.payload.name,'新しい名前'); assert.equal(posts[1].body.payload.asOf,'2026-10-19');
+  assert.equal(posts[1].body.payload.habits.length,2);
+});
+test('mixed-cache UI without v2 handshake cannot review, connect, enable, resume, or recover a pending send', async () => {
+  const f=fixture(); await f.enable(); f.online=false; f.source.value=2; await f.client.localSaved('wt_habit_log_v1');
+  const approved=f.approval(), pending={...f.client.pendingReview(),confirmed:true}, raw=f.map.get(SYNC_KEY), count=f.calls.length;
+  f.online=true; const stale=f.make({uiConsentVersion:undefined});
+  assert.throws(()=>stale.review({habitIds:['h_english']}),{code:'UPDATE_REQUIRED'});
+  await assert.rejects(stale.connect(approved),{code:'UPDATE_REQUIRED'});
+  await assert.rejects(stale.enable(approved),{code:'UPDATE_REQUIRED'});
+  await assert.rejects(stale.retryPending(pending),{code:'UPDATE_REQUIRED'});
+  await stale.resume(); await stale.localSaved('wt_records');
+  assert.equal(stale.getState().enabled,false); assert.equal(f.calls.length,count); assert.equal(f.map.get(SYNC_KEY),raw);
+  await stale.disable(); assert.equal(f.make().getState().enabled,false,'Stop remains usable with stale UI');
+});
+test('oversize projection has a specific error and never truncates or sends a partial snapshot', async () => {
+  const f=fixture(), raw=f.map.get(SYNC_KEY); f.client=f.make({buildPayload:()=>{throw Object.assign(new Error('large'),{code:'PAYLOAD_TOO_LARGE'});}});
+  assert.throws(()=>f.client.review(),{code:'PAYLOAD_TOO_LARGE'});
+  assert.equal(f.map.get(SYNC_KEY),raw); assert.equal(f.calls.length,0);
+});
+test('dismissing setup during connect cancels the late result without navigating or uploading', async () => {
+  const f=fixture(), hold=deferred(); f.hook=async c=>{if(c.action==='connect') await hold.promise;};
+  const flight=f.client.connect(f.approval()); await tick(); f.client.pause(); hold.resolve();
+  await assert.rejects(flight,{code:'STATE_CHANGED'});
+  assert.equal(f.client.getState().enabled,false); assert.equal(f.client.getState().queue,null);
+});
+test('dismissing setup before its Web Lock is acquired cancels the queued activation', async () => {
+  const f=fixture(), hold=deferred(); f.client=f.make({withLock:async run=>{await hold.promise;return run();}});
+  const flight=f.enable(); f.client.pause(); hold.resolve();
+  await assert.rejects(flight,{code:'STATE_CHANGED'}); assert.equal(f.calls.length,0); assert.equal(f.map.has(SYNC_KEY),false);
+});
+
+// Small DOM adapter executes the real UI module without browser dependencies.
+// This covers interaction wiring, not layout, accessibility rendering, or CUA.
+function uiFixture() {
+  const nodes=new Map(), listeners=new Map(), navigations=[];
+  function element(tag) {
+    const e={tagName:tag,children:[],listeners:new Map(),hidden:false,disabled:false,checked:false,textContent:'',
+      append(...children){this.children.push(...children);},appendChild(child){this.append(child);},replaceChildren(...children){this.children=children;},
+      addEventListener(type,handler){this.listeners.set(type,handler);},dispatch(type,event={}){return this.listeners.get(type)?.(event);},
+      querySelectorAll(){return [];},getClientRects(){return [1];},focus(){document.activeElement=this;}};
+    Object.defineProperty(e,'innerHTML',{set(markup){this.markup=markup;
+      for(const match of markup.matchAll(/<([a-z0-9-]+)([^>]*\bid="([^"]+)"[^>]*)>([^<]*)/g)) {
+        const node=element(match[1]);node.id=match[3];node.hidden=/\bhidden\b/.test(match[2]);node.disabled=/\bdisabled\b/.test(match[2]);node.textContent=match[4];nodes.set(node.id,node);
+      }
+    },get(){return this.markup||'';}});
+    return e;
+  }
+  const document={hidden:false,body:element('body'),activeElement:null,createElement:element,getElementById:id=>nodes.get(id),
+    addEventListener:(type,handler)=>listeners.set(`document:${type}`,handler)};
+  nodes.set('private-sync-open',element('button'));document.activeElement=nodes.get('private-sync-open');
+  const payload={schemaVersion:2,habits:[{name:'<img src=x onerror=unsafe>'}],tasks:[{},{}],routines:[{}],reading:[{},{},{}]},
+    review={consentVersion:2,payload,json:JSON.stringify(payload,null,2)};
+  const state={enabled:false,busy:false,queue:null,online:true,configured:true,connected:false,lastSyncedAt:null,blocked:null,error:null};
+  const hold=deferred();let pauses=0,clientOptions;
+  const client={getState:()=>state,review:()=>review,refreshStatus:async()=>{},resume:async()=>{},pause:()=>{pauses++;},
+    connect:()=>hold.promise,syncExternal:()=>{},localSaved:async()=>{}};
+  const source=fs.readFileSync(new URL('../js/private-sync-ui.mjs',import.meta.url),'utf8').replace(/^import .*;\n/gm,'');
+  vm.runInNewContext(source,{document,window:{addEventListener:(type,handler)=>listeners.set(type,handler)},localStorage:{},
+    fetch:()=>{throw new Error('No network allowed');},location:{assign:url=>navigations.push(url)},
+    createPrivateSyncClient:options=>{clientOptions=options;return client;},buildPayload:()=>payload,validatePayload:()=>{},validateLegacyPayload:()=>{},
+    SOURCE_KEYS:new Set(['wt_habits_v1']),SYNC_KEY,STOP_KEY});
+  return {nodes,document,payload,review,hold,navigations,clientOptions,pauses:()=>pauses,overlay:document.body.children[0]};
+}
+test('UI renders four category counts, a single scope consent checkbox, and exact text-only JSON preview', async () => {
+  const f=uiFixture(); await f.nodes.get('private-sync-open').dispatch('click');
+  assert.equal(f.clientOptions.uiConsentVersion,2,'UI pins the consent wording version independently of imported client constants');
+  assert.deepEqual(f.nodes.get('ps-categories').children.map(row=>row.children.map(node=>node.textContent)),
+    [['タスク','2 件'],['習慣','1 件'],['日課','1 件'],['本','3 件']]);
+  assert.equal((f.overlay.innerHTML.match(/type="checkbox"/g)||[]).length,1);
+  assert.equal(f.nodes.get('ps-connect').disabled,true);
+  f.nodes.get('ps-preview-button').dispatch('click');
+  assert.equal(f.nodes.get('ps-preview').textContent,f.review.json);assert.equal(f.nodes.get('ps-preview').innerHTML,'');
+  f.nodes.get('ps-consent').checked=true;f.nodes.get('ps-consent').dispatch('change');
+  assert.equal(f.nodes.get('ps-connect').disabled,false);
+});
+test('UI Close and Escape invalidate setup and prevent late OAuth navigation, even after reopen', async () => {
+  for(const method of ['close','escape']) {
+    const f=uiFixture();await f.nodes.get('private-sync-open').dispatch('click');f.nodes.get('ps-preview-button').dispatch('click');
+    f.nodes.get('ps-consent').checked=true;f.nodes.get('ps-consent').dispatch('change');
+    const flight=f.nodes.get('ps-connect').dispatch('click');
+    if(method==='close')f.nodes.get('ps-close').dispatch('click');else f.overlay.dispatch('keydown',{key:'Escape',preventDefault(){}});
+    assert.equal(f.overlay.hidden,true);assert.equal(f.pauses(),1);assert.equal(f.nodes.get('ps-consent').checked,false);
+    await f.nodes.get('private-sync-open').dispatch('click');
+    f.hold.resolve('https://accounts.google.com/o/oauth2/v2/auth?synthetic=true');await flight;
+    assert.deepEqual(f.navigations,[]);
+  }
 });
