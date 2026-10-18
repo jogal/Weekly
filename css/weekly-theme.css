@@ -9,8 +9,9 @@ body[data-app="tracker"] { --green:var(--gold); }
 body[data-app="music"] { --note:#b4b3de; --accent:var(--note); }
 body[data-app="spots"] { --acc:#9ac8b8; --accent:var(--acc); }
 #app { max-width:760px; margin-inline:auto; min-width:0; }
-/* iPhoneのホーム画面アプリでは 100vh / 100dvh がステータスバーの分だけ短く計算され、
-   画面の下に帯が残ってタブバーが浮いて見える。高さの単位に頼らず、画面の四辺に固定する */
+/* 高さの単位(100vh/100dvh)に頼らず、画面の四辺に固定して全高を使う。
+   iPhoneのホーム画面アプリで下に帯が残る主な原因は透過ステータスバーなので、
+   各ページの apple-mobile-web-app-status-bar-style は不透明の black にしている */
 html, body { height:100%; }
 #app { position:fixed; inset:0; height:auto; }
 #header { border:0; padding:18px 18px 12px; padding-top:max(18px,env(safe-area-inset-top)); }
