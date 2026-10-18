@@ -338,3 +338,18 @@ test('daySegments: one segment per counted habit, with its color, matching dayCo
   assert.equal(segs.filter(x => x.done).length, dc.done);
   assert.ok(segs.every(x => /^#\d{6}$/.test(x.color)));
 });
+
+test('stats calendar day states: done / miss / rest / off / future', () => {
+  const log = logFor('h_x', [0, 2]);
+  log[H.addDays(TODAY, -1)] = { h_x: { rest: true } };
+  const ctx = ctxOf(log, {}, { [H.addDays(TODAY, -3)]: ['h_x'] });
+  const daily = custom({ createdOn: '2026-10-13' });
+  assert.deepEqual(H.habitDays(daily, '2026-10-12', '2026-10-19', ctx, TODAY).map(d => d.state),
+    ['off', 'miss', 'miss', 'rest', 'done', 'rest', 'done', 'future']);
+  const mwf = custom({ freq: { type: 'days', days: [0, 2, 4] } });
+  assert.equal(H.habitDayState(mwf, '2026-10-13', ctx, TODAY), 'off', 'not a due day');
+  assert.equal(H.habitDayState(mwf, '2026-10-12', ctx, TODAY), 'miss');
+  const weekly = custom({ freq: { type: 'weekly', times: 2 } });
+  assert.equal(H.habitDayState(weekly, '2026-10-16', ctx, TODAY), 'done');
+  assert.equal(H.habitDayState(weekly, '2026-10-14', ctx, TODAY), 'miss');
+});

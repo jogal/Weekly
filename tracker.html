@@ -379,13 +379,15 @@ textarea.field-input { height:76px; resize:vertical; }
 .td-rcal-dow { font-size:9px; color:var(--faint); text-align:center; }
 .td-rcal-wk { font-size:9px; color:var(--faint); }
 .td-rcal-day { aspect-ratio:1; max-height:26px; border-radius:6px; background:#ffffff10; justify-self:stretch; }
-.td-rcal-day.done { background:#a9c98f; }
+.td-rcal-day.done { background:var(--c, #a9c98f); }
+.td-rcal-day.rest, .hm-ycell.td-ry.rest { background:none; border:1.5px solid var(--c, #a9c98f); opacity:.55; }
+.hs-cal .td-rcal-head .hs-rate { flex-shrink:0; }
 .td-rcal-day.off, .td-rcal-day.future { background:none; }
 .td-rcal-day.off { border:1px dashed #ffffff10; }
 .td-rcal-day.today { outline:1.5px solid var(--gold); outline-offset:1px; }
 .td-ryear .hm-year-row { margin-top:2px; }
 .hm-ycell.td-ry { cursor:default; }
-.hm-ycell.td-ry.done { background:#a9c98f; border-color:#a9c98f; }
+.hm-ycell.td-ry.done { background:var(--c, #a9c98f); border-color:var(--c, #a9c98f); }
 .hm-ycell.td-ry.off, .hm-ycell.td-ry.future { background:none; border-color:#ffffff0a; }
 .td-rcal-day.slip, .hm-ycell.td-ry.slip { background:#d98f8f; border-color:#d98f8f; }
 .td-rcal.avoid .td-rcal-streak { color:#a9c98f; }
@@ -2473,23 +2475,10 @@ function routineCal(s, r, anchor = s.today) {
   const st = T.routineStreak(s.todo, r.id, s.today), best = T.routineBestStreak(s.todo, r.id, s.today);
   const rate = T.routineRate(s.todo, r.id, s.today, 30);
   const wrap = routineCalCard(r, st, `最長 ${best}日 ・ 直近30日 ${r.avoid ? "守れた " : ""}${rate.done}/${rate.total}日`);
-  const grid = el("div", "td-rcal-grid");
-  grid.setAttribute("role", "table");
-  grid.setAttribute("aria-label", `${r.name}の${CAL_WEEKS}週間の記録`);
-  grid.appendChild(el("span", "td-rcal-wk", ""));
-  H.WEEKDAY_LABELS.forEach(lb => grid.appendChild(el("span", "td-rcal-dow", lb)));
-  T.routineWeeks(s.todo, r.id, anchor, CAL_WEEKS).forEach(w => {
-    grid.appendChild(el("span", "td-rcal-wk", `${+w.monday.slice(5, 7)}/${+w.monday.slice(8)}`));
-    w.days.forEach(d => {
-      const c = el("span", `td-rcal-day ${d.state}${d.key === s.today ? " today" : ""}`);
-      c.title = `${d.key} ${dayWord(r, d.state)}`;
-      grid.appendChild(c);
-    });
-  });
-  wrap.appendChild(grid);
+  wrap.appendChild(weekGrid(T.routineWeeks(s.todo, r.id, anchor, CAL_WEEKS), r.name, st => dayWord(r, st), s.today));
   return wrap;
 }
-const dayWord = (r, st) => ({ done: r.avoid ? "守れた" : "済み", miss: "未", slip: "やってしまった", off: "", future: "" })[st];
+const dayWord = (r, st) => ({ done: r.avoid ? "守れた" : "済み", miss: "未", slip: "やってしまった", rest: "休み", off: "", future: "" })[st];
 function routineCalCard(r, st, sub) {
   const wrap = el("div", "td-rcal" + (r.avoid ? " avoid" : ""));
   wrap.dataset.rid = r.id;
@@ -2506,6 +2495,27 @@ function routineYear(s, r, from, to) {
   const wrap = routineCalCard(r, T.routineStreak(s.todo, r.id, s.today),
     `この年 ${r.avoid ? "守れた " : ""}${done}/${active.length}日 ・ 最長 ${T.routineBestStreak(s.todo, r.id, s.today)}日`);
   wrap.classList.add("td-ryear");
+  wrap.appendChild(yearGrid(days, r.name, st => dayWord(r, st), from, to, s.today));
+  return wrap;
+}
+// 日課・習慣で共通のカレンダー。weeks は新しい週が上 [{monday, days:[{key, state}]}]
+function weekGrid(weeks, name, word, today) {
+  const grid = el("div", "td-rcal-grid");
+  grid.setAttribute("role", "table");
+  grid.setAttribute("aria-label", `${name}の${weeks.length}週間の記録`);
+  grid.appendChild(el("span", "td-rcal-wk", ""));
+  H.WEEKDAY_LABELS.forEach(lb => grid.appendChild(el("span", "td-rcal-dow", lb)));
+  weeks.forEach(w => {
+    grid.appendChild(el("span", "td-rcal-wk", `${+w.monday.slice(5, 7)}/${+w.monday.slice(8)}`));
+    w.days.forEach(d => {
+      const c = el("span", `td-rcal-day ${d.state}${d.key === today ? " today" : ""}`);
+      c.title = `${d.key} ${word(d.state)}`;
+      grid.appendChild(c);
+    });
+  });
+  return grid;
+}
+function yearGrid(days, name, word, from, to, today) {
   const row = el("div", "hm-year-row");
   const labels = el("div", "hm-ylabels");
   H.WEEKDAY_LABELS.forEach((d, i) => labels.appendChild(el("div", "", i % 2 === 0 ? d : "")));
@@ -2513,7 +2523,7 @@ function routineYear(s, r, from, to) {
   const scroll = el("div", "hm-year-wrap");
   const months = el("div", "hm-months");
   const grid = el("div", "hm-year");
-  grid.setAttribute("aria-label", `${r.name}の${from.slice(0, 4)}年の記録`);
+  grid.setAttribute("aria-label", `${name}の${from.slice(0, 4)}年の記録`);
   const lead = (new Date(from + "T00:00").getDay() + 6) % 7; // 1/1 より前の月曜までの空き
   for (let i = 0; i < lead; i++) grid.appendChild(el("div", "hm-ycell empty"));
   let lastMonth = "";
@@ -2523,23 +2533,22 @@ function routineYear(s, r, from, to) {
       if (m !== lastMonth) { lbl.textContent = `${+m}月`; lastMonth = m; }
       months.appendChild(lbl);
     }
-    const c = el("div", `hm-ycell td-ry ${d.state}${d.key === s.today ? " today" : ""}`);
-    c.title = `${d.key} ${dayWord(r, d.state)}`;
+    const c = el("div", `hm-ycell td-ry ${d.state}${d.key === today ? " today" : ""}`);
+    c.title = `${d.key} ${word(d.state)}`;
     grid.appendChild(c);
   });
   scroll.appendChild(months); scroll.appendChild(grid);
   row.appendChild(scroll);
-  wrap.appendChild(row);
-  if (from <= s.today && s.today <= to) requestAnimationFrame(() => { scroll.scrollLeft = scroll.scrollWidth; });
-  return wrap;
+  if (from <= today && today <= to) requestAnimationFrame(() => { scroll.scrollLeft = scroll.scrollWidth; });
+  return row;
 }
 function renderRoutineStats(wrap) {
   const s = loadState();
   const range = statsRange(), from = H.keyOfDate(range.from), to = H.keyOfDate(range.to);
   if (from > s.today) return;
   const end = to < s.today ? to : s.today;
-  // その期間に表示していた日課(作る前・消した後は出さない)
-  const list = s.todo.routines.filter(r => r.createdOn <= end && (!r.archivedOn || r.archivedOn > from));
+  // その期間に表示していた日課(作る前は出さない)。消した日課は統計にも出さない
+  const list = s.todo.routines.filter(r => r.createdOn <= end && !r.archivedOn);
   const year = statsMode === "year";
   const span = year ? `${from.slice(0, 4)}年の1年間` : `${+end.slice(5, 7)}/${+end.slice(8)}までの${CAL_WEEKS}週間`;
   // ふつうの日課と、やめたいこと(守れた日を数える)を別の見出しで
@@ -2616,7 +2625,7 @@ function openRoutineEditor(rid, avoid = false) {
     if (msg) box.appendChild(el("p", "hb-note", esc(msg)));
     const row = el("div", "btn-row");
     if (orig) row.appendChild(btn("削除", "btn btn-secondary", () => {
-      if (!confirm(`「${orig.name}」を消しますか？これまでの記録とゴールドは残ります。`)) return;
+      if (!confirm(`「${orig.name}」を消しますか？統計からも消えます（もらったゴールドはそのまま）。`)) return;
       closeSheet();
       changeTodo((t, st) => T.archiveRoutine(t, orig.id, st.today), `${what}を消しました`);
     }));
@@ -3131,27 +3140,42 @@ function openShop(kind = "wish") {
 }
 
 // ── 統計タブ: 習慣ごとの達成度 ────────────────────────────────────────────
+// 習慣ごとのカード(日課と同じ見た目)。週間・月間は期間の終わりまでの8週、年間は1年ぶん。色は習慣の色
 function renderHabitStats(wrap) {
   const s = loadState(), ctx = ctxOf(s);
   const range = statsRange(), from = H.keyOfDate(range.from), to = H.keyOfDate(range.to);
   if (from > s.today) return;
+  const end = to < s.today ? to : s.today;
   const list = s.habits.filter(h => !h.archived || (h.archivedOn && h.archivedOn > from));
   if (!list.length) return;
+  const year = statsMode === "year";
   wrap.appendChild(el("p", "section-label", "習慣の達成度"));
-  const card = el("div", "stats-card");
+  const box = el("div", "td-rstats");
+  box.appendChild(el("p", "hb-note td-rstats-note", `${year ? `${from.slice(0, 4)}年の1年間` : `${+end.slice(5, 7)}/${+end.slice(8)}までの${CAL_WEEKS}週間`}。色のついた日が達成した日、枠だけの日は休息日・護符で守った日です（達成率の分母から除いています）。`));
+  const word = st => ({ done: "達成", miss: "未", rest: "休息・護符", off: "", future: "" })[st];
   list.forEach(h => {
     const r = H.habitRate(h, from, to, s.today, ctx);
-    const b = H.bestStreak(h, from, to < s.today ? to : s.today, ctx);
+    const b = H.bestStreak(h, from, end, ctx);
+    const cur = H.currentStreak(h, s.today, ctx);
     const unit = h.freq.type === "weekly" ? "週" : "日";
-    const row = el("div", "hs-row");
-    row.innerHTML = `<div class="hb-icon" aria-hidden="true">${esc(h.icon)}</div>
-      <div class="hs-main"><div class="hs-name">${esc(h.name)}</div>
-        <div class="hs-sub">${esc(H.freqLabel(h))} ・ ${r.ok}/${r.due}${unit} ・ 最長🔥${b.n}${unit}</div></div>
-      <span class="hs-rate" style="background:${h.color}26;color:${h.color}">${r.rate == null ? "—" : Math.round(r.rate * 100) + "%"}</span>`;
-    card.appendChild(row);
+    const card = el("div", "td-rcal hs-cal" + (year ? " td-ryear" : ""));
+    card.dataset.hid = h.id;
+    card.style.setProperty("--c", h.color);
+    card.innerHTML = `<div class="td-rcal-head"><span class="td-ico" aria-hidden="true">${esc(h.icon)}</span><b>${esc(h.name)}</b>
+        <span class="hs-rate" style="background:${h.color}26;color:${h.color}">${r.rate == null ? "—" : Math.round(r.rate * 100) + "%"}</span></div>
+      <div class="td-rcal-sub">${esc(H.freqLabel(h))} ・ ${cur.n ? `🔥${cur.n}${unit}連続` : "連続なし"} ・ 最長 ${b.n}${unit} ・ ${r.ok}/${r.due}${unit}</div>`;
+    if (year) card.appendChild(yearGrid(H.habitDays(h, from, to, ctx, s.today), h.name, word, from, to, s.today));
+    else {
+      const mon = H.mondayOf(end);
+      const weeks = Array.from({ length: CAL_WEEKS }, (_, w) => {
+        const m = H.addDays(mon, -7 * w);
+        return { monday: m, days: H.habitDays(h, m, H.addDays(m, 6), ctx, s.today) };
+      });
+      card.appendChild(weekGrid(weeks, h.name, word, s.today));
+    }
+    box.appendChild(card);
   });
-  card.appendChild(el("p", "hb-note", "休息日・護符で守った日は分母から除いています。"));
-  wrap.appendChild(card);
+  wrap.appendChild(box);
 }
 
 window.HabitUI = { renderToday, openDay: k => { selDay = k; stripFocus = true; }, renderRewardCard, renderHabitStats, renderRoutineStats, updateQuestBadge: () => updateQuestBadge() };
