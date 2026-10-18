@@ -469,11 +469,11 @@ textarea.field-input { height:76px; resize:vertical; }
 .qb-row { display:flex; align-items:center; gap:10px; padding:12px 0; border-bottom:1px solid var(--line); }
 /* サムネイル: 外周リング=今の段の進み具合、下の◆=何段目か。色は段ごとに 銅→銀→金→紫 */
 .qb-ico { width:48px; flex-shrink:0; display:flex; flex-direction:column; align-items:center; gap:5px; font-size:21px; }
-.qb-ring { width:46px; height:46px; border-radius:50%; display:grid; place-items:center;
-  background:conic-gradient(var(--t1) 0 var(--p), #ffffff12 var(--p) 100%); }
-.qb-ring b { width:38px; height:38px; border-radius:50%; display:grid; place-items:center; font-weight:400;
+.qb-ring { position:relative; width:46px; height:46px; border-radius:50%; display:grid; place-items:center; }
+.qb-ring svg { position:absolute; inset:0; transform:rotate(-90deg); }
+.qb-ring b { width:36px; height:36px; border-radius:50%; display:grid; place-items:center; font-weight:400; overflow:hidden; white-space:nowrap;
   background:radial-gradient(circle at 35% 30%,#24262d,#101115); box-shadow:inset 0 0 0 1px #ffffff10; }
-.qb-row.ready .qb-ring { background:#f0d7a3; box-shadow:0 0 10px #f0d7a388; }
+.qb-row.ready .qb-ring { box-shadow:0 0 10px #f0d7a388; }
 .qb-row.fresh .qb-ring b { filter:grayscale(1) opacity(.55); }
 .qb-pips { display:flex; gap:3px; }
 .qb-pips i { width:6px; height:6px; transform:rotate(45deg); background:#ffffff1a; }
@@ -2700,13 +2700,16 @@ function updateQuestBadge(board) {
   }
   return n;
 }
+// 自分で付けたアイコンは8文字まで入るので、丸の中には先頭の1文字(絵文字1つ)だけ出す
+const firstGlyph = s => (typeof Intl !== "undefined" && Intl.Segmenter
+  ? new Intl.Segmenter().segment(String(s)).containing(0)?.segment : Array.from(String(s))[0]) || "";
 const QUEST_TIER_COLORS = [["#d39a63", "#7a4a26"], ["#e4ebf3", "#7d8896"], ["#ffe39a", "#b8862f"], ["#c9b6ff", "#6a4fd0"]];
 function questThumb(q) {
   const t = Math.min(q.tierIdx, q.line.tiers.length - 1);
   const [t1, t2] = QUEST_TIER_COLORS[Math.min(t, QUEST_TIER_COLORS.length - 1)];
   const pips = q.line.tiers.map((_, i) => `<i class="${i < q.tierIdx ? "on" : i === q.tierIdx ? "now" : ""}"></i>`).join("");
-  return `<div class="qb-ico" aria-hidden="true" style="--t1:${t1};--t2:${t2};--p:${(q.ratio * 100).toFixed(1)}%">
-    <span class="qb-ring"><b>${esc(q.line.icon)}</b></span><span class="qb-pips">${pips}</span></div>`;
+  return `<div class="qb-ico" aria-hidden="true" style="--t1:${t1};--t2:${t2}">
+    <span class="qb-ring">${ringSvg(46, 4, q.ratio, q.claimable ? "#f0d7a3" : t1)}<b>${esc(firstGlyph(q.line.icon))}</b></span><span class="qb-pips">${pips}</span></div>`;
 }
 function questRow(q, onClaim) {
   const row = el("div", "qb-row" + (q.claimable ? " ready" : "") + (!q.done && !q.value ? " fresh" : ""));

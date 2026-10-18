@@ -90,7 +90,10 @@ function seedRecords() {
   assert.match(await p.locator('#hb-sheet .qb-row', { hasText: 'ことばの旅 III' }).innerText(), /31\/100時間/);
   // サムネイル: リングは今の段の進み具合(31%)、◆は済んだ2段+今の段
   const thumb = p.locator('#hb-sheet .qb-row', { hasText: 'ことばの旅 III' }).locator('.qb-ico');
-  assert.equal(await thumb.evaluate(e => e.style.getPropertyValue('--p')), '31.0%');
+  assert.ok(await thumb.locator('.qb-ring svg circle').nth(1).evaluate(e => {
+    const c = Number(e.getAttribute('stroke-dasharray')), off = Number(e.getAttribute('stroke-dashoffset'));
+    return Math.abs(1 - off / c - 0.31) < 0.01;
+  }));
   assert.equal(await thumb.locator('.qb-pips i.on').count(), 2);
   assert.equal(await thumb.locator('.qb-pips i.now').count(), 1);
   let r = await reward();
