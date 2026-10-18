@@ -315,8 +315,10 @@ textarea.field-input { height:76px; resize:vertical; }
 .hb-pick { position:relative; display:inline-block; cursor:pointer; }
 .hb-pick input { position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer; border:0; padding:0; }
 .hb-pick h1::after { content:"▾"; font-size:13px; color:var(--dim); margin-left:6px; vertical-align:middle; }
-.hb-days { display:grid; grid-template-columns:repeat(7,1fr); gap:4px; margin-bottom:8px; }
-.hb-day { border:0; background:none; color:var(--dim); padding:6px 0 8px; border-radius:16px; cursor:pointer;
+.hb-days { display:flex; gap:4px; margin:0 -2px 8px; padding:0 2px; overflow-x:auto; overscroll-behavior-x:contain;
+  scroll-snap-type:x proximity; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
+.hb-days::-webkit-scrollbar { display:none; }
+.hb-day { flex:0 0 calc((100% - 24px) / 7); scroll-snap-align:start; border:0; background:none; color:var(--dim); padding:6px 0 8px; border-radius:16px; cursor:pointer;
   display:flex; flex-direction:column; align-items:center; gap:4px; min-height:64px; }
 .hb-day.sel { background:linear-gradient(#dfbd7c26,#dfbd7c10); color:var(--txt); }
 .hb-dow { font-size:11px; }
@@ -1766,7 +1768,8 @@ const esc = s => String(s ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": 
 const fmt = n => Math.round(n).toLocaleString("ja-JP");
 const GOAL_LABEL = { check: "チェック", count: "回数", minutes: "時間" };
 const FREQ_LABEL = { daily: "毎日", days: "曜日指定", weekly: "週N回" };
-let selDay = null, stripEnd = null, lastToday = null;
+let selDay = null, lastToday = null;
+let stripDays = 28, stripRight = 0, stripFocus = false; // 日付ストリップ: 描く日数・右端からの位置・選んだ日へ寄せるか
 
 // ── state ──────────────────────────────────────────────────────────────────
 function ctxOf(s) {
@@ -1788,25 +1791,12 @@ function loadState() {
 }
 function saveHabits(list) { write(H.KEYS.habits, { habits: list }); }
 function curDay(s) {
-  if (lastToday !== s.today) { selDay = null; stripEnd = null; lastToday = s.today; }
+  if (lastToday !== s.today) { selDay = null; stripRight = 0; lastToday = s.today; }
   return selDay && selDay <= s.today ? selDay : s.today;
-}
-// 日付ストリップの右端。選んだ日が必ず7日の中に入るようにする
-function stripEndOf(s, day) {
-  const end = stripEnd && stripEnd <= s.today ? stripEnd : s.today;
-  return day <= end && day > H.addDays(end, -7) ? end : (H.addDays(day, 3) < s.today ? H.addDays(day, 3) : s.today);
 }
 function showDay(k, today) {
   selDay = k > today ? today : k;
-  stripEnd = null;
-  renderToday();
-}
-function shiftWeek(n, s, day, end) {
-  const t = s.today;
-  const e = H.addDays(end, 7 * n);
-  stripEnd = e > t ? t : e;
-  const d = H.addDays(day, 7 * n);
-  selDay = d > t ? t : d;
+  stripFocus = true;
   renderToday();
 }
 function dayLabel(k, today) {
@@ -1908,30 +1898,38 @@ function renderToday() {
   top.querySelector(".hb-pick input").onchange = e => { if (e.target.value) showDay(e.target.value, s.today); };
   v.appendChild(top);
 
-  // 7日の日付ストリップ(リング = 予定の習慣の達成割合)。週単位でいくらでもさかのぼれる
-  const end = stripEndOf(s, day), start = H.addDays(end, -6);
+  // 日付ストリップ(リング = 予定の習慣の達成割合)。横にスワイプしてどこまでもさかのぼれる
   const nav = el("div", "hb-weeknav");
-  const md = k => { const [, m, d] = k.split("-").map(Number); return `${m}/${d}`; };
-  nav.innerHTML = `<button type="button" class="prev" aria-label="前の7日">‹ 前へ</button>
-    <span>${md(start)} 〜 ${md(end)}</span>
-    ${end === s.today ? `<button type="button" class="next" disabled aria-label="次の7日">次へ ›</button>`
-      : `<button type="button" class="back">今日へ</button><button type="button" class="next" aria-label="次の7日">次へ ›</button>`}`;
-  nav.querySelector(".prev").onclick = () => shiftWeek(-1, s, day, end);
-  nav.querySelector(".next").onclick = () => shiftWeek(1, s, day, end);
+  const [sy, sm] = day.split("-").map(Number);
+  nav.innerHTML = `<span>${sy !== Number(s.today.slice(0, 4)) ? sy + "年" : ""}${sm}月</span>`
+    + (day !== s.today ? `<button type="button" class="back">今日へ ›</button>` : "");
   nav.querySelector(".back")?.addEventListener("click", () => showDay(s.today, s.today));
   v.appendChild(nav);
+  stripDays = Math.max(stripDays, H.daysBetween(day, s.today) + 7);
   const strip = el("div", "hb-days");
-  for (let i = 6; i >= 0; i--) {
-    const k = H.addDays(end, -i), dc = H.dayCompletion(active, k, ctx);
+  const dayBtn = k => {
+    const dc = H.dayCompletion(active, k, ctx);
     const b = el("button", "hb-day" + (k === day ? " sel" : "") + (k === s.today ? " today" : ""));
     b.type = "button";
+    b.dataset.day = k;
     b.setAttribute("aria-label", `${dayLabel(k, s.today)} ${dc.done}/${dc.due}達成`);
     if (k === day) b.setAttribute("aria-current", "date");
     b.innerHTML = `<span class="hb-dow">${H.WEEKDAY_LABELS[H.weekdayIdx(k)]}</span>
       <span class="hb-dnum">${ringSvg(36, 3, dc.due ? dc.done / dc.due : 0, "#dfbd7c")}${Number(k.slice(8))}</span>`;
-    b.onclick = () => { selDay = k; stripEnd = end; renderToday(); };
-    strip.appendChild(b);
-  }
+    b.onclick = () => { selDay = k; renderToday(); };
+    return b;
+  };
+  for (let i = stripDays - 1; i >= 0; i--) strip.appendChild(dayBtn(H.addDays(s.today, -i)));
+  // 左端に近づいたら、さらに4週間ぶん前の日を足す(見えている位置は動かさない)
+  strip.addEventListener("scroll", () => {
+    stripRight = strip.scrollWidth - strip.clientWidth - strip.scrollLeft;
+    if (strip.scrollLeft > 80) return;
+    const frag = document.createDocumentFragment();
+    for (let i = stripDays + 27; i >= stripDays; i--) frag.appendChild(dayBtn(H.addDays(s.today, -i)));
+    stripDays += 28;
+    strip.prepend(frag);
+    strip.scrollLeft = strip.scrollWidth - strip.clientWidth - stripRight;
+  }, { passive: true });
   v.appendChild(strip);
 
   const shown = active.filter(h => H.isActiveOn(h, day));
@@ -1972,6 +1970,32 @@ function renderToday() {
   }
   cont.appendChild(v);
   v.scrollTop = keep;
+  // 前回の位置を保つ。日付を指定して開いたときや、選んだ日が見えないときはその日へ寄せる
+  strip.scrollLeft = strip.scrollWidth - strip.clientWidth - stripRight;
+  const sel = strip.querySelector(".hb-day.sel");
+  if (sel && (stripFocus || sel.offsetLeft < strip.scrollLeft || sel.offsetLeft + sel.offsetWidth > strip.scrollLeft + strip.clientWidth))
+    strip.scrollLeft = sel.offsetLeft - (strip.clientWidth - sel.offsetWidth) / 2;
+  stripFocus = false;
+  stripRight = strip.scrollWidth - strip.clientWidth - strip.scrollLeft;
+  bindDaySwipe(v, s.today, day);
+}
+// 習慣の一覧を左右にスワイプすると前の日/次の日へ(縦スクロールや日付ストリップの上では反応しない)
+function bindDaySwipe(v, today, day) {
+  let x0 = null, y0 = 0;
+  v.addEventListener("touchstart", e => {
+    x0 = e.touches.length === 1 && !e.target.closest(".hb-days, .hb-pick, button, input") ? e.touches[0].clientX : null;
+    y0 = e.touches[0].clientY;
+  }, { passive: true });
+  v.addEventListener("touchend", e => {
+    if (x0 == null) return;
+    const t = e.changedTouches[0], dx = t.clientX - x0, dy = t.clientY - y0;
+    x0 = null;
+    if (Math.abs(dx) < 60 || Math.abs(dx) < Math.abs(dy) * 2) return;
+    const k = H.addDays(day, dx > 0 ? -1 : 1);
+    if (k > today) return;
+    selDay = k;
+    renderToday();
+  }, { passive: true });
 }
 
 function habitCard(h, day, ctx, isOff = false) {
@@ -2560,7 +2584,7 @@ function renderHabitStats(wrap) {
   wrap.appendChild(card);
 }
 
-window.HabitUI = { renderToday, openDay: k => { selDay = k; stripEnd = null; }, renderRewardCard, renderHabitStats, updateQuestBadge: () => updateQuestBadge() };
+window.HabitUI = { renderToday, openDay: k => { selDay = k; stripFocus = true; }, renderRewardCard, renderHabitStats, updateQuestBadge: () => updateQuestBadge() };
 if (["today", "status", "stats"].includes(tab)) render();
 </script>
 <script src="js/pwa-update.js"></script>
