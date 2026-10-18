@@ -65,14 +65,8 @@ const server = http.createServer((req,res)=>{
     await p.setViewportSize({width:390,height:844});
     await p.locator('.tab-btn').first().click();
     if(page==='tracker') {
-      await p.locator('[data-tab="schedule"]').click();
-      await p.locator('.add-btn').first().click();
-      await p.locator('#add-label').fill('朝の習慣');await p.locator('#add-save').click();
-      await p.locator('[data-tab="log"]').click();
-      await p.locator('.rec-btn').first().click();
-      await p.locator('#rec-duration').fill('20');await p.locator('#rec-note').fill('自分のペースで');
-      await p.locator('#rec-save').click();
-      assert.match(await p.evaluate(()=>localStorage.getItem('wt_records')),/自分のペースで/);
+      await p.locator('.hb-card',{hasText:'自炊'}).locator('.hb-ring').click();
+      assert.match(await p.evaluate(()=>localStorage.getItem('wt_records')),/cooking/);
       await p.clock.runFor(3000);await p.evaluate(()=>document.fonts.ready);
       if(shots)await p.screenshot({path:path.join(shots,'weekly-mobile.png')});
       await p.locator('[data-tab="status"]').click();
