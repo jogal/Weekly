@@ -20,6 +20,13 @@ Grit 風の「今日」画面を週クエの主画面にし、習慣ごとの目
 - ゴールドは読み込みのたびに「未確定の日〜今日」を記録から計算し直す。7日より前は合計に畳み込んで確定する
 - 既存キーのスキーマは変更しない。バックアップ（書き出し／復元）に3キーを追加
 
+## クエスト掲示板
+
+- `js/quest-core.mjs`: クエストの定義（`QUEST_LINES`、独自習慣ごとの専用ライン）、記録からの進捗集計、掲示板の状態、受け取り
+- 進捗は `wt_records`・`wt_habit_log_v1`・メダルから毎回数える。保存するのは `wt_reward_v1.quests.claimed`（クエストIDと受け取り日）だけ
+- 受け取りでゴールドを `grants` に足し、限定アイテムを `owned` に入れる。限定アイテムはショップでは買えない（`purchase` が `quest` で拒否）
+- 指標: 記録の完了日数（筋トレは部位をまとめて1日）、部位ごとの日数、累計分、何か達成した日数、習慣の達成回数、パーフェクトデイ、メダル数
+
 ## 統計の数え方の修正
 
 統計タブの「達成回数」とカテゴリ別の回数は、予定に入っていた記録しか数えていなかった。今日タブ・ジム・Neuro Learn からの予定外の記録も数えるよう、完了記録ベースに変更した。
@@ -29,6 +36,7 @@ Grit 風の「今日」画面を週クエの主画面にし、習慣ごとの目
 ```sh
 node --test tests/*.test.mjs
 BROWSER_PATH=<chromium> node tests/habit-ui.cjs
+BROWSER_PATH=<chromium> node tests/quest-ui.cjs
 BROWSER_PATH=<chromium> node tests/app-ui.cjs
 ```
 

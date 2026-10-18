@@ -285,6 +285,7 @@ export function newRewardState(todayKey) {
     grants: [{ g: GOLD.welcome, reason: "welcome", on: todayKey }],
     purchases: [], freezes: {}, owned: [],
     equipped: { title: null, pet: null, bg: null },
+    quests: { claimed: {} },
   };
 }
 export function normalizeReward(r, todayKey) {
@@ -299,6 +300,7 @@ export function normalizeReward(r, todayKey) {
     freezes: r.freezes && typeof r.freezes === "object" ? r.freezes : {},
     owned: Array.isArray(r.owned) ? r.owned : [],
     equipped: { title: null, pet: null, bg: null, ...(r.equipped || {}) },
+    quests: { claimed: { ...(r.quests?.claimed || {}) } },
   };
 }
 const clone = o => JSON.parse(JSON.stringify(o));
@@ -394,6 +396,19 @@ export const SHOP = [
     css: "radial-gradient(1px 1px at 20% 30%,#fff9,transparent),radial-gradient(1px 1px at 70% 20%,#fff8,transparent),radial-gradient(1.5px 1.5px at 85% 60%,#fffa,transparent),radial-gradient(1px 1px at 40% 75%,#fff7,transparent),linear-gradient(170deg,#141a33,#0b0d18)" },
   { id: "bg_castle", kind: "bg", name: "王城", icon: "🏰", price: 2500, desc: "背景",
     css: "radial-gradient(ellipse at 50% 0,#dfbd7c55,transparent 60%),linear-gradient(170deg,#2a2338,#16131d)" },
+  // クエスト報酬でしか手に入らないもの(quest-core.mjs の QUEST_LINES が配る)
+  { id: "t_iron_body", kind: "title", name: "鋼の肉体", icon: "📜", quest: true, desc: "クエスト報酬" },
+  { id: "t_scholar", kind: "title", name: "知の探究者", icon: "📜", quest: true, desc: "クエスト報酬" },
+  { id: "t_traveler", kind: "title", name: "一年の冒険者", icon: "📜", quest: true, desc: "クエスト報酬" },
+  { id: "t_collector", kind: "title", name: "メダルコレクター", icon: "📜", quest: true, desc: "クエスト報酬" },
+  { id: "p_kangaroo", kind: "pet", name: "カンガルー", icon: "🦘", quest: true, desc: "クエスト報酬" },
+  { id: "p_parrot", kind: "pet", name: "オウム", icon: "🦜", quest: true, desc: "クエスト報酬" },
+  { id: "p_bird", kind: "pet", name: "ことり", icon: "🐦", quest: true, desc: "クエスト報酬" },
+  { id: "p_turtle", kind: "pet", name: "かめ", icon: "🐢", quest: true, desc: "クエスト報酬" },
+  { id: "bg_kitchen", kind: "bg", name: "灯りの台所", icon: "🍲", quest: true, desc: "クエスト報酬",
+    css: "radial-gradient(ellipse at 80% 100%,#e0954a55,transparent 60%),linear-gradient(165deg,#2a2018,#15110e)" },
+  { id: "bg_dawn", kind: "bg", name: "夜明け", icon: "🌅", quest: true, desc: "クエスト報酬",
+    css: "radial-gradient(ellipse at 50% 115%,#f2b36a66,transparent 60%),linear-gradient(180deg,#1b2238,#2a2232 70%,#3a2a2a)" },
 ];
 export const SHOP_KINDS = [
   { kind: "shield", label: "どうぐ" }, { kind: "title", label: "称号" },
@@ -403,6 +418,7 @@ export function shopItem(id) { return SHOP.find(i => i.id === id) || null; }
 export function purchase(r, itemId, today) {
   const it = shopItem(itemId);
   if (!it) return { ok: false, reason: "unknown" };
+  if (it.quest) return { ok: false, reason: "quest" };
   if (it.kind !== "shield" && r.owned.includes(it.id)) return { ok: false, reason: "owned" };
   if (it.kind === "shield" && shieldCount(r) >= SHIELD_MAX) return { ok: false, reason: "max" };
   if (balance(r) < it.price) return { ok: false, reason: "gold" };
