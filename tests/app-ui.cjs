@@ -55,6 +55,9 @@ const server = http.createServer((req,res)=>{
       for(let i=0;i<tabs;i++) {
         await p.locator('.tab-btn').nth(i).click();
         assert.ok(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),`${page} ${width} body overflow`);
+        // iOSのホーム画面アプリで100dvhが短くなる問題の回避: 高さの単位ではなく四辺固定で全高を使う
+        const fill=await p.evaluate(()=>{const a=document.getElementById('app');return getComputedStyle(a).position==='fixed'&&Math.round(a.getBoundingClientRect().bottom)===innerHeight;});
+        assert.ok(fill,`${page} ${width} app must fill the screen height`);
         const overflow=await p.locator('#content').evaluate(e=>e.scrollWidth>e.clientWidth);
         assert.equal(overflow,false,`${page} ${width} content overflow`);
       }

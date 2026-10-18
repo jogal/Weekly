@@ -9,6 +9,10 @@ body[data-app="tracker"] { --green:var(--gold); }
 body[data-app="music"] { --note:#b4b3de; --accent:var(--note); }
 body[data-app="spots"] { --acc:#9ac8b8; --accent:var(--acc); }
 #app { max-width:760px; margin-inline:auto; min-width:0; }
+/* iPhoneのホーム画面アプリでは 100vh / 100dvh がステータスバーの分だけ短く計算され、
+   画面の下に帯が残ってタブバーが浮いて見える。高さの単位に頼らず、画面の四辺に固定する */
+html, body { height:100%; }
+#app { position:fixed; inset:0; height:auto; }
 #header { border:0; padding:18px 18px 12px; padding-top:max(18px,env(safe-area-inset-top)); }
 #app-title { font-family:inherit; font-size:19px; font-weight:700; letter-spacing:-.05em; text-transform:none; flex-wrap:wrap; gap:12px; }
 #app-title .t-red { color:var(--txt); }
