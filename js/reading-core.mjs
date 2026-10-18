@@ -1,6 +1,9 @@
 // 読書記録のロジック(画面なし)。保存先は wt_reading_v1 だけで、習慣の記録とは別に残る。
 // { books: [{ id, title, author, pages, status, addedOn, startedOn, finishedOn, review, log: { "YYYY-MM-DD": { page } } }] }
 // log はその日に「何ページまで進んだか」。その日に読んだページ数は前の記録との差で数える。
+// recordOnly: 最初から読了で登録した本(記録だけでゴールドなし)。bonusOn: 読了ボーナスを付けた日(1冊1回)。
+// fill: 読了にしたとき最後のページまで埋めた日と、その日にもともとあった記録({ on, prev })。取り消し・読了日の変更で戻す。
+import { SETTLE_WINDOW, addDays } from "./habit-core.mjs";
 export const KEY = "wt_reading_v1";
 export const STATUSES = ["reading", "want", "done"];
 export const STATUS_LABEL = { want: "読みたい", reading: "読書中", done: "読了" };
@@ -37,8 +40,13 @@ export function normalizeBook(b, today) {
     finishedOn: status === "done" ? (dateOr(b?.finishedOn) || today) : null,
     review: str(b?.review, 2000),
     log,
+    recordOnly: status === "done" && b?.recordOnly === true,
+    bonusOn: dateOr(b?.bonusOn),
+    fill: status === "done" && dateOr(b?.fill?.on) ? { on: b.fill.on, prev: b.fill.prev > 0 ? int(b.fill.prev, 0, pages || 20000) : null } : null,
   };
 }
+// ゴールドが確定済み(直近7日より前)の日か
+const banked = (day, today) => day <= addDays(today, -SETTLE_WINDOW);
 
 export function normalize(data, today) {
   const books = Array.isArray(data?.books) ? data.books.map(b => normalizeBook(b, today)) : [];
@@ -91,13 +99,45 @@ export function removeLog(book, day) {
   return { ...book, log };
 }
 
-export function setStatus(book, status, day) {
+// 読了で埋めたページを元に戻す
+function unfill(b) {
+  if (!b.fill) return b;
+  const log = { ...b.log };
+  if (b.fill.prev) log[b.fill.on] = { page: b.fill.prev }; else delete log[b.fill.on];
+  return { ...b, log, fill: null };
+}
+// 読了日に最後のページまで進んだことにする(その日の分のゴールドが入る)
+function fillTo(b, day) {
+  if (!b.pages || currentPage(b) >= b.pages) return b;
+  return { ...b, log: { ...b.log, [day]: { page: b.pages } }, fill: { on: day, prev: b.log[day]?.page || null } };
+}
+// day: 読了にする日、today: 今日(ボーナスが確定済みかの判定に使う)
+export function setStatus(book, status, day, today = day) {
   if (!STATUSES.includes(status) || status === book.status) return book;
-  const b = { ...book, status };
+  let b = { ...book, status };
   if (status !== "want" && !b.startedOn) b.startedOn = Object.keys(book.log).sort()[0] || day;
-  b.finishedOn = status === "done" ? day : null;
-  // 読了にしたら最後のページまで進んだことにする(その日の分のゴールドが入る)
-  if (status === "done" && b.pages && currentPage(b) < b.pages) b.log = { ...b.log, [day]: { page: b.pages } };
+  if (status === "done") {
+    b.finishedOn = day;
+    // 一度も記録していない本の読了は「もう読んだ本の登録」: 記録だけでゴールドなし
+    b.recordOnly = !Object.keys(book.log).length;
+    if (!b.recordOnly) {
+      b = fillTo(b, day);
+      if (!b.bonusOn || !banked(b.bonusOn, today)) b.bonusOn = day; // ボーナスは1冊1回。確定済みならもう付けない
+    }
+    return b;
+  }
+  b = unfill(b);
+  b.finishedOn = null;
+  b.recordOnly = false;
+  if (b.bonusOn && !banked(b.bonusOn, today)) b.bonusOn = null; // まだ確定していないボーナスは取り消す
+  return b;
+}
+// 読了日を変える。埋めたページとまだ確定していないボーナスも一緒に動かす
+export function setFinishedOn(book, day, today) {
+  if (book.status !== "done" || !DATE_RE.test(day) || day === book.finishedOn) return book;
+  let b = { ...book, finishedOn: day > today ? today : day };
+  if (b.fill) b = fillTo(unfill(b), b.finishedOn);
+  if (b.bonusOn && !banked(b.bonusOn, today)) b.bonusOn = b.finishedOn;
   return b;
 }
 
@@ -115,7 +155,8 @@ export function booksOn(books, day) {
 
 // ── ゴールド ─────────────────────────────────────────────────────────────────
 export function bookDayGold(book, day) {
-  const pages = readOn(book, day), bonus = book.status === "done" && book.finishedOn === day ? finishBonus(book) : 0;
+  if (book.recordOnly) return null;
+  const pages = readOn(book, day), bonus = book.status === "done" && book.bonusOn === day ? finishBonus(book) : 0;
   const g = pages * GOLD_PER_PAGE + bonus;
   return g ? { g, streak: 0, unit: "d", ms: 0, pages, bonus } : null;
 }

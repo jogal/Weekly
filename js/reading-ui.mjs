@@ -114,7 +114,7 @@ export function openBook(id) {
 
     const sg = h("div", "hb-seg");
     ["want", "reading", "done"].forEach(st => sg.appendChild(button(R.STATUS_LABEL[st], b.status === st ? "on" : "", () => {
-      updateBook(id, x => R.setStatus(x, st, t0)); draw();
+      updateBook(id, x => R.setStatus(x, st, t0, t0)); draw();
     })));
     box.appendChild(sg);
 
@@ -123,6 +123,7 @@ export function openBook(id) {
       <div><b>${t.days}</b><span>読んだ日</span></div><div><b>${b.startedOn ? shortDate(b.startedOn) : "—"}</b><span>読みはじめ</span></div>`;
     box.appendChild(st3);
     if (p != null && b.status !== "done") box.insertAdjacentHTML("beforeend", bar(p));
+    if (b.recordOnly) box.appendChild(h("p", "hb-note", "読了で登録した本なので、記録だけでゴールドは付きません。"));
 
     if (b.status !== "want") {
       box.appendChild(h("span", "field-label", "何ページまで進んだか"));
@@ -138,7 +139,7 @@ export function openBook(id) {
       box.appendChild(h("span", "field-label", "読了日"));
       const fin = h("input", "field-input rd-date"); fin.type = "date"; fin.max = t0; fin.value = b.finishedOn;
       fin.setAttribute("aria-label", "読了日");
-      fin.onchange = () => { if (/^\d{4}-\d{2}-\d{2}$/.test(fin.value)) updateBook(id, x => ({ ...x, finishedOn: fin.value > t0 ? t0 : fin.value })); };
+      fin.onchange = () => { if (/^\d{4}-\d{2}-\d{2}$/.test(fin.value)) updateBook(id, x => R.setFinishedOn(x, fin.value, t0)); };
       box.appendChild(fin);
     }
     box.appendChild(h("span", "field-label", b.status === "done" ? "感想" : "メモ"));
@@ -202,7 +203,7 @@ export function openPage(id, day) {
     const list = [saveBtn];
     if (b.status === "reading") list.push(button("読了にする", "btn btn-secondary", () => {
       const g0 = R.bookDayGold(b, day);
-      const nb = updateBook(id, x => R.setStatus(x, "done", day));
+      const nb = updateBook(id, x => R.setStatus(x, "done", day, t0));
       const g1 = R.bookDayGold(nb, day);
       if (typeof showToast === "function") showToast(inGoldWindow(day, t0) ? `🎉 読了！ +${(g1?.g || 0) - (g0?.g || 0)}G` : "🎉 読了！");
       openBook(id);
@@ -235,6 +236,7 @@ export function openEditor(id, opts = {}) {
       box.appendChild(sg);
     }
     if (msg) box.appendChild(h("p", "hb-note rd-warn", esc(msg)));
+    if (!orig && draft.status === "done") box.appendChild(h("p", "hb-note", "読了で登録した本は記録として残り、ゴールドは付きません。"));
     box.appendChild(h("p", "hb-note", `読み進めた1ページごとに ${R.GOLD_PER_PAGE}G、読了した日に全ページ数×1/2のボーナス${draft.pages > 0 ? `（${R.finishBonus(draft)}G）` : ""}。`));
     const list = [];
     if (orig) list.push(button("削除", "btn btn-secondary", () => {
@@ -250,7 +252,8 @@ export function openEditor(id, opts = {}) {
         save(d); openBook(id);
       } else {
         const nb = R.normalizeBook({ id: "b_" + Date.now().toString(36), title: draft.title, author: draft.author, pages: draft.pages,
-          status: draft.status, addedOn: t0, startedOn: draft.status === "want" ? null : (opts.day || t0), finishedOn: t0 }, t0);
+          status: draft.status, addedOn: t0, startedOn: draft.status === "want" ? null : (opts.day || t0), finishedOn: t0,
+          recordOnly: draft.status === "done" }, t0);
         d.books.push(nb); save(d); seg = nb.status;
         if (opts.day) closeSheet(); else openBook(nb.id);
       }
