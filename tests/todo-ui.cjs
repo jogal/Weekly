@@ -36,7 +36,7 @@ const server = http.createServer((req, res) => {
   const g0 = await balance();
 
   // 1) ＋ で「習慣・日課・大きなタスク」を選べる。最初はどちらも空
-  assert.match(await p.locator('#today-view').innerText(), /日課[\s\S]*大きなタスク/);
+  assert.match(await p.locator('#today-view').innerText(), /大きなタスク[\s\S]*習慣[\s\S]*日課/);
   await p.locator('.hb-add').click();
   assert.deepEqual(await p.locator('#hb-sheet .td-choice .hb-name').allInnerTexts(), ['習慣', '日課', '大きなタスク']);
   if (shots) await p.screenshot({ path: path.join(shots, 'todo-chooser.png') });
@@ -52,14 +52,14 @@ const server = http.createServer((req, res) => {
   await p.locator('#hb-sheet .hb-seg button', { hasText: '夜' }).click();
   await p.locator('#hb-sheet .btn-primary', { hasText: '保存' }).click();
   assert.deepEqual(await p.locator('.td-slot').allInnerTexts(), ['🌅 朝', '🌙 夜']);
-  assert.match(await p.locator('.td-head').first().innerText(), /日課 0\/2/);
+  assert.match(await p.locator('.td-head', { hasText: '日課' }).innerText(), /日課 0\/2/);
 
   // 3) タップで済み(+2G)、もう一度で戻る。習慣の連続記録やリングには影響しない
   const brush = p.locator('.td-routine', { hasText: '歯みがき' });
   await brush.click();
   assert.equal(await p.locator('.td-routine', { hasText: '歯みがき' }).getAttribute('aria-pressed'), 'true');
   assert.equal(await balance(), g0 + 2);
-  assert.match(await p.locator('.td-head').first().innerText(), /日課 1\/2/);
+  assert.match(await p.locator('.td-head', { hasText: '日課' }).innerText(), /日課 1\/2/);
   await p.locator('.td-routine', { hasText: '歯みがき' }).click();
   assert.equal(await balance(), g0);
   await p.locator('.td-routine', { hasText: '歯みがき' }).click();
@@ -77,47 +77,63 @@ const server = http.createServer((req, res) => {
   await p.locator('#hb-sheet .btn-primary', { hasText: '保存' }).click();
   assert.equal(await p.locator('.td-routine', { hasText: '降圧薬' }).count(), 1);
 
-  // 5) 大きなタスクを追加(期限3日後、ステップ3つ)
+  // 5) 大きなタスクを追加(期限3日後、ステップ3つ) → 習慣より上に出て、開いた状態でステップが並ぶ
   await p.locator('.td-plus[aria-label="大きなタスクを追加"]').click();
   await p.locator('#hb-sheet input.field-input').first().fill('症例報告');
   await p.locator('#hb-sheet input[type="date"]').fill('2026-10-21');
   await p.locator('#hb-sheet textarea').fill('文献を読む\n図1を作る\n\n考察を書く');
   await p.locator('#hb-sheet .btn-primary', { hasText: '追加' }).click();
-  await p.waitForSelector('#hb-sheet .td-step');
-  assert.equal(await p.locator('#hb-sheet .td-step').count(), 3);
-  // ステップを足して、1つ済ませる(+5G)
-  await p.locator('#hb-sheet input[aria-label="新しいステップ"]').fill('指導医に見せる');
-  await p.locator('#hb-sheet input[aria-label="新しいステップ"]').press('Enter');
-  assert.equal(await p.locator('#hb-sheet .td-step').count(), 4);
-  await p.locator('#hb-sheet .td-step', { hasText: '文献を読む' }).locator('.td-check').click();
+  const box = p.locator('.td-tbox', { hasText: '症例報告' });
+  assert.equal(await box.locator('.td-step').count(), 3);
+  assert.ok(await p.evaluate(() => {
+    const t = document.querySelector('.td-tbox'), h = [...document.querySelectorAll('#today-view .hb-card')].find(c => !c.classList.contains('td-task'));
+    return t.compareDocumentPosition(h) & Node.DOCUMENT_POSITION_FOLLOWING;
+  }), 'tasks come before habits');
+  // その場でステップを足す(入力欄に戻る)。丸をタップして1つ済ませる(+5G)
+  const stepInput = () => p.locator('.td-tbox', { hasText: '症例報告' }).locator('.td-addstep input');
+  await stepInput().fill('指導医に見せる');
+  await stepInput().press('Enter');
+  assert.equal(await box.locator('.td-step').count(), 4);
+  assert.ok(await stepInput().evaluate(e => document.activeElement === e), 'focus returns to the add-step input');
+  await box.locator('.td-step', { hasText: '文献を読む' }).locator('.td-scheck').click();
   assert.equal(await balance(), g0 + 4 + 5);
-  // 並べ替え: 最後のステップを1つ上へ
-  await p.locator('#hb-sheet .td-step', { hasText: '指導医に見せる' }).locator('.td-mini', { hasText: '↑' }).click();
-  assert.deepEqual(await p.locator('#hb-sheet .td-stname').evaluateAll(es => es.map(e => e.firstElementChild.textContent)), ['文献を読む', '図1を作る', '指導医に見せる', '考察を書く']);
-  if (shots) await p.screenshot({ path: path.join(shots, 'todo-task-sheet.png') });
-  await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click();
-  const card = p.locator('.td-task', { hasText: '症例報告' });
-  assert.match(await card.innerText(), /あと3日/);
-  assert.match(await card.innerText(), /ステップ 1\/4/);
+  assert.equal(await box.locator('.td-step', { hasText: '文献を読む' }).locator('.td-scheck').getAttribute('aria-pressed'), 'true');
   if (shots) await p.screenshot({ path: path.join(shots, 'todo-today.png'), fullPage: true });
+  // カードをタップすると閉じる/開く
+  await box.locator('.td-task').click();
+  assert.equal(await box.locator('.td-step').count(), 0);
+  assert.match(await box.innerText(), /あと3日/);
+  assert.match(await box.innerText(), /ステップ 1\/4/);
+  await box.locator('.td-task').click();
+  assert.equal(await box.locator('.td-step').count(), 4);
+
+  // 5b) 編集は別画面: 名前・期限を変え、ステップを並べ替えて保存
+  await box.locator('.td-tbtn', { hasText: '編集' }).click();
+  await p.locator('#hb-sheet input.field-input').first().fill('症例報告を書く');
+  await p.locator('#hb-sheet .td-step', { hasText: '指導医に見せる' }).locator('.td-mini', { hasText: '↑' }).click();
+  if (shots) await p.screenshot({ path: path.join(shots, 'todo-task-edit.png') });
+  await p.locator('#hb-sheet .btn-primary', { hasText: '保存' }).click();
+  const card = p.locator('.td-tbox', { hasText: '症例報告を書く' });
+  assert.deepEqual(await card.locator('.td-stname').evaluateAll(es => es.map(e => e.firstElementChild.textContent)), ['文献を読む', '図1を作る', '指導医に見せる', '考察を書く']);
+  assert.equal((await todo()).tasks[0].steps[0].doneOn, '2026-10-18', 'saving the edit keeps step records');
 
   // 6) 完了にする(+30G) → 今日の一覧に完了として残り、完了したタスクに入る
-  await card.click();
-  await p.locator('#hb-sheet .btn-primary', { hasText: '完了' }).click();
+  await card.locator('.td-tbtn', { hasText: '完了にする' }).click();
   assert.equal(await balance(), g0 + 4 + 5 + 30);
   assert.ok(await p.locator('.td-task', { hasText: '症例報告' }).evaluate(e => e.classList.contains('done')));
   await p.locator('.td-donelink').click();
   assert.match(await p.locator('#hb-sheet').innerText(), /症例報告[\s\S]*今日に完了/);
   await p.locator('#hb-sheet .hb-chip', { hasText: '戻す' }).click();
+  await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click().catch(() => {});
   assert.equal(await balance(), g0 + 4 + 5);
   assert.equal(await p.locator('.td-donelink').count(), 0);
 
-  // 7) 昨日の画面でステップを済ませると、昨日のゴールドになる
+  // 7) 昨日の画面でステップを済ませると、昨日の記録になる
   await p.locator('.hb-day[data-day="2026-10-17"]').click();
-  await p.locator('.td-task', { hasText: '症例報告' }).click();
-  assert.match(await p.locator('#hb-sheet').innerText(), /昨日 に済ませたことになります/);
-  await p.locator('#hb-sheet .td-step', { hasText: '図1を作る' }).locator('.td-check').click();
-  await p.locator('#hb-sheet .btn-secondary', { hasText: '閉じる' }).click();
+  const y = p.locator('.td-tbox', { hasText: '症例報告' });
+  if (!(await y.locator('.td-step').count())) await y.locator('.td-task').click();
+  assert.match(await y.innerText(), /昨日 に済ませたことになります/);
+  await y.locator('.td-step', { hasText: '図1を作る' }).locator('.td-scheck').click();
   const fig = (await todo()).tasks[0].steps.find(x => x.name === '図1を作る');
   assert.equal(fig.doneOn, '2026-10-17');
   // 昨日には今日作った日課は出ない
