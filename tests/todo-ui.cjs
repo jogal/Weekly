@@ -55,24 +55,38 @@ const server = http.createServer((req, res) => {
   assert.match(await p.locator('.td-head', { hasText: '日課' }).innerText(), /日課 0\/2/);
 
   // 3) タップで済み(+2G)、もう一度で戻る。習慣の連続記録やリングには影響しない
+  // 1回タップはダブルタップでないと分かってから保存する(見た目はすぐ変わる)
+  const tap = async name => { await p.locator('.td-routine', { hasText: name }).click(); await p.clock.runFor(400); };
   const brush = p.locator('.td-routine', { hasText: '歯みがき' });
   await brush.click();
+  assert.equal(await brush.getAttribute('aria-pressed'), 'true', 'looks done right away');
+  await p.clock.runFor(400);
   assert.equal(await p.locator('.td-routine', { hasText: '歯みがき' }).getAttribute('aria-pressed'), 'true');
   assert.equal(await balance(), g0 + 2);
   assert.match(await p.locator('.td-head', { hasText: '日課' }).innerText(), /日課 1\/2/);
-  await p.locator('.td-routine', { hasText: '歯みがき' }).click();
+  await tap('歯みがき');
   assert.equal(await balance(), g0);
-  await p.locator('.td-routine', { hasText: '歯みがき' }).click();
+  await tap('歯みがき');
+  // 別の日課を続けてタップしても、両方とも記録される
   await p.locator('.td-routine', { hasText: '薬' }).click();
+  await p.locator('.td-routine', { hasText: '歯みがき' }).click();
+  assert.equal(await p.locator('.td-routine', { hasText: '歯みがき' }).getAttribute('aria-pressed'), 'false', 'the second routine flips on screen right away');
+  await p.clock.runFor(400);
+  await tap('歯みがき');
   assert.equal(await balance(), g0 + 4);
   assert.deepEqual(Object.keys((await todo()).rlog['2026-10-18']).length, 2);
 
-  // 4) 長押しで編集 → 名前を変える
+  // 4) ダブルタップで編集(済みの状態は変わらない) → 名前を変える。長押しでは何も起きない
   const med = p.locator('.td-routine', { hasText: '薬' });
   await med.dispatchEvent('pointerdown');
   await p.clock.runFor(700);
   await med.dispatchEvent('pointerup');
+  assert.equal(await p.locator('#hb-sheet').evaluate(e => e.style.display === 'flex').catch(() => false), false, 'long press does nothing');
+  await med.click();
+  await med.click();
   await p.waitForSelector('#hb-sheet .modal-title:has-text("日課を編集")');
+  await p.clock.runFor(400);
+  assert.equal(await balance(), g0 + 4, 'double tap does not toggle');
   await p.locator('#hb-sheet input.field-input').first().fill('降圧薬');
   await p.locator('#hb-sheet .btn-primary', { hasText: '保存' }).click();
   assert.equal(await p.locator('.td-routine', { hasText: '降圧薬' }).count(), 1);
@@ -155,9 +169,8 @@ const server = http.createServer((req, res) => {
   // 8) 日課を消す: 今日やっていれば今日は残り、明日から出ない。ゴールドは残る
   const before = await balance();
   const brush2 = p.locator('.td-routine', { hasText: '歯みがき' });
-  await brush2.dispatchEvent('pointerdown');
-  await p.clock.runFor(700);
-  await brush2.dispatchEvent('pointerup');
+  await brush2.click();
+  await brush2.click();
   await p.locator('#hb-sheet .btn-secondary', { hasText: '削除' }).click();
   assert.equal(await balance(), before);
   assert.equal((await todo()).routines.find(r => r.name === '歯みがき').archivedOn, '2026-10-19');
