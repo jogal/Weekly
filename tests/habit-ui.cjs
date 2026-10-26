@@ -196,6 +196,8 @@ function seedRecords() {
   // 10) 統計の上の部分: 習慣の選択・丸カレンダー・記録・1週間・1年のドット・達成率
   assert.equal(await p.locator('.so-pick-v').innerText(), 'すべての習慣 ›');
   assert.equal(await p.locator('.so-cal .so-d').count(), 35, 'Oct 2026 = 5 weeks from Monday 9/28');
+  // すべての習慣: 今日タブと同じ色分けリング。10/13は専門医(+筋トレ胸)ができた日
+  assert.ok(await p.locator('.so-d.seg[data-key="2026-10-13"] .so-dot svg circle.seg-on').count() >= 1);
   assert.match(await p.locator('.so-rec-card').innerText(), /いまの連続[\s\S]*最長連続[\s\S]*完了数[\s\S]*成功率/);
   assert.match(await p.locator('.so-rec-card .so-note').innerText(), /この期間の記録 \d+件 ・ 活動 \d+日/);
   assert.equal(await p.locator('.so-wk .so-wk-n', { hasText: '専門医勉強' }).count(), 1);
