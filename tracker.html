@@ -228,6 +228,7 @@ textarea.field-input { height:76px; resize:vertical; }
 .so-dot span { position:relative; }
 .so-d.done .so-dot { background:var(--c); color:#17150f; }
 .so-d.miss .so-dot { background:#ffffff0d; }
+.so-d.seg .so-dot { background:none; color:var(--txt); }
 .so-d.rest .so-dot { border:2px solid var(--c); opacity:.6; }
 .so-d.off .so-dot, .so-d.future .so-dot { color:var(--faint); font-weight:400; }
 .so-d.other { opacity:.4; }
@@ -3136,18 +3137,21 @@ function statsCalendar(o, from, to) {
   const days = [];
   for (let k = start; k <= end; k = H.addDays(k, 1)) days.push({ key: k, ...statsDay(o, k) });
   const detail = detailBox(o);
+  const seg = !o.sel; // すべての習慣: 今日タブの日付と同じく、できた習慣をそれぞれの色で区切ったリング
   days.forEach((d, i) => {
-    const full = d.state === "done", col = i % 7;
+    const full = !seg && d.state === "done", col = i % 7;
     const jl = full && col > 0 && days[i - 1].state === "done";
     const jr = full && col < 6 && days[i + 1]?.state === "done";
-    const b = el("button", `so-d ${d.state}${jl ? " jl" : ""}${jr ? " jr" : ""}${d.key < from || d.key > to ? " other" : ""}${d.key === o.today ? " today" : ""}`);
+    const b = el("button", `so-d ${d.state}${seg ? " seg" : ""}${jl ? " jl" : ""}${jr ? " jr" : ""}${d.key < from || d.key > to ? " other" : ""}${d.key === o.today ? " today" : ""}`);
     b.type = "button"; b.dataset.key = d.key;
-    b.innerHTML = `<span class="so-dot">${d.state === "miss" && d.f > 0 ? ringSvg(32, 2.6, d.f, o.color) : ""}<span>${+d.key.slice(8)}</span></span>`;
+    const ring = seg ? (d.state === "done" || d.state === "miss" ? segRingSvg(32, 2.6, H.daySegments(o.habits, d.key, o.ctx)) : "")
+      : d.state === "miss" && d.f > 0 ? ringSvg(32, 2.6, d.f, o.color) : "";
+    b.innerHTML = `<span class="so-dot">${ring}<span>${+d.key.slice(8)}</span></span>`;
     b.onclick = () => detail.show(d.key, b);
     grid.appendChild(b);
   });
   card.appendChild(grid);
-  card.appendChild(el("p", "so-legend", o.sel ? "● 達成　◔ 途中まで　○ 休息日・護符" : "● 全部できた日（続いた日は線でつなぐ）　◔ 一部だけ"));
+  card.appendChild(el("p", "so-legend", o.sel ? "● 達成　◔ 途中まで　○ 休息日・護符" : "リングの色 = その日にできた習慣（今日タブと同じ）"));
   card.appendChild(detail);
   return card;
 }
