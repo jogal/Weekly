@@ -239,3 +239,22 @@ test('new inbox task identity must agree with the private source row, not just t
   todo.tasks[1].id = 'inbox_' + SOURCES[1].inboxId;
   assert.equal(C.planConsolidation(todo, command(), TODAY).status, 'blocked');
 });
+
+
+test('consolidation joins two text properties losslessly before the unchanged strict schema', () => {
+  const original = command();
+  const at = Math.floor(original.note.length / 2);
+  const split = { ...original, note: original.note.slice(0, at), steps: original.note.slice(at) };
+  assert.deepEqual(C.commandManifest(split), C.commandManifest(original));
+  assert.deepEqual(C.planConsolidation(fixture(), split, TODAY), C.planConsolidation(fixture(), original, TODAY));
+  assert.ok(split.steps, 'old clients reject a nonempty steps field for consolidation');
+  for (const parts of [
+    { note: '', steps: '' }, { note: '', steps: original.note },
+    { note: split.note, steps: '' }, { note: split.steps, steps: split.note },
+    { note: split.note, steps: split.steps.slice(0, -1) },
+    { note: original.note, steps: '{}' }, { note: split.note, steps: [split.steps] },
+    { note: split.note, steps: 0 }, { note: ' '.repeat(15001), steps: ' '.repeat(15000) },
+  ]) assert.equal(C.commandManifest({ ...original, ...parts }), null);
+  assert.deepEqual(C.commandManifest({ ...original, steps: null }), C.commandManifest(original));
+  assert.equal(I.taskFrom({ title: 'ordinary task', steps: 'one\ntwo' }, TODAY).steps.length, 2, 'ordinary task interpretation unchanged');
+});
