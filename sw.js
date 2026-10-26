@@ -1,4 +1,4 @@
-const CACHE = "weekly-quest-v84";
+const CACHE = "weekly-quest-v85";
 const ASSETS = [
   "./tracker.html",
   "./css/private-sync.css",
@@ -14,6 +14,7 @@ const ASSETS = [
   "./js/quest-core.mjs",
   "./js/todo-core.mjs",
   "./js/inbox-core.mjs",
+  "./js/task-consolidation.mjs",
   "./js/inbox-ui.mjs",
   "./js/pwa-update.js",
   "./js/backup-file.js",
@@ -85,6 +86,14 @@ self.addEventListener("message", e => {
   if (e.data?.type === "weekly-private-sync-cache-check" && e.data.version === 1) {
     e.ports?.[0]?.postMessage({ type: "weekly-private-sync-cache-safe", version: 1 });
   }
+  // Include old/uncontrolled pages; only one app window may perform this repair.
+  if (e.data?.type !== "weekly:consolidation-preflight" || e.data.version !== 1 || !e.ports?.[0]) return;
+  e.waitUntil(self.clients.matchAll({ type: "window", includeUncontrolled: true }).then(clients => {
+    e.ports[0].postMessage({
+      type: "weekly:consolidation-preflight", version: 1,
+      soleClient: clients.length === 1 && clients[0].id === e.source?.id,
+    });
+  }));
 });
 
 // Cache-first with background refresh; fonts and same-origin GETs get cached at runtime

@@ -5,12 +5,13 @@
 //   {id, kind:"英語"|"タスク", title, date:"YYYY-MM-DD"|null, minutes, questions, correct, note, steps, gold}
 // AI経由の記録は手入力と同じ扱いで、AIを使った分のおまけゴールドは付けない。
 import { addDays } from "./habit-core.mjs";
+import { isConsolidationCommand, wasConsolidatedSource } from "./task-consolidation.mjs";
 
 export const KEY = "wt_inbox_v1";           // {url, key, seen:{行id: 取り込んだ日}}。接続コードを含むので書き出しには入れない
 export const MARK = "🤖";                    // 英語学習のメモに足す1行の頭
 export const ENGLISH_DAYS = 30;              // 英語は今日から30日前まで受け付ける
 export const TASK_GOLD_MAX = 200;            // AIが書いたごほうびの上限
-const MINUTES_MAX = 600, LINE_MAX = 80, NOTE_MAX = 300, STEPS_MAX = 10, SEEN_MAX = 500;
+const MINUTES_MAX = 600, LINE_MAX = 80, NOTE_MAX = 300, STEPS_MAX = 30, SEEN_MAX = 500;
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const isDate = v => typeof v === "string" && DATE_RE.test(v);
 const num = v => (typeof v === "number" && Number.isFinite(v) ? v : null);
@@ -62,7 +63,8 @@ export function taskFrom(item, today) {
   if (!name) return null;
   const steps = String(item?.steps || "").split(/\r?\n/)
     .map(s => s.replace(/^\s*(?:[-・*•]|\d+[.)．])\s*/, "").trim()).filter(Boolean)
-    .slice(0, STEPS_MAX).map(n => ({ name: n }));
+    .map(n => ({ name: n }));
+  if (steps.length > STEPS_MAX) return null; // Never silently drop requested steps.
   const g = num(item?.gold);
   return {
     name, icon: "📝", due: isDate(item?.date) ? item.date : null, steps, createdOn: today,
@@ -71,19 +73,24 @@ export function taskFrom(item, today) {
 }
 
 // 届いた行を仕分ける。seen にある行は記録済み(取り込み済みの印だけ付け直す)
-export function plan(items, state, today) {
-  const out = { english: [], tasks: [], ack: [], skipped: [] };
+export function plan(items, state, today, todo) {
+  const out = { english: [], tasks: [], consolidations: [], ack: [], skipped: [] };
+  const batchIds = new Set();
   (Array.isArray(items) ? items : []).forEach(it => {
     const id = typeof it?.id === "string" ? it.id : "";
-    if (!id) return;
-    if (state.seen[id]) { out.ack.push(id); return; }
+    if (!id || batchIds.has(id)) return;
+    batchIds.add(id);
+    if (state.seen[id] || wasConsolidatedSource(todo, id)) { out.ack.push(id); return; }
     const kind = str(it.kind);
     if (kind === "英語") {
       const e = englishEntry(it, today);
       if (e) { out.english.push({ id, ...e }); out.ack.push(id); return; }
     } else if (kind === "タスク") {
+      if (!/^[A-Za-z0-9_-]{1,90}$/.test(id)) { out.skipped.push(id); return; }
       const t = taskFrom(it, today);
-      if (t) { out.tasks.push({ id, task: t }); out.ack.push(id); return; }
+      if (t) { out.tasks.push({ id, task: { ...t, id: `inbox_${id}` } }); out.ack.push(id); return; }
+    } else if (kind === "タスク統合" && isConsolidationCommand(it)) {
+      out.consolidations.push(it); return; // ACK only after the atomic write succeeds.
     }
     out.skipped.push(id);
   });
