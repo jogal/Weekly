@@ -29,10 +29,14 @@ function manifestFrom(raw, targetName) {
     sources: raw.sources.map(s => ({ inboxId: canonicalId(s.inboxId), name: s.name, createdOn: s.createdOn, steps: [...s.steps], label: s.label })) };
 }
 export function commandManifest(item) {
-  if (item?.kind !== 'タスク統合' || !rowId(item.id) || !text(item.title) || item.steps || item.date || item.gold != null
-    || typeof item.note !== 'string' || item.note.length > 30000) return null;
+  if (item?.kind !== 'タスク統合' || !rowId(item.id) || !text(item.title) || item.date || item.gold != null
+    || typeof item.note !== 'string' || !item.note || (item.steps != null && typeof item.steps !== 'string')) return null;
+  // Some inbox connectors cap each text property. Only this operation may carry
+  // the JSON tail in steps; concatenate without trimming, then apply the SAME schema.
+  const serialized = item.note + (item.steps || '');
+  if (serialized.length > 30000) return null;
   let raw;
-  try { raw = JSON.parse(item.note); } catch { return null; }
+  try { raw = JSON.parse(serialized); } catch { return null; }
   return manifestFrom(raw, item.title);
 }
 export function isConsolidationCommand(item) { return !!commandManifest(item); }

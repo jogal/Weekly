@@ -179,3 +179,17 @@ test('multiple windows, old or unavailable service worker all defer without any 
     assert.equal(h.storage.getItem(T.KEY), before); assert.deepEqual(h.acked, []);
   }
 });
+
+
+test('split text transport reaches durable commit/ACK; partial text stays unread and unchanged', async () => {
+  const original = command, at = Math.floor(original.note.length / 2);
+  const h = await harness(), before = h.storage.getItem(T.KEY);
+  h.control.rows = [{ ...original, note: original.note.slice(0, at), steps: '' }];
+  const partial = await h.sync();
+  assert.equal(partial.consolidated, 0); assert.equal(partial.skipped, 1);
+  assert.equal(h.storage.getItem(T.KEY), before); assert.deepEqual(h.acked, []);
+  h.control.rows = [{ ...original, note: original.note.slice(0, at), steps: original.note.slice(at) }];
+  assert.equal((await h.sync()).consolidated, 1);
+  assert.deepEqual(h.acked, [original.id]);
+  assert.equal(JSON.parse(h.storage.getItem(T.KEY)).tasks[1].steps.length, 16);
+});
