@@ -4,7 +4,7 @@ import vm from 'node:vm';
 import { readFileSync } from 'node:fs';
 
 const code = readFileSync(new URL('../sw.js', import.meta.url), 'utf8');
-function worker() {
+function worker(clients = []) {
   const events = {}, cacheNames = new Map(), reads = [], writes = [], fetches = [], precache = [];
   let response = { ok: true, redirected: false, headers: new Headers(), clone() { return this; } };
   const makeCache = name => {
@@ -20,7 +20,7 @@ function worker() {
     match: async req => { reads.push(req.url); for (const c of cacheNames.values()) if (c.has(req.url)) return c.get(req.url); },
   };
   vm.runInNewContext(code, { URL, caches, fetch: async req => { fetches.push(req.url); return response; },
-    self: { location: { origin: 'https://weekly.test' }, clients: { claim: async () => {} }, skipWaiting: async () => {}, addEventListener: (name, fn) => events[name] = fn } });
+    self: { location: { origin: 'https://weekly.test' }, clients: { claim: async () => {}, matchAll: async options => { assert.deepEqual(JSON.parse(JSON.stringify(options)), { type: "window", includeUncontrolled: true }); return clients; } }, skipWaiting: async () => {}, addEventListener: (name, fn) => events[name] = fn } });
   return { events, cacheNames, reads, writes, fetches, precache, setResponse: r => { response = r; } };
 }
 async function dispatch(w, url, method = 'GET') {
@@ -83,4 +83,16 @@ test('new worker proves private-route cache safety through a dedicated message c
   assert.deepEqual(replies, [{ type: 'weekly-private-sync-cache-safe', version: 1 }]);
   w.events.message({ data: { type: 'weekly-private-sync-cache-check', version: 2 }, ports: [{ postMessage: value => replies.push(value) }] });
   assert.equal(replies.length, 1);
+});
+
+
+test('consolidation preflight requires sole requesting window, including old/uncontrolled clients', async () => {
+  for (const clients of [[], [{ id: 'caller' }], [{ id: 'other' }], [{ id: 'caller' }, { id: 'old-page' }]]) {
+    const w = worker(clients), replies = []; let pending;
+    w.events.message({ data: { type: 'weekly:consolidation-preflight', version: 1 }, source: { id: 'caller' },
+      ports: [{ postMessage: value => replies.push(JSON.parse(JSON.stringify(value))) }], waitUntil: promise => { pending = promise; } });
+    await pending;
+    assert.deepEqual(replies, [{ type: 'weekly:consolidation-preflight', version: 1,
+      soleClient: clients.length === 1 && clients[0].id === 'caller' }]);
+  }
 });

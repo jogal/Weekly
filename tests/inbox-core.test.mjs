@@ -62,7 +62,7 @@ test('plan: sorts rows, skips unreadable, re-acks seen rows', () => {
   assert.deepEqual(p.tasks.map(x => x.id), ['b']);
   assert.deepEqual(p.ack, ['a', 'b', 'e']);
   assert.deepEqual(p.skipped, ['c', 'd']);
-  assert.deepEqual(I.plan(null, st(), TODAY), { english: [], tasks: [], ack: [], skipped: [] });
+  assert.deepEqual(I.plan(null, st(), TODAY), { english: [], tasks: [], consolidations: [], ack: [], skipped: [] });
 });
 
 test('remember: keeps first import day, bounded', () => {

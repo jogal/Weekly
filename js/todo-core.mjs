@@ -7,6 +7,8 @@
 // ゴールドは習慣と同じく記録から日ごとに計算し直す(habit-core の settle に dayGoldItems を渡す)。
 // だからチェックを外せばゴールドも戻り、直近7日より前は確定する。HPのような罰はない。
 import { addDays, mondayOf } from "./habit-core.mjs";
+import { isRetiredTaskId } from "./task-consolidation.mjs";
+export { isRetiredTaskId };
 
 export const KEY = "wt_todo_v1";
 export const SLOTS = [
@@ -78,6 +80,9 @@ export function normalizeTodo(raw, today) {
     });
   }
   return {
+    // Keep the atomic repair receipt/source backup through all ordinary edits and exports.
+    ...(raw?.taskConsolidations && typeof raw.taskConsolidations === "object" && !Array.isArray(raw.taskConsolidations)
+      ? { taskConsolidations: clone(raw.taskConsolidations) } : {}),
     routines: Array.isArray(raw?.routines) ? raw.routines.map(r => normalizeRoutine(r, today)) : [],
     rlog,
     tasks: Array.isArray(raw?.tasks) ? raw.tasks.map(t => normalizeTask(t, today)) : [],
@@ -219,6 +224,7 @@ function updateTask(state, id, fn) {
   return n;
 }
 export function saveTask(state, task, today) {
+  if (isRetiredTaskId(state, task?.id)) return state; // A stale editor must not resurrect a consolidated source.
   const n = clone(state), t = normalizeTask(task, today);
   const i = n.tasks.findIndex(x => x.id === t.id);
   if (i >= 0) n.tasks[i] = t; else n.tasks.push(t);

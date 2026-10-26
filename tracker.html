@@ -1453,7 +1453,7 @@ document.getElementById("menu-modal").addEventListener("click",e=>{
 const ARCHIVED_KEYS=["mus_logs","mus_custom","spot_logs","spot_cats"];
 document.getElementById("export-btn").onclick=()=>{
   const habitData={};
-  ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1","wt_todo_v1"].forEach(k=>{try{const v=JSON.parse(localStorage.getItem(k));if(v!==null)habitData[k]=v;}catch(e){}});
+  ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1","wt_todo_v1","wt_task_consolidation_backup_v1"].forEach(k=>{try{const v=JSON.parse(localStorage.getItem(k));if(v!==null)habitData[k]=v;}catch(e){}});
   const archivedData={};
   ARCHIVED_KEYS.forEach(k=>{const v=localStorage.getItem(k);if(v!==null)archivedData[k]=v;});
   const out={records,habitData};
@@ -1468,7 +1468,7 @@ document.getElementById("import-btn").onclick=()=>{
         if(!d.records)throw new Error("bad format");
         records=d.records;
         if(d.habitData&&typeof d.habitData==="object")
-          ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1","wt_todo_v1"].forEach(k=>{if(d.habitData[k]!==undefined)localStorage.setItem(k,JSON.stringify(d.habitData[k]));});
+          ["wt_habits_v1","wt_habit_log_v1","wt_reward_v1","wt_todo_v1","wt_task_consolidation_backup_v1"].forEach(k=>{if(d.habitData[k]!==undefined)localStorage.setItem(k,JSON.stringify(d.habitData[k]));});
         if(d.archivedData&&typeof d.archivedData==="object")
           ARCHIVED_KEYS.forEach(k=>{if(typeof d.archivedData[k]==="string")localStorage.setItem(k,d.archivedData[k]);});
         // 読書記録(wt_reading_v1)。これを含まない古いバックアップでは今の読書記録をそのまま残す
@@ -2695,6 +2695,7 @@ function openTaskEdit(tid) {
     row.appendChild(btn("キャンセル", "btn btn-secondary", closeSheet));
     row.appendChild(btn("保存", "btn btn-primary", () => {
       if (!draft.name.trim()) { msg = "名前を入れてください"; draw(); return; }
+      if (T.isRetiredTaskId(loadState().todo, tid)) { msg = "このタスクは統合済みです。入力は保存せず残しています。閉じて統合先を確認してください。"; draw(); return; }
       closeSheet();
       changeTodo((x, s) => T.saveTask(x, { ...draft, name: draft.name.trim(), due: draft.due || null }, s.today), "✅ タスクを更新しました");
     }));
