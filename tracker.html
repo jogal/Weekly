@@ -618,6 +618,7 @@ textarea.field-input { height:76px; resize:vertical; }
   <div class="modal-box">
     <h3 class="modal-title">⚙ 設定</h3>
     <button type="button" class="menu-item" id="nl-open">🧠 Neuro Learn 自動同期</button>
+    <button type="button" class="menu-item" id="inbox-open">🤖 AI受け取り箱</button>
     <button type="button" class="menu-item" id="private-sync-open">☁ Notion に進捗を同期</button>
     <button type="button" class="menu-item" id="export-btn">💾 データを書き出す</button>
     <button type="button" class="menu-item" id="import-btn">📂 データを復元する</button>
@@ -643,6 +644,26 @@ textarea.field-input { height:76px; resize:vertical; }
     <div class="btn-row">
       <button class="btn btn-secondary" id="nl-close">閉じる</button>
       <button class="btn btn-primary" id="nl-save">保存して接続</button>
+    </div>
+  </div>
+</div>
+
+<!-- AI受け取り箱(Notion + Apps Script)。ロジックは js/inbox-core.mjs、画面は js/inbox-ui.mjs -->
+<div class="overlay" id="inbox-modal" style="display:none">
+  <div class="modal-box">
+    <h3 class="modal-title">🤖 AI受け取り箱</h3>
+    <p class="modal-sub">ClaudeやChatGPTがNotionの「Weekly 受け取り箱」に書いた記録を、
+      週クエを開くたびに<b>自動で</b>取り込みます。英語は「英語学習」に、タスクは今日タブの「大きなタスク」に入ります。</p>
+    <span class="field-label">接続コード（Apps Scriptの /exec のURL|合い言葉）</span>
+    <input type="text" class="field-input" id="inbox-code"
+      placeholder="https://script.google.com/macros/s/…/exec|合い言葉" autocomplete="off"
+      autocapitalize="none" autocorrect="off" spellcheck="false">
+    <p class="modal-sub" id="inbox-status" style="min-height:1em"></p>
+    <p class="modal-sub" style="font-size:11px">空欄で保存すると接続を解除します。接続コードはデータの書き出しには入りません。</p>
+    <div class="btn-row">
+      <button class="btn btn-secondary" id="inbox-close">閉じる</button>
+      <button class="btn btn-secondary" id="inbox-now">いま取り込む</button>
+      <button class="btn btn-primary" id="inbox-save">保存して接続</button>
     </div>
   </div>
 </div>
@@ -3283,6 +3304,7 @@ function renderStatsOverview(wrap) {
 window.HabitUI = { renderToday, openDay: k => { selDay = k; stripFocus = true; }, renderRewardCard, renderHabitStats, renderRoutineStats, renderStatsOverview, updateQuestBadge: () => updateQuestBadge() };
 if (["today", "status", "stats"].includes(tab)) render();
 </script>
+<script type="module" src="js/inbox-ui.mjs"></script>
 <script type="module" src="js/private-sync-ui.mjs"></script>
 <script src="js/backup-file.js"></script>
 <script src="js/pwa-update.js"></script>

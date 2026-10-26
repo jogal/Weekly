@@ -1,4 +1,4 @@
-const CACHE = "weekly-quest-v83";
+const CACHE = "weekly-quest-v84";
 const ASSETS = [
   "./tracker.html",
   "./css/private-sync.css",
@@ -13,6 +13,8 @@ const ASSETS = [
   "./js/habit-core.mjs",
   "./js/quest-core.mjs",
   "./js/todo-core.mjs",
+  "./js/inbox-core.mjs",
+  "./js/inbox-ui.mjs",
   "./js/pwa-update.js",
   "./js/backup-file.js",
   "./js/monk-companion.mjs",
@@ -91,6 +93,8 @@ self.addEventListener("fetch", e => {
   // Let the browser use the network even when an old cache has a matching response.
   if (isPrivateRoute(e.request.url)) return;
   if (e.request.method !== "GET") return;
+  // AI受け取り箱(Apps Script)は毎回ネットワークへ。合い言葉付きのURLをキャッシュに残さない
+  if (/^https:\/\/script\.google(?:usercontent)?\.com\//.test(e.request.url)) return;
   const cacheable = new URL(e.request.url).origin === self.location.origin
     || e.request.url.includes("fonts.googleapis.com")
     || e.request.url.includes("fonts.gstatic.com");
