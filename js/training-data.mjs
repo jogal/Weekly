@@ -3,7 +3,7 @@
 // 旧データが無くても壊れない(additive / 後方互換最優先)。
 
 import { nextTemplateId, lastCompletedTemplateIdFrom, localDayKey,
-         monkStateFromRecords } from "./training-core.mjs";
+         monkStateFromRecords, allocateSlotId } from "./training-core.mjs";
 
 export const K = {
   profile:   "gym_profile_v2",
@@ -42,7 +42,7 @@ export function saveProfile(p) { wr(K.profile, p); }
 // optional=true は余力がある日の追加クエスト。未実施でもWorkout完了を妨げない。
 // 既存のユーザー編集済みprogramは勝手に上書きしない。
 // 旧デフォルトA/B/C/Dのままの端末だけ、初回load時に新標準へ移行する。
-export const PROGRAM_VERSION = 4;
+export const PROGRAM_VERSION = 5;
 
 const LEGACY_DEFAULT_SIGNATURE = [
   "A|ベンチプレス:4:6:10|インクラインダンベルプレス:3:8:12|ケーブルフライ:3:10:15|サイドレイズ:4:12:20|トライセプスプレスダウン:3:8:15",
@@ -77,7 +77,7 @@ export const DEFAULT_TEMPLATES = [
   {
     id: "MAIN",
     name: "Main Quest",
-    focus: "胸＋背中 / 3 of 5",
+    focus: "胸＋背中＋肩 / 3 of 7",
     minExercises: 3,
     exercises: [
       // 実際に続いている順番をそのまま標準化。5種目すべて必須にはしない。
@@ -86,6 +86,9 @@ export const DEFAULT_TEMPLATES = [
       { ex: "リアデルト",                 slot: "MAIN3", part: "shoulder", sets: 3, repMin: 10, repMax: 15 },
       { ex: "インクラインダンベルプレス", slot: "A2",    part: "chest",    sets: 3, repMin: 8,  repMax: 12 },
       { ex: "ラットプルダウン",           slot: "B1",    part: "back",     sets: 3, repMin: 8,  repMax: 12 },
+      // v5: 肩の候補を追加(7候補のうち3種目でクリアは変えない)
+      { ex: "ショルダープレス",           slot: "S1",    part: "shoulder", sets: 3, repMin: 6,  repMax: 10 },
+      { ex: "サイドレイズ",               slot: "S2",    part: "shoulder", sets: 4, repMin: 12, repMax: 20 },
     ],
   },
 ];
@@ -103,11 +106,42 @@ export function defaultProgram() {
   };
 }
 
+// v4→v5: 保存済みMain Questに肩の候補を「追加だけ」する。
+// 並び替え・削除・セット数などユーザーの編集には触らない。
+const V5_SHOULDER_ADDITIONS = ["ショルダープレス", "サイドレイズ"];
+function addShoulderCandidates(p) {
+  const main = p.templates.find(t => t.id === "MAIN");
+  if (!main || !Array.isArray(main.exercises)) return { ...p, programVersion: PROGRAM_VERSION };
+  const used = new Set();
+  p.templates.forEach(t => (t.exercises || []).forEach(e => e.slot && used.add(e.slot)));
+  rd("gym_logs", []).forEach(l => l?.slot && used.add(l.slot));   // 読むだけ
+  const defaults = DEFAULT_TEMPLATES[0].exercises;
+  const names = new Set(main.exercises.map(e => e.ex));
+  const added = [];
+  V5_SHOULDER_ADDITIONS.forEach(ex => {
+    if (names.has(ex)) return;
+    const d = { ...defaults.find(e => e.ex === ex) };
+    if (used.has(d.slot)) d.slot = allocateSlotId(main.id, [...used]);
+    used.add(d.slot);
+    added.push(d);
+  });
+  const exercises = [...main.exercises, ...added];
+  const focus = main.focus === "胸＋背中 / 3 of 5"
+    ? DEFAULT_TEMPLATES[0].focus : main.focus;
+  return { ...p, programVersion: PROGRAM_VERSION,
+    templates: p.templates.map(t => t === main ? { ...main, focus, exercises } : t) };
+}
+
 export function loadProgram() {
   const p = rd(K.program, null);
   if (p && Array.isArray(p.templates) && p.templates.length) {
     if ((!p.programVersion && isUntouchedLegacyDefault(p)) || isV3RepeatDefault(p)) {
       const migrated = defaultProgram();
+      wr(K.program, migrated);
+      return migrated;
+    }
+    if (p.programVersion === 4) {
+      const migrated = addShoulderCandidates(p);
       wr(K.program, migrated);
       return migrated;
     }

@@ -43,20 +43,23 @@ const server = http.createServer((req,res)=>{
   }
   const p=await pageAt();
   const label=()=>p.locator('#today-quest .quest-count').innerText();
-  const names=['懸垂','ベンチプレス','リアデルト','インクラインダンベルプレス','ラットプルダウン'];
+  const names=['懸垂','ベンチプレス','リアデルト','インクラインダンベルプレス','ラットプルダウン','ショルダープレス','サイドレイズ'];
   async function log(ex){await p.locator(`[data-exercise="${ex}"]`).click();await p.locator('#log-btn').click();}
   assert.equal(await label(),'0 / 3 CLEAR');
-  assert.equal(await p.locator('.quest-exercise').count(),5);
+  assert.equal(await p.locator('.quest-exercise').count(),7);
+  assert.match(await p.locator('.quest-milestones').innerText(),/7 FULL CLEAR/);
   // Non-standard order, repeat sets, and 0..5 transitions.
   await log(names[2]); assert.equal(await label(),'1 / 3 CLEAR');
   await log(names[2]); assert.equal(await label(),'1 / 3 CLEAR');
   await log(names[4]); assert.equal(await label(),'2 / 3 CLEAR');
   await p.getByRole('button',{name:'今日はここまで・記録を確認'}).click();
-  assert.match(await p.locator('#toast').innerText(),/今日は2\/5。記録は残っています/);
+  assert.match(await p.locator('#toast').innerText(),/今日は2\/7。記録は残っています/);
   await log(names[0]); assert.equal(await label(),'MAIN QUEST CLEAR');
   assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('gym_sessions_v2')).filter(s=>s.status==='completed').length),1);
   await log(names[1]);assert.equal(await label(),'BONUS CLEAR');
-  await log(names[3]);assert.equal(await label(),'FULL CLEAR');
+  await log(names[3]);assert.equal(await label(),'BONUS CLEAR');
+  await log(names[5]);assert.equal(await label(),'BONUS CLEAR');
+  await log(names[6]);assert.equal(await label(),'FULL CLEAR');
   assert.match(await p.locator('#adventure-route').innerText(),/CLEAR/);
   const stored=await p.evaluate(()=>localStorage.getItem('gym_logs'));
   await p.reload();assert.equal(await label(),'FULL CLEAR');
@@ -67,7 +70,7 @@ const server = http.createServer((req,res)=>{
   }
   // Delete recorded sets back through all milestones; auto session is reversible.
   p.on('dialog',d=>d.accept());
-  for(const expect of ['BONUS CLEAR','MAIN QUEST CLEAR','2 / 3 CLEAR']){
+  for(const expect of ['BONUS CLEAR','BONUS CLEAR','BONUS CLEAR','MAIN QUEST CLEAR','2 / 3 CLEAR']){
     await p.locator('.set-del').first().click();assert.equal(await label(),expect);
   }
   assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('gym_sessions_v2')).filter(s=>s.status==='completed').length),0);
@@ -107,7 +110,7 @@ const server = http.createServer((req,res)=>{
     await w.getByRole('button',{name:/^⚡ セット記録/}).click();
   }
   await w.getByRole('button',{name:'ワークアウト終了',exact:true}).click();
-  assert.match(await w.getByRole('dialog').innerText(),/今日は2\/5/);
+  assert.match(await w.getByRole('dialog').innerText(),/今日は2\/7/);
   await w.getByRole('button',{name:'記録を残して終了'}).click();
   assert.equal(await w.evaluate(()=>JSON.parse(localStorage.getItem('gym_sessions_v2'))[0].status),'aborted');
   assert.deepEqual(await w.evaluate(()=>JSON.parse(localStorage.getItem('gym_logs')).map(l=>[l.kg,l.reps])),[[42.5,8],[42.5,8]]);
@@ -149,7 +152,7 @@ const server = http.createServer((req,res)=>{
   });
   await offline.reload();
   await offline.context().setOffline(true);await offline.reload();
-  assert.equal(await offline.locator('.quest-exercise').count(),5);
+  assert.equal(await offline.locator('.quest-exercise').count(),7);
   assert.equal(await offline.evaluate(()=>localStorage.getItem('gym_logs')),offlineLogs);
   assert.equal(await offline.evaluate(async()=>(await caches.keys()).includes('weekly-quest-v44')),false);
   const cachedAssets=await offline.evaluate(async()=>Promise.all([1,10,20,30,40].map(async tier=>(await fetch(`sprites/monk_lv${tier}x2.png`)).ok)));

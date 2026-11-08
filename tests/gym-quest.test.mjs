@@ -6,13 +6,13 @@ process.env.TZ = 'Asia/Tokyo';
 const tpl = DEFAULT_TEMPLATES[0];
 const logs = tpl.exercises.map((e,i) => ({ ...e, t:`2026-09-26T16:0${i}:00Z`, kg:20, reps:10 }));
 
-test('0–5 unique exercises: neutral partial, main, bonus, full; order is free', () => {
-  const labels=['0 / 3 CLEAR','1 / 3 CLEAR','2 / 3 CLEAR','MAIN QUEST CLEAR','BONUS CLEAR','FULL CLEAR'];
-  for(let n=0;n<=5;n++) {
+test('0–7 unique exercises: neutral partial, main, bonus, full; order is free', () => {
+  const labels=['0 / 3 CLEAR','1 / 3 CLEAR','2 / 3 CLEAR','MAIN QUEST CLEAR','BONUS CLEAR','BONUS CLEAR','BONUS CLEAR','FULL CLEAR'];
+  for(let n=0;n<=7;n++) {
     const result=questView(tpl,logs.slice(0,n).reverse());
     assert.equal(result.label,labels[n]);
     assert.equal(result.complete,n>=3);
-    if(n>0&&n<3)assert.equal(result.note,`今日は${n}/5。記録は残っています。`);
+    if(n>0&&n<3)assert.equal(result.note,`今日は${n}/7。記録は残っています。`);
   }
 });
 test('repeated sets and exercises outside the quest never inflate progress', () => {
