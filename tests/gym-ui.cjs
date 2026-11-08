@@ -47,7 +47,7 @@ const server = http.createServer((req,res)=>{
   async function log(ex){await p.locator(`[data-exercise="${ex}"]`).click();await p.locator('#log-btn').click();}
   assert.equal(await label(),'0 / 3 CLEAR');
   assert.equal(await p.locator('.quest-exercise').count(),7);
-  assert.match(await p.locator('.quest-milestones').innerText(),/7 FULL CLEAR/);
+  assert.match(await p.locator('.quest-milestones').innerText(),/3 MAIN CLEAR\s+\/\s+4 BONUS\s+\/\s+5 FULL CLEAR/);
   // Non-standard order, repeat sets, and 0..5 transitions.
   await log(names[2]); assert.equal(await label(),'1 / 3 CLEAR');
   await log(names[2]); assert.equal(await label(),'1 / 3 CLEAR');
@@ -57,8 +57,8 @@ const server = http.createServer((req,res)=>{
   await log(names[0]); assert.equal(await label(),'MAIN QUEST CLEAR');
   assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('gym_sessions_v2')).filter(s=>s.status==='completed').length),1);
   await log(names[1]);assert.equal(await label(),'BONUS CLEAR');
-  await log(names[3]);assert.equal(await label(),'BONUS CLEAR');
-  await log(names[5]);assert.equal(await label(),'BONUS CLEAR');
+  await log(names[3]);assert.equal(await label(),'FULL CLEAR');
+  await log(names[5]);assert.equal(await label(),'FULL CLEAR');
   await log(names[6]);assert.equal(await label(),'FULL CLEAR');
   assert.match(await p.locator('#adventure-route').innerText(),/CLEAR/);
   const stored=await p.evaluate(()=>localStorage.getItem('gym_logs'));
@@ -70,7 +70,7 @@ const server = http.createServer((req,res)=>{
   }
   // Delete recorded sets back through all milestones; auto session is reversible.
   p.on('dialog',d=>d.accept());
-  for(const expect of ['BONUS CLEAR','BONUS CLEAR','BONUS CLEAR','MAIN QUEST CLEAR','2 / 3 CLEAR']){
+  for(const expect of ['FULL CLEAR','FULL CLEAR','BONUS CLEAR','MAIN QUEST CLEAR','2 / 3 CLEAR']){
     await p.locator('.set-del').first().click();assert.equal(await label(),expect);
   }
   assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('gym_sessions_v2')).filter(s=>s.status==='completed').length),0);

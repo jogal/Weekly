@@ -79,6 +79,7 @@ export const DEFAULT_TEMPLATES = [
     name: "Main Quest",
     focus: "胸＋背中＋肩 / 3 of 7",
     minExercises: 3,
+    fullClearAt: 5,   // 7候補すべては求めない。5種目でFULL CLEAR
     exercises: [
       // 実際に続いている順番をそのまま標準化。5種目すべて必須にはしない。
       { ex: "懸垂",                       slot: "MAIN2", part: "back",     sets: 3, repMin: 5,  repMax: 10 },
@@ -129,7 +130,8 @@ function addShoulderCandidates(p) {
   const focus = main.focus === "胸＋背中 / 3 of 5"
     ? DEFAULT_TEMPLATES[0].focus : main.focus;
   return { ...p, programVersion: PROGRAM_VERSION,
-    templates: p.templates.map(t => t === main ? { ...main, focus, exercises } : t) };
+    templates: p.templates.map(t => t === main
+      ? { ...main, focus, exercises, fullClearAt: main.fullClearAt ?? DEFAULT_TEMPLATES[0].fullClearAt } : t) };
 }
 
 export function loadProgram() {

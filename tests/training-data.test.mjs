@@ -104,6 +104,7 @@ test("program: v4のMain Questへ肩の候補を追加し、編集内容は残�
   assert.equal(ex[1].slot,"MAIN4");                // 既存のサイドレイズは重複追加しない
   assert.equal(ex[2].slot,"MAIN5");                // ログで使用済みのS1は再利用しない
   assert.equal(p.templates[0].focus,"胸＋背中＋肩 / 3 of 7");
+  assert.equal(p.templates[0].fullClearAt,5);
   assert.equal(JSON.parse(localStorage.getItem("gym_program_v2")).programVersion,5);
   // 2回目のloadでは何も増えない
   assert.equal(TD.loadProgram().templates[0].exercises.length,3);
