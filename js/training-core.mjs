@@ -273,7 +273,7 @@ export function templateExerciseDef(program, exName) {
 }
 
 // 自由記録モードのWorkout達成判定。
-// minExercisesがある新Main Questは、候補5種目のうち異なる3種目を記録したら達成。
+// minExercisesがある新Main Questは、候補(標準7種目)のうち異なる3種目を記録したら達成。
 // loggedExercisesを渡せない旧呼び出しはrequiredParts/part判定へフォールバック。
 export function questExerciseProgress(tpl, loggedExercises) {
   const candidates = new Set((tpl?.exercises || []).map(e => e.ex));

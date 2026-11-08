@@ -5,14 +5,17 @@ export function questView(template, sets) {
   const progress = questExerciseProgress(template, sets.map(s => s.ex));
   const target = progress.target ?? progress.total;
   const complete = target > 0 && progress.done >= target;
-  const stage = !complete ? "idle" : progress.done >= progress.total ? "full"
+  // fullClearAt: 全候補をやらなくてもFULL CLEARにする種目数(未設定なら全候補)
+  const fullAt = Number.isInteger(template?.fullClearAt)
+    ? Math.min(Math.max(template.fullClearAt, target), progress.total) : progress.total;
+  const stage = !complete ? "idle" : progress.done >= fullAt ? "full"
     : progress.done > target ? "bonus" : "main";
   const label = stage === "full" ? "FULL CLEAR" : stage === "bonus" ? "BONUS CLEAR"
     : stage === "main" ? "MAIN QUEST CLEAR" : `${progress.done} / ${target} CLEAR`;
   const note = complete ? "今日のMain Quest達成。ここで終えても、余力でもう少しでも。"
     : sets.length ? `今日は${progress.done}/${progress.total}。記録は残っています。`
     : `${progress.total}種目のうち${target}種目でクリア。順番は自由。`;
-  return { ...progress, target, complete, stage, label, note };
+  return { ...progress, target, fullAt, complete, stage, label, note };
 }
 
 export function trainingDays(logs, dates) {

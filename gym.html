@@ -1757,7 +1757,7 @@ function renderQuestDashboard(root,tpl,sess=null){
   });
   card.appendChild(list);
   card.appendChild(el('p','quest-note',esc(view.note)));
-  if(view.target===3&&view.total===5) card.appendChild(el('div','quest-milestones','3 MAIN CLEAR　 /　 4 BONUS　 /　 5 FULL CLEAR'));
+  if(view.fullAt>view.target+1) card.appendChild(el('div','quest-milestones',`${view.target} MAIN CLEAR　 /　 ${view.target+1}${view.fullAt-view.target>2?'+':''} BONUS　 /　 ${view.fullAt} FULL CLEAR`));
   root.appendChild(card);
   if(questEvent){ questEvent=false; setTimeout(()=>hero.classList.remove('quest-event'),700); }
   lastQuestCount={day:today,done:view.done};
