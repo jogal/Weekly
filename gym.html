@@ -599,6 +599,8 @@ function renderToday(root){
   root.appendChild(card);
 
   root.appendChild(extras);
+  // 宅トレ(サイドクエスト)。Main Questのクリア判定には入らない
+  if(window.HomeWorkoutUI) window.HomeWorkoutUI.renderCard(root);
   if(window.TrainingUI) window.TrainingUI.renderRoute(root);
 
   // 今日のセット一覧
@@ -646,7 +648,8 @@ function renderHistory(root){
     else root.appendChild(el("div","empty-note","読み込み中…"));
     return;
   }
-  if(!logs.length){
+  const home=window.HomeWorkoutUI?window.HomeWorkoutUI.historyByDay():{};
+  if(!logs.length&&!Object.keys(home).length){
     const c=el("div","card");
     c.appendChild(el("div","empty-note","履歴はまだナシ。今日から始めよう⚡"));
     root.appendChild(c);
@@ -658,16 +661,18 @@ function renderHistory(root){
     const k=dateKeyOf(new Date(l.t));
     (byDay[k]=byDay[k]||[]).push(l);
   });
+  Object.keys(home).forEach(k=>{ byDay[k]=byDay[k]||[]; });
   Object.keys(byDay).sort().reverse().forEach(dk=>{
     const list=byDay[dk].sort((a,b)=>a.t<b.t?-1:1);
     const d=new Date(dk+"T00:00:00");
     const wd=["日","月","火","水","木","金","土"][d.getDay()];
     const card=el("div","card h-day"); card.style.padding="0";
     const parts=[...new Set(list.map(l=>l.part))]
-      .map(id=>PART_MAP[id]?.label||id).join("・");
+      .map(id=>PART_MAP[id]?.label||id).concat(home[dk]?["HOME"]:[]).join("・");
+    const sub=list.length?`${list.length}セット / ${volume(list)}kg`:"宅トレ";
     card.appendChild(el("div","h-day-head",
       `<span class="h-day-date">${d.getMonth()+1}/${d.getDate()}(${wd}) <span class="quest-badge">${esc(parts)}</span></span>
-       <span class="h-day-sub">${list.length}セット / ${volume(list)}kg</span>`));
+       <span class="h-day-sub">${sub}</span>`));
     // 種目ごとにまとめる
     const byEx={};
     list.forEach(l=>{ (byEx[l.ex]=byEx[l.ex]||[]).push(l); });
@@ -677,6 +682,11 @@ function renderHistory(root){
       card.appendChild(el("div","h-ex",
         `<span class="h-ex-name" style="color:${p?.color||"#fff"}">${esc(ex)}</span>
          <div class="h-ex-sets">${sets.map(s=>`${fmtKg(s.kg)}×${s.reps}`).join(", ")}</div>`));
+    });
+    (home[dk]||[]).forEach(r=>{
+      card.appendChild(el("div","h-ex h-home",
+        `<span class="h-ex-name">🏠 ${esc(r.ex)}</span>
+         <div class="h-ex-sets">${r.sets.map(esc).join(", ")}</div>`));
     });
     root.appendChild(card);
   });
@@ -724,6 +734,7 @@ document.getElementById("export-btn").onclick=()=>{
               gym_sel:sel, gym_stepkg:stepPref};
   // v2キー(profile/sessions/program/daily/plan/overrides)もadditiveに含める
   if(window.TrainingUI) Object.assign(data, window.TrainingUI.exportV2());
+  if(window.HomeWorkoutUI) Object.assign(data, window.HomeWorkoutUI.exportData());
   BackupFile.save("gym-log-backup.json",JSON.stringify(data,null,2));
   document.getElementById("menu-modal").style.display="none";
 };
@@ -737,6 +748,8 @@ document.getElementById("import-btn").onclick=()=>{
         if(d.gym_stepkg) stepPref=d.gym_stepkg;
         // 旧backup(v2キーなし)もそのまま受理。v2キーがあれば復元。
         if(window.TrainingUI) window.TrainingUI.importV2(d);
+        // 宅トレ(gym_home_v1)。含まない古いbackupでは今の宅トレ記録を残す
+        if(window.HomeWorkoutUI) window.HomeWorkoutUI.importData(d);
         persist(); render();
         showToast("✅ 復元しました");
       }catch(e){ showToast("❌ 読み込めなかった…"); }
@@ -1770,17 +1783,18 @@ function renderQuickSuggestion(root){ renderQuestDashboard(root,dashboardTemplat
 function renderRoute(root,link=true){
   const {dates,plan}=getCurrentPlan();
   const trained=trainingDays(logs,dates), today=core.localDayKey(new Date());
+  const home=window.HomeWorkoutUI?window.HomeWorkoutUI.homeDays():new Set();
   const card=el('section','card route-card'); card.id='adventure-route';
   const heading=el('div','route-heading','<h2 class="card-title">THIS WEEK / 冒険ルート</h2>');
   if(link){const b=el('button','route-link','予定を調整 →'); b.onclick=()=>switchGymTab('plan'); heading.appendChild(b);}
   card.appendChild(heading);
   const route=el('div','adventure-route'); route.setAttribute('role','list');
   dates.forEach((date,i)=>{
-    const day=routeDay(plan.dayInfo[date],trained.has(date));
+    const day=routeDay(plan.dayInfo[date],trained.has(date),home.has(date));
     const stop=el('div','route-stop'); stop.dataset.state=day.state; stop.setAttribute('role','listitem');
     stop.setAttribute('aria-label',`${date} ${day.detail}`);
     if(date===today)stop.setAttribute('aria-current','date');
-    stop.innerHTML=`<span class="route-day">${DAY_KEYS[i].toUpperCase()}</span><span class="route-node" aria-hidden="true">${day.state==='done'?'✓':day.state==='logged'?'·':day.state==='blocked'?'−':''}</span><span class="route-label">${day.label}</span>`;
+    stop.innerHTML=`<span class="route-day">${DAY_KEYS[i].toUpperCase()}</span><span class="route-node" aria-hidden="true">${day.state==='done'?'✓':day.state==='logged'?'·':day.state==='home'?'⌂':day.state==='blocked'?'−':''}</span><span class="route-label">${day.label}</span>`;
     route.appendChild(stop);
   });
   card.appendChild(route);
@@ -2053,6 +2067,7 @@ if(tab==="workout"||tab==="today") render();
 // 取得前はwt_schedulesのみで即表示され、取得完了後にTODAY/PLANが再計算される
 if(gcalConfigured()) fetchGcalWeek();
 </script>
+<script type="module" src="js/home-workout-ui.mjs"></script>
 <script src="js/backup-file.js"></script>
 <script src="js/pwa-update.js"></script>
 </body>

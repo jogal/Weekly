@@ -23,9 +23,10 @@ export function trainingDays(logs, dates) {
   return new Set(logs.map(l => localDayKey(l.t)).filter(d => week.has(d)));
 }
 
-export function routeDay(info, hasLogs) {
+export function routeDay(info, hasLogs, hasHome = false) {
   if (info.status === "done") return { state: "done", label: "CLEAR", detail: "Main Quest達成" };
   if (hasLogs) return { state: "logged", label: "LOGGED", detail: "記録あり" };
+  if (hasHome) return { state: "home", label: "HOME", detail: "宅トレ" };
   if (info.status === "blocked") return { state: "blocked", label: "BLOCKED", detail: "予定を優先する日" };
   if (info.recommended) return { state: "quest", label: "QUEST", detail: "トレーニング候補日" };
   return { state: "rest", label: "REST", detail: "RECOVERY DAY" };
