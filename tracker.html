@@ -1491,7 +1491,7 @@ function reloadFromStorage(){
   render();
 }
 window.addEventListener("storage",e=>{
-  if(["wt_records","wt_habits_v1","wt_habit_log_v1","wt_reward_v1","wt_todo_v1"].includes(e.key))reloadFromStorage();
+  if(["wt_records","wt_habits_v1","wt_habit_log_v1","wt_reward_v1","wt_todo_v1","gym_home_v1"].includes(e.key))reloadFromStorage();
 });
 document.addEventListener("visibilitychange",()=>{if(!document.hidden)reloadFromStorage();});
 window.addEventListener("pageshow",e=>{if(e.persisted)reloadFromStorage();});
@@ -1727,6 +1727,7 @@ import * as H from "./js/habit-core.mjs";
 import * as Q from "./js/quest-core.mjs";
 import * as T from "./js/todo-core.mjs";
 import * as RC from "./js/reading-core.mjs";
+import * as HW from "./js/home-workout-core.mjs";
 
 const read = k => { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } };
 const write = (k, v) => {
@@ -1743,13 +1744,14 @@ let stripDays = 28, stripRight = 0, stripFocus = false; // 日付ストリップ
 // ── state ──────────────────────────────────────────────────────────────────
 function readingBooks(today) { return RC.normalize(read(RC.KEY), today).books; }
 function ctxOf(s) {
+  const home = HW.normalize(read(HW.KEY)); // 宅トレ(ジム画面のサイドクエスト)。した日に1回だけゴールド
   const books = readingBooks(s.today); // 読書は本棚(wt_reading_v1)から。進んだページ・読了をゴールドに足し、習慣「読書」の進み具合にする
   let floorKey = H.dataFloor(records, s.log);
   const rf = RC.firstLogDay(books);
   if (rf && (!floorKey || rf < floorKey)) floorKey = rf;
   return { records, log: s.log, freezes: s.reward.freezes, floorKey, today: s.today,
     readPages: k => RC.pagesOnDay(books, k),
-    extraGold: k => ({ ...T.dayGoldItems(s.todo, k), ...RC.dayGoldItems(books, k) }) };
+    extraGold: k => ({ ...T.dayGoldItems(s.todo, k), ...RC.dayGoldItems(books, k), ...HW.dayGoldItems(home, k) }) };
 }
 // 読み込みのたびに未確定日のゴールドを精算する(ジムやNeuro Learnの記録もここで反映)
 function loadState() {
