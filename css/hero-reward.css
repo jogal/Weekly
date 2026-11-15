@@ -60,7 +60,7 @@
   background:linear-gradient(90deg,#dfbd7c33,#dfbd7c14); color:var(--gold, #dfbd7c); font-weight:700; font-size:14px; }
 
 /* ごほうびカット */
-#hr-cut { flex-direction:column; background:rgba(10,8,6,.96); cursor:pointer; z-index:150; }
+#hr-cut { flex-direction:column; background:#0a0806; cursor:pointer; z-index:150; }
 .hr-cut-card { width:min(92vw,420px); text-align:center; }
 .hr-cut-art { border-radius:18px; overflow:hidden; border:1px solid #dfbd7c66;
   background:radial-gradient(ellipse at 50% 40%,#5a4320,#120d06 72%); }

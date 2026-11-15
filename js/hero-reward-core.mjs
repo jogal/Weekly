@@ -52,13 +52,13 @@ export function lineFor(stage, tap = 0, doneNames = []) {
 }
 
 // 全部こなした日だけ見られる一枚絵。日付で1枚決まる(同じ日は何度開いても同じ)。
-// 絵は sprites/reward/<id>.png に置くと表示され、無ければ仮の画面になる。
+// 絵は sprites/reward/<id>.png(tools/make_reward_cuts.py がモンクの絵から作る)。無ければ仮の画面になる。
 export const CUTS = [
   { id: "pump", title: "パンプアップ", line: "仕上がったところ、一番に見せたかった" },
-  { id: "bath", title: "湯上がり", line: "……ノックくらいしろよ。まあ、今日はいいか" },
-  { id: "jazz", title: "深夜のジャズバー", line: "一曲だけ吹いてやる。今日頑張ったお前のために" },
-  { id: "dawn", title: "夜明けのランニング", line: "汗だくだな、お互い。いい朝だ" },
-  { id: "yukata", title: "夕涼み", line: "着崩れてる？ ……直さなくていい" },
+  { id: "bath", title: "湯けむり", line: "……ノックくらいしろよ。まあ、今日はいいか" },
+  { id: "jazz", title: "深夜のジャズバー", line: "今日頑張ったお前に、一杯おごってやる。隣、空いてるぞ" },
+  { id: "dawn", title: "夜明けの拳", line: "汗だくだな、お互い。いい朝だ" },
+  { id: "festival", title: "夏祭りの夜", line: "花火より、こっち見てたろ。……別にいいけど" },
   { id: "beach", title: "海辺の夕暮れ", line: "ここまで来たご褒美。少しだけ、隣にいろ" },
 ];
 
