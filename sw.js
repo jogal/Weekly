@@ -1,4 +1,4 @@
-const CACHE = "weekly-quest-v91";
+const CACHE = "weekly-quest-v92";
 const ASSETS = [
   "./tracker.html",
   "./css/private-sync.css",
@@ -57,7 +57,6 @@ const ASSETS = [
   "./sprites/bard.png",
   "./sprites/chef.png",
   "./css/reading.css",
-  "./css/frost-theme.css",
   "./js/reading-core.mjs",
   "./js/reading-ui.mjs",
 ];

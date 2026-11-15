@@ -9,7 +9,7 @@ body[data-app="tracker"] { --green:var(--gold); }
 #app { max-width:760px; margin-inline:auto; min-width:0; }
 /* 高さの単位(100vh/100dvh)に頼らず、画面の四辺に固定して全高を使う。
    iPhoneのホーム画面アプリで下に帯が残る主な原因は透過ステータスバーなので、
-   各ページの apple-mobile-web-app-status-bar-style は不透明にしている(tracker は default、gym は black) */
+   各ページの apple-mobile-web-app-status-bar-style は不透明の black にしている */
 html, body { height:100%; }
 #app { position:fixed; inset:0; height:auto; }
 #header { border:0; padding:18px 18px 12px; padding-top:max(18px,env(safe-area-inset-top)); }
