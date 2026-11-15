@@ -9,6 +9,15 @@ Gym Quest (PR #18) の黒〜チャコール・柔らかなカード・控えめ�
 - データ保存・XP・Google Calendar・タイマーの計算は変更しない。保存キー／スキーマの変更・移行なし。
 - SW v46で共有CSSをプリキャッシュ。4つのmanifestとtheme-colorを背景に合わせる。
 
+## Frost theme (2026-11, tracker only)
+
+`css/frost-theme.css` を tracker.html の最後に読み込み、週クエだけを明るいすりガラスのテーマにする（Gymは従来の暗いテーマのまま）。
+
+- 背景は明るいグレー、カード・ボタン・タブバー・シートは半透明の白＋ backdrop-filter。
+- 習慣の色はカードにほのかに透かす程度。チェックの玉とアイコンはクリアなビニール（ゼリー）質感で、達成すると玉が習慣の色に染まる。
+- フォント・レイアウト・データ・計算は変更しない。セレクタの上書きだけなので、外せば元の暗いテーマに戻る。
+- tracker の status-bar-style は不透明の `default`（白）、theme-color と manifest は `#eceef1`。SW v89 で frost-theme.css をプリキャッシュ。
+
 ## Validation
 
 ```sh
