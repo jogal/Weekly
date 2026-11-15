@@ -1,0 +1,73 @@
+/* 達成度ごほうび(js/hero-reward-ui.mjs)。レベルの絵の上にエフェクトを重ねるだけ */
+.hero-sprite-box, .hero-sprite-clip { position:relative; }
+.hr-s0, .hr-s1, .hr-s2, .hr-s3 { isolation:isolate; }
+.hr-fx { position:absolute; inset:0; pointer-events:none; overflow:visible; }
+
+/* 0 だらっと: 少し眠そう */
+.hr-s0 .hero-sprite { filter:saturate(.55) brightness(.82); }
+.hr-zz { position:absolute; right:4%; top:6%; font:700 13px/1 var(--cond, sans-serif); color:#9fb4d8;
+  animation:hrZz 2.6s ease-in-out infinite; }
+.hr-zz i { font-style:normal; font-size:.75em; margin-left:1px; position:relative; top:-6px; }
+@keyframes hrZz { 0%,100% { opacity:.35; transform:translateY(2px); } 50% { opacity:1; transform:translateY(-3px); } }
+
+/* 2 温まってきた: 汗と少しの火照り */
+.hr-s2 .hero-sprite { filter:saturate(1.1) brightness(1.04) contrast(1.04); }
+.hr-drop { position:absolute; width:5px; height:7px; background:#bfe6ff; border-radius:50% 50% 50% 50% / 65% 65% 35% 35%;
+  box-shadow:0 0 4px #bfe6ffaa; opacity:0; animation:hrDrop 2.4s ease-in infinite; }
+.hr-drop.d1 { left:30%; top:18%; }
+.hr-drop.d2 { right:28%; top:24%; animation-delay:1.2s; }
+@keyframes hrDrop { 0% { opacity:0; transform:translateY(0); } 15% { opacity:.95; } 70% { opacity:.8; transform:translateY(14px); } 100% { opacity:0; transform:translateY(20px); } }
+
+/* 3 仕上がった: 金の光・ツヤ・きらめき */
+.hr-s3 .hero-sprite { filter:saturate(1.15) brightness(1.08) contrast(1.06) drop-shadow(0 0 6px #ffd27a88); }
+.hero-sprite-box.hr-s3 { border-color:var(--gold, #dfbd7c) !important; box-shadow:0 0 16px #dfbd7c55; }
+.hr-glow { position:absolute; inset:-6%; background:radial-gradient(circle at 50% 55%, #ffd27a40, transparent 62%);
+  animation:hrGlow 2.8s ease-in-out infinite; z-index:-1; }
+.hr-s3 > .hero-sprite { position:relative; z-index:1; }
+@keyframes hrGlow { 0%,100% { opacity:.6; } 50% { opacity:1; } }
+.hr-spark { position:absolute; color:#ffe2a0; font-size:11px; text-shadow:0 0 6px #ffcf6a; z-index:2;
+  animation:hrSpark 2.2s ease-in-out infinite; }
+.hr-spark.s1 { left:8%; top:20%; }
+.hr-spark.s2 { right:6%; top:44%; animation-delay:.7s; font-size:9px; }
+.hr-spark.s3 { left:16%; bottom:16%; animation-delay:1.4s; }
+@keyframes hrSpark { 0%,100% { opacity:0; transform:scale(.5); } 45% { opacity:1; transform:scale(1.1); } }
+
+@media(prefers-reduced-motion:reduce) {
+  .hr-zz, .hr-drop, .hr-glow, .hr-spark { animation:none; }
+  .hr-drop { opacity:.8; }
+  .hr-spark { opacity:.8; }
+}
+
+/* 拡大画面: セリフ・今日の段階・タップ反応 */
+.hr-bubble { position:relative; max-width:min(86vw,340px); background:#fff; color:#222; border-radius:14px;
+  padding:10px 14px; font-size:14px; line-height:1.55; text-align:left; margin-bottom:4px; }
+.hr-bubble::after { content:""; position:absolute; left:50%; bottom:-8px; margin-left:-8px;
+  border:8px solid transparent; border-top-color:#fff; border-bottom:0; }
+.hr-tappable { cursor:pointer; -webkit-tap-highlight-color:transparent; }
+.hr-meter { display:flex; gap:10px; align-items:baseline; font-size:12px; color:var(--dim, #a3a5ae); }
+.hr-meter b { color:#f2a7c4; font-size:13px; }
+.hr-move-yawn { animation:hrYawn .9s ease-in-out; }
+.hr-move-hop { animation:hrHop .5s cubic-bezier(.3,1.6,.5,1); }
+.hr-move-sway { animation:hrSway .8s ease-in-out; }
+.hr-move-flex { animation:hrFlex .7s cubic-bezier(.3,1.6,.5,1); }
+@keyframes hrYawn { 30% { transform:scaleY(1.04) scaleX(.98); } 60% { transform:scaleY(.97) scaleX(1.02); } }
+@keyframes hrHop { 40% { transform:translateY(-14px); } }
+@keyframes hrSway { 25% { transform:rotate(-3deg); } 75% { transform:rotate(3deg); } }
+@keyframes hrFlex { 35% { transform:scale(1.08); filter:brightness(1.25); } }
+@media(prefers-reduced-motion:reduce) { .hr-move-yawn, .hr-move-hop, .hr-move-sway, .hr-move-flex { animation:none; } }
+
+.hr-cut-btn { margin-top:4px; padding:10px 18px; border-radius:999px; border:1px solid var(--gold, #dfbd7c);
+  background:linear-gradient(90deg,#dfbd7c33,#dfbd7c14); color:var(--gold, #dfbd7c); font-weight:700; font-size:14px; }
+
+/* ごほうびカット */
+#hr-cut { flex-direction:column; background:rgba(10,8,6,.96); cursor:pointer; z-index:150; }
+.hr-cut-card { width:min(92vw,420px); text-align:center; }
+.hr-cut-art { border-radius:18px; overflow:hidden; border:1px solid #dfbd7c66;
+  background:radial-gradient(ellipse at 50% 40%,#5a4320,#120d06 72%); }
+.hr-cut-art > img { display:block; width:100%; height:auto; image-rendering:pixelated; }
+.hr-cut-ph { display:flex; flex-direction:column; align-items:center; padding:26px 0 12px; gap:12px; }
+.hr-cut-ph .hero-sprite { height:min(46vh,340px); image-rendering:pixelated; }
+.hr-cut-soon { font-size:11px; color:#ffffff80; }
+.hr-cut-title { margin-top:14px; font-size:18px; font-weight:700; color:var(--gold, #dfbd7c); }
+.hr-cut-line { margin-top:6px; font-size:15px; line-height:1.6; }
+.hr-cut-note { margin-top:10px; font-size:11px; color:var(--dim, #a3a5ae); }

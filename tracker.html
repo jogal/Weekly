@@ -593,6 +593,7 @@ textarea.field-input { height:76px; resize:vertical; }
 </style>
 <link rel="stylesheet" href="css/weekly-theme.css">
 <link rel="stylesheet" href="css/reading.css">
+<link rel="stylesheet" href="css/hero-reward.css">
 </head>
 <body data-app="tracker">
 <div id="app">
@@ -1005,9 +1006,11 @@ function openHeroZoom(src,jobName,lvl){
   img.src=src;
   ov.querySelector(".hero-zoom-job").textContent="JOB─"+jobName;
   ov.querySelector(".hero-zoom-lvl").textContent="Lv."+lvl;
+  window.HeroReward?.onZoomOpen(ov); // 達成度ごほうび(js/hero-reward-ui.mjs): セリフ・タップ反応・ごほうびカット
   ov.style.display="flex";
 }
 document.getElementById("hero-zoom").addEventListener("click",e=>{
+  if(e.target.closest(".hr-tappable,.hr-cut-btn"))return;
   e.currentTarget.style.display="none";
 });
 
@@ -1069,6 +1072,7 @@ function renderStatus(){
   const heroImg=hero.querySelector(".hero-sprite");
   setHeroSprite(heroImg,jobSt);
   hero.querySelector(".hero-sprite-box").onclick=()=>openHeroZoom(heroImg.src,jobName,totalLvl);
+  window.HeroReward?.decorate(hero.querySelector(".hero-sprite-box")); // 今日の達成度のエフェクト(レベルの絵はそのまま)
   window.HabitUI?.renderRewardCard(wrap);
 
   // Track cards
@@ -3310,10 +3314,18 @@ function renderStatsOverview(wrap) {
   wrap.appendChild(statsProgress(o, from, to));
 }
 
-window.HabitUI = { renderToday, openDay: k => { selDay = k; stripFocus = true; }, renderRewardCard, renderHabitStats, renderRoutineStats, renderStatsOverview, updateQuestBadge: () => updateQuestBadge() };
+// 達成度ごほうび用: 今日の予定の習慣のうち、いくつできたか(今日タブの日付リングと同じ数え方)
+function todayProgress() {
+  const s = loadState(), ctx = ctxOf(s), active = s.habits.filter(h => !h.archived);
+  const dc = H.dayCompletion(active, s.today, ctx);
+  const doneNames = active.filter(h => H.isActiveOn(h, s.today) && H.isAchieved(h, s.today, ctx)).map(h => h.name);
+  return { ...dc, doneNames, today: s.today };
+}
+window.HabitUI = { todayProgress, renderToday, openDay: k => { selDay = k; stripFocus = true; }, renderRewardCard, renderHabitStats, renderRoutineStats, renderStatsOverview, updateQuestBadge: () => updateQuestBadge() };
 if (["today", "status", "stats"].includes(tab)) render();
 </script>
 <script type="module" src="js/inbox-ui.mjs"></script>
+<script type="module" src="js/hero-reward-ui.mjs"></script>
 <script type="module" src="js/private-sync-ui.mjs"></script>
 <script src="js/backup-file.js"></script>
 <script src="js/pwa-update.js"></script>

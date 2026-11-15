@@ -1,4 +1,4 @@
-const CACHE = "weekly-quest-v88";
+const CACHE = "weekly-quest-v89";
 const ASSETS = [
   "./tracker.html",
   "./css/private-sync.css",
@@ -59,6 +59,9 @@ const ASSETS = [
   "./css/reading.css",
   "./js/reading-core.mjs",
   "./js/reading-ui.mjs",
+  "./css/hero-reward.css",
+  "./js/hero-reward-core.mjs",
+  "./js/hero-reward-ui.mjs",
 ];
 
 self.addEventListener("install", e => {
