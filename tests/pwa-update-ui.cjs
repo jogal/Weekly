@@ -27,10 +27,11 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   const browser = await chromium.launch({ headless: true, ...(process.env.BROWSER_PATH ? { executablePath: process.env.BROWSER_PATH } : {}), args: ['--no-sandbox', '--disable-dev-shm-usage', '--disable-gpu'] });
   const errors = [];
 
-  // 2画面とも共通スクリプトで登録され、ステータスバーは不透明の black
+  // 2画面とも共通スクリプトで登録され、ステータスバーは不透明(透過の black-translucent は使わない)。
+  // tracker は明るいフロストテーマなので白の default、gym は暗いので black
   for (const page of ['tracker', 'gym']) {
     const html = fs.readFileSync(path.join(root, page + '.html'), 'utf8');
-    assert.match(html, /apple-mobile-web-app-status-bar-style" content="black"/, page);
+    assert.match(html, new RegExp(`apple-mobile-web-app-status-bar-style" content="${page === 'tracker' ? 'default' : 'black'}"`), page);
     assert.match(html, /<script src="js\/pwa-update\.js"><\/script>/, page);
     assert.doesNotMatch(html, /serviceWorker\.register/, `${page} registers only via pwa-update.js`);
   }

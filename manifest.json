@@ -6,8 +6,8 @@
   "scope": "./",
   "display": "standalone",
   "orientation": "portrait",
-  "background_color": "#08090b",
-  "theme_color": "#08090b",
+  "background_color": "#eceef1",
+  "theme_color": "#eceef1",
   "icons": [
     {
       "src": "icon-quest-192.png",
