@@ -16,7 +16,7 @@ Gym Quest (PR #18) の黒〜チャコール・柔らかなカード・控えめ�
 - 背景は明るいグレー、カード・ボタン・タブバー・シートは半透明の白＋ backdrop-filter。
 - 習慣の色はカードにほのかに透かす程度。チェックの玉とアイコンはクリアなビニール（ゼリー）質感で、達成すると玉が習慣の色に染まる。
 - フォント・レイアウト・データ・計算は変更しない。セレクタの上書きだけなので、外せば元の暗いテーマに戻る。
-- tracker の status-bar-style は不透明の `default`（白）、theme-color と manifest は `#eceef1`。SW v89 で frost-theme.css をプリキャッシュ。
+- tracker の status-bar-style は不透明の `default`（白）、theme-color と manifest は `#eceef1`。SW v91 で frost-theme.css をプリキャッシュ。
 
 ## Validation
 

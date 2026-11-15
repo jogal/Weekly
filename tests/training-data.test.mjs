@@ -22,7 +22,7 @@ test("program: DEFAULT_TEMPLATESはloadProgram経由のmutationから隔離さ�
   Object.assign(p.templates[0].exercises[0], { sets: 99 });
   // module constantは不変
   assert.equal(TD.DEFAULT_TEMPLATES[0].exercises[0].ex, origName);
-  assert.equal(TD.DEFAULT_TEMPLATES[0].exercises.length, 7);
+  assert.equal(TD.DEFAULT_TEMPLATES[0].exercises.length, 8);
   assert.notEqual(TD.DEFAULT_TEMPLATES[0].exercises[0].sets, 99);
   // 保存していないので次のloadProgramも綺麗なdefault
   const p2 = TD.loadProgram();
@@ -67,10 +67,10 @@ test("program: 旧ABCDデフォルトは新しい胸＋背中Main Questへ自動
   assert.equal(p.templates[0].id, "MAIN");
   assert.equal(p.templates[0].minExercises, 3);
   assert.deepEqual(p.templates[0].exercises.map(e=>e.ex),
-    ["懸垂","ベンチプレス","リアデルト","インクラインダンベルプレス","ラットプルダウン","ショルダープレス","サイドレイズ"]);
+    ["懸垂","ベンチプレス","リアデルト","インクラインダンベルプレス","ラットプルダウン","ショルダープレス","サイドレイズ","スクワット"]);
 });
 
-test("program: v3の未編集Main Questは3-of-7へ自動移行", () => {
+test("program: v3の未編集Main Questは3-of-8へ自動移行", () => {
   localStorage.clear();
   localStorage.setItem("gym_program_v2", JSON.stringify({
     programVersion:3, mode:"repeat", cycle:["MAIN"],
@@ -80,10 +80,10 @@ test("program: v3の未編集Main Questは3-of-7へ自動移行", () => {
     ]}]
   }));
   const p=TD.loadProgram();
-  assert.equal(p.programVersion,5);
+  assert.equal(p.programVersion,6);
   assert.equal(p.templates[0].minExercises,3);
   assert.deepEqual(p.templates[0].exercises.map(e=>e.ex),
-    ["懸垂","ベンチプレス","リアデルト","インクラインダンベルプレス","ラットプルダウン","ショルダープレス","サイドレイズ"]);
+    ["懸垂","ベンチプレス","リアデルト","インクラインダンベルプレス","ラットプルダウン","ショルダープレス","サイドレイズ","スクワット"]);
 });
 
 test("program: v4のMain Questへ肩の候補を追加し、編集内容は残す", () => {
@@ -97,17 +97,53 @@ test("program: v4のMain Questへ肩の候補を追加し、編集内容は残�
     ]}]
   }));
   const p=TD.loadProgram();
-  assert.equal(p.programVersion,5);
+  assert.equal(p.programVersion,6);
   const ex=p.templates[0].exercises;
-  assert.deepEqual(ex.map(e=>e.ex),["ベンチプレス","サイドレイズ","ショルダープレス"]);
+  assert.deepEqual(ex.map(e=>e.ex),["ベンチプレス","サイドレイズ","ショルダープレス","スクワット"]);
   assert.equal(ex[0].sets,5);                      // 編集はそのまま
   assert.equal(ex[1].slot,"MAIN4");                // 既存のサイドレイズは重複追加しない
   assert.equal(ex[2].slot,"MAIN5");                // ログで使用済みのS1は再利用しない
-  assert.equal(p.templates[0].focus,"胸＋背中＋肩 / 3 of 7");
+  assert.equal(p.templates[0].focus,"胸＋背中＋肩＋脚 / 3 of 8");
   assert.equal(p.templates[0].fullClearAt,5);
-  assert.equal(JSON.parse(localStorage.getItem("gym_program_v2")).programVersion,5);
+  assert.equal(JSON.parse(localStorage.getItem("gym_program_v2")).programVersion,6);
   // 2回目のloadでは何も増えない
+  assert.equal(TD.loadProgram().templates[0].exercises.length,4);
+});
+
+test("program: v5のMain Questへスクワットを追加し、編集内容は残す", () => {
+  localStorage.clear();
+  localStorage.setItem("gym_logs", JSON.stringify([{ex:"x",slot:"L1",t:"2026-01-01T00:00:00Z"}]));
+  localStorage.setItem("gym_program_v2", JSON.stringify({
+    programVersion:5, mode:"repeat", cycle:["MAIN"],
+    templates:[{id:"MAIN",name:"Main Quest",focus:"胸＋背中＋肩 / 3 of 7",minExercises:3,fullClearAt:5,exercises:[
+      {ex:"懸垂",slot:"MAIN2",part:"back",sets:4,repMin:5,repMax:10},
+      {ex:"サイドレイズ",slot:"S2",part:"shoulder",sets:4,repMin:12,repMax:20},
+    ]}]
+  }));
+  const p=TD.loadProgram();
+  assert.equal(p.programVersion,6);
+  const ex=p.templates[0].exercises;
+  assert.deepEqual(ex.map(e=>e.ex),["懸垂","サイドレイズ","スクワット"]);
+  assert.equal(ex[0].sets,4);
+  assert.equal(ex[2].part,"leg");
+  assert.equal(ex[2].sets,4); assert.equal(ex[2].repMin,6); assert.equal(ex[2].repMax,10);
+  assert.notEqual(ex[2].slot,"L1");                // ログで使用済みのL1は再利用しない
+  assert.equal(p.templates[0].focus,"胸＋背中＋肩＋脚 / 3 of 8");
   assert.equal(TD.loadProgram().templates[0].exercises.length,3);
+});
+
+test("program: スクワットが既にあるv5は重複追加しない", () => {
+  localStorage.clear();
+  localStorage.setItem("gym_program_v2", JSON.stringify({
+    programVersion:5, mode:"repeat", cycle:["MAIN"],
+    templates:[{id:"MAIN",name:"Main Quest",focus:"自分用",minExercises:3,exercises:[
+      {ex:"スクワット",slot:"X1",part:"leg",sets:5,repMin:3,repMax:5},
+    ]}]
+  }));
+  const p=TD.loadProgram();
+  assert.equal(p.templates[0].exercises.length,1);
+  assert.equal(p.templates[0].exercises[0].sets,5);
+  assert.equal(p.templates[0].focus,"自分用");
 });
 
 test("program: 壊れたprogram(exercises=[])でもload/templateByIdがfatalにならない", () => {
