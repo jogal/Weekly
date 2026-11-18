@@ -14,6 +14,12 @@ const server = http.createServer((req,res)=>{
   fs.readFile(file,(err,data)=>{if(err){res.writeHead(404).end();return;}
     res.setHeader('Content-Type',mime[path.extname(file)]||'application/octet-stream');res.end(data);});
 });
+// Main Questは部位タブで絞り込むため、隠れている行はタブを切り替えてから押す
+async function pickEx(page,ex){
+  const row=page.locator(`[data-exercise="${ex}"]`);
+  if(!(await row.isVisible())) await page.locator(`.quest-part-tab[data-part="${await row.getAttribute('data-part')}"]`).click();
+  await page.locator(`[data-exercise="${ex}"]`).click();
+}
 (async()=>{
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   const base=`http://127.0.0.1:${server.address().port}`;
@@ -142,7 +148,7 @@ const server = http.createServer((req,res)=>{
   await p.waitForFunction(()=>document.querySelector('.monk-actor')?.dataset.paused==='false');
   // Recording milestones can celebrate without changing existing clear semantics.
   for(const name of ['懸垂','ベンチプレス','リアデルト']) {
-    await p.locator(`[data-exercise="${name}"]`).click();await p.locator('#log-btn').click();
+    await pickEx(p,name);await p.locator('#log-btn').click();
   }
   await p.locator('#quest-hero').scrollIntoViewIfNeeded();
   await p.waitForFunction(()=>document.querySelector('.monk-actor')?.dataset.pose==='flex');

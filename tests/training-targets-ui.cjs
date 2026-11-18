@@ -14,6 +14,12 @@ const server = http.createServer((req,res)=>{
   fs.readFile(file,(err,data)=>{if(err){res.writeHead(404).end();return;}
     res.setHeader('Content-Type',mime[path.extname(file)]||'application/octet-stream');res.end(data);});
 });
+// Main Questは部位タブで絞り込むため、隠れている行はタブを切り替えてから押す
+async function pickEx(page,ex){
+  const row=page.locator(`[data-exercise="${ex}"]`);
+  if(!(await row.isVisible())) await page.locator(`.quest-part-tab[data-part="${await row.getAttribute('data-part')}"]`).click();
+  await page.locator(`[data-exercise="${ex}"]`).click();
+}
 (async()=>{
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   const base=`http://127.0.0.1:${server.address().port}`;
@@ -46,7 +52,7 @@ const server = http.createServer((req,res)=>{
   const seed={gym_logs:oldLogs,gym_last:{[bench]:{kg:50,reps:8}}};
   for(const width of [320,375,390,430]){
     const p=await pageAt(width,seed);
-    await p.locator(`[data-exercise="${bench}"]`).click();
+    await pickEx(p,bench);
     assert.equal(await p.locator('.target-set').count(),3);
     assert.match(await p.locator('.training-target').innerText(),/60kg×8回/);
     assert.equal(await p.locator('.target-challenge').count(),0);
@@ -79,7 +85,7 @@ const server = http.createServer((req,res)=>{
   const w=await pageAt(390,seed);
   await w.locator('[data-tab="workout"]').click();
   await w.getByRole('button',{name:'ワークアウトを始める',exact:true}).click();
-  await w.locator(`[data-exercise="${bench}"]`).click();
+  await pickEx(w,bench);
   for(const kg of [50,60,50]){
     assert.equal(await w.getByLabel('重量 kg',{exact:true}).inputValue(),String(kg));
     await w.clock.runFor(1000);await w.getByRole('button',{name:/^⚡ セット記録/}).click();
@@ -94,7 +100,7 @@ const server = http.createServer((req,res)=>{
   const opt=await pageAt(390,{...seed,gym_daily_v2:{'2026-09-26':{exerciseFeedback:{[bench]:{effort:'easy',lastSetAt:oldLogs[2].t}}}}});
   await opt.locator('[data-tab="workout"]').click();
   await opt.getByRole('button',{name:'ワークアウトを始める',exact:true}).click();
-  await opt.locator(`[data-exercise="${bench}"]`).click();
+  await pickEx(opt,bench);
   assert.equal(await opt.getByRole('button',{name:/挑戦を入力/}).count(),0);
   await opt.getByRole('button',{name:/^⚡ セット記録/}).click();
   assert.equal(await opt.getByLabel('回数',{exact:true}).inputValue(),'8');
@@ -105,7 +111,7 @@ const server = http.createServer((req,res)=>{
   await opt.context().close();
   // Warm-up stays in logs but doesn't consume the next working-set preset.
   const warm=await pageAt(390,seed);
-  await warm.locator(`[data-exercise="${bench}"]`).click();
+  await pickEx(warm,bench);
   await warm.locator('.recording-options summary').click();
   await warm.getByRole('button',{name:'このセットはウォームアップ',exact:true}).click();
   await warm.locator('#log-btn').click();
@@ -117,7 +123,7 @@ const server = http.createServer((req,res)=>{
   await warm.context().close();
   // Assistance must be explicit and survive into both history and future targets.
   const pull=await pageAt();
-  await pull.locator('[data-exercise="懸垂"]').click();
+  await pickEx(pull,'懸垂');
   await pull.locator('.recording-options summary').click();
   await pull.getByLabel('懸垂の重量方式').selectOption('assisted');
   await pull.getByRole('button',{name:'+10',exact:true}).click();
@@ -128,7 +134,7 @@ const server = http.createServer((req,res)=>{
   await pull.context().close();
   // Cache upgrade replaces the old target engine without touching existing logs.
   const offline=await pageAt(390,seed);
-  await offline.locator(`[data-exercise="${bench}"]`).click();
+  await pickEx(offline,bench);
   const before=await offline.evaluate(()=>localStorage.getItem('gym_logs'));
   await offline.evaluate(async()=>{
     const old=await caches.open('weekly-quest-v48');await old.put('./gym.html',new Response('old'));

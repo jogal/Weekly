@@ -1702,7 +1702,160 @@ function switchGymTab(next){
 function scrollToInput(){
   document.getElementById('input-card')?.scrollIntoView({block:'start',behavior:matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
 }
+// ── メインクエストの部位タブ・種目の追加/整理 ──────────────────────────────
+// タブは表示の切り替えだけ。クリア判定は部位をまたいだ合計種目数のまま。
+let questPartTab=null;      // 明示的に選んだ部位(null=選択中の種目の部位)
+let questOrganize=false;    // 「整理」モード: 行タップで候補から外す
+const QUEST_SUGGEST={       // 追加シートの候補(PRESET_EXとカスタム種目に加える)
+  chest:["ケーブルフライ","マシンチェストプレス","インクラインダンベルプレス"],
+  back:["ケーブルロウ","チェストサポーテッドロウ","ワンハンドロウ"],
+  shoulder:["リアデルト","アップライトロウ"],
+  arm:["ケーブルプレスダウン","オーバーヘッドエクステンション","ケーブルカール"],
+  leg:["ルーマニアンデッドリフト","ブルガリアンスクワット","レッグエクステンション"],
+  core:["ケーブルクランチ","ハンギングレッグレイズ"],
+};
+function questTabOf(tpl,sess){
+  const ids=PARTS.map(p=>p.id);
+  if(questPartTab&&ids.includes(questPartTab)) return questPartTab;
+  const cur=sess? tpl.exercises[Math.min(sess.curEx||0,tpl.exercises.length-1)]
+    : tpl.exercises.find(e=>e.ex===sel.ex);
+  if(cur&&ids.includes(cur.part)) return cur.part;
+  if(ids.includes(sel.part)) return sel.part;
+  return tpl.exercises.find(e=>ids.includes(e.part))?.part||ids[0];
+}
+function questPartTabs(tpl,sets,tab){
+  const wrap=el('div','quest-part-tabs'); wrap.setAttribute('role','tablist');
+  wrap.setAttribute('aria-label','部位');
+  PARTS.forEach(p=>{
+    const exs=tpl.exercises.filter(e=>e.part===p.id);
+    const hit=exs.some(e=>sets.some(s=>s.ex===e.ex));
+    const b=el('button','quest-part-tab'+(hit?' has-done':''),
+      `${p.label}<small>${exs.length}</small>`);
+    b.type='button'; b.dataset.part=p.id; b.setAttribute('role','tab');
+    b.setAttribute('aria-selected',String(p.id===tab));
+    b.setAttribute('aria-label',`${p.label} ${exs.length}種目${hit?'、記録あり':''}`);
+    b.onclick=()=>{ questPartTab=p.id; render(); };
+    wrap.appendChild(b);
+  });
+  return wrap;
+}
+function questPartFooter(tpl,tab,sess){
+  const label=PART_MAP[tab]?.label||tab;
+  const foot=el('div','quest-part-foot');
+  if(!tpl.exercises.some(e=>e.part===tab))
+    foot.appendChild(el('p','quest-part-empty',`${esc(label)}の種目はまだありません`));
+  const add=el('button','quest-add-btn',`＋ ${esc(label)}の種目を追加`);
+  add.type='button'; add.onclick=()=>openQuestAddSheet(tab);
+  foot.appendChild(add);
+  const org=el('button','quest-organize-btn',questOrganize?'整理を終える':'候補を整理');
+  org.type='button'; org.setAttribute('aria-pressed',String(questOrganize));
+  org.onclick=()=>{
+    if(!questOrganize&&sess){ showToast('ワークアウト中は外せません。終了してから整理してね'); return; }
+    questOrganize=!questOrganize; render();
+  };
+  foot.appendChild(org);
+  if(questOrganize) foot.appendChild(el('p','quest-part-empty','外したい種目をタップ。過去の記録は消えません。'));
+  return foot;
+}
+// 「3 of 8」のような標準focus表記だけ候補数に合わせる(手書きのfocusは触らない)
+function syncQuestFocus(tpl){
+  if(typeof tpl.focus==='string')
+    tpl.focus=tpl.focus.replace(/(\d+) of \d+$/,(m,a)=>`${a} of ${tpl.exercises.length}`);
+}
+function questProgramTemplate(){
+  const program=TD.loadProgram(), active=TD.activeSession();
+  const id=active?.templateId||TD.nextWorkoutTemplateId(program);
+  return {program, tpl:program.templates.find(t=>t.id===id)||program.templates[0]};
+}
+function removeQuestExercise(e,sess){
+  if(sess||TD.activeSession()){ showToast('ワークアウト中は外せません'); return; }
+  const {program,tpl}=questProgramTemplate();
+  if(tpl.exercises.length<=1){ showToast('1種目以上は残してね'); return; }
+  if(!confirm(`${e.ex} をメインクエストの候補から外す?(過去の記録は消えない)`)) return;
+  const i=tpl.exercises.findIndex(x=>x.ex===e.ex&&x.slot===e.slot);
+  if(i<0) return;
+  tpl.exercises.splice(i,1); syncQuestFocus(tpl); TD.saveProgram(program);
+  showToast(`${e.ex} を外しました`);
+  if(!tpl.exercises.some(x=>x.part===e.part)) questOrganize=false;
+  render();
+}
+function openQuestAddSheet(part){
+  const label=PART_MAP[part]?.label||part;
+  const {tpl:cur}=questProgramTemplate();
+  const inQuest=new Set(cur.exercises.map(e=>e.ex));
+  const history=logs.filter(l=>l.part===part).map(l=>l.ex);
+  const names=[...new Set([...(QUEST_SUGGEST[part]||[]),...exListOf(part),...history])]
+    .filter(n=>n&&!inQuest.has(n));
+  const REPS=[[5,8],[6,10],[8,12],[10,15],[12,20]];
+  let name='', sets=3, rep=[8,12];
+  const ov=el('div','overlay quest-sheet-overlay');
+  const box=el('div','modal-box quest-sheet'); box.setAttribute('role','dialog');
+  box.setAttribute('aria-label',`${label}の種目を追加`);
+  const close=()=>{ if(ov.parentNode) document.body.removeChild(ov); };
+  function draw(){
+    box.innerHTML='';
+    box.appendChild(el('h3','modal-title',`${esc(label)}の種目を追加`));
+    box.appendChild(el('div','quest-sheet-label','種目名'));
+    const input=el('input','quest-sheet-input'); input.type='text'; input.value=name;
+    input.placeholder='例 ケーブルプレスダウン'; input.setAttribute('aria-label','種目名');
+    input.oninput=()=>{ name=input.value; box.querySelectorAll('.quest-sheet-chip[data-name]')
+      .forEach(c=>c.setAttribute('aria-pressed',String(c.dataset.name===name.trim()))); };
+    box.appendChild(input);
+    if(names.length){
+      box.appendChild(el('div','quest-sheet-label','候補から選ぶ'));
+      const chips=el('div','quest-sheet-chips');
+      names.forEach(n=>{
+        const c=el('button','quest-sheet-chip',esc(n)); c.type='button'; c.dataset.name=n;
+        c.setAttribute('aria-pressed',String(n===name.trim()));
+        c.onclick=()=>{ name=n; draw(); };
+        chips.appendChild(c);
+      });
+      box.appendChild(chips);
+    }
+    const row=el('div','quest-sheet-row');
+    const setCol=el('div',''); setCol.appendChild(el('div','quest-sheet-label','セット数'));
+    const st=el('div','quest-sheet-stepper');
+    const minus=el('button','','−'); minus.type='button'; minus.setAttribute('aria-label','セットを減らす');
+    const plus=el('button','','＋'); plus.type='button'; plus.setAttribute('aria-label','セットを増やす');
+    minus.onclick=()=>{ sets=Math.max(1,sets-1); draw(); };
+    plus.onclick=()=>{ sets=Math.min(10,sets+1); draw(); };
+    st.appendChild(minus); st.appendChild(el('b','',String(sets))); st.appendChild(plus);
+    setCol.appendChild(st); row.appendChild(setCol);
+    box.appendChild(row);
+    box.appendChild(el('div','quest-sheet-label','回数の目安'));
+    const rc=el('div','quest-sheet-chips');
+    REPS.forEach(r=>{
+      const c=el('button','quest-sheet-chip',`${r[0]}–${r[1]}`); c.type='button';
+      c.setAttribute('aria-pressed',String(r[0]===rep[0]&&r[1]===rep[1]));
+      c.onclick=()=>{ rep=r; draw(); };
+      rc.appendChild(c);
+    });
+    box.appendChild(rc);
+    box.appendChild(el('p','quest-sheet-note','クリア条件はそのまま。部位をまたいで3種目でCLEAR。'));
+    const ok=el('button','quest-sheet-ok','追加する'); ok.type='button';
+    ok.onclick=()=>{
+      const n=name.trim();
+      if(!n){ showToast('種目名を入れてね'); input.focus(); return; }
+      const {program,tpl}=questProgramTemplate();
+      if(tpl.exercises.some(e=>e.ex===n)){ showToast('もう候補に入っています'); return; }
+      // 追加は末尾のみ: ワークアウト中でもcurExの位置はずれない
+      tpl.exercises.push({ex:n, slot:allocateSlotForTemplate(program,tpl), part,
+        sets, repMin:rep[0], repMax:rep[1]});
+      syncQuestFocus(tpl); TD.saveProgram(program);
+      if(!exListOf(part).includes(n)){ (custom[part]=custom[part]||[]).push(n); persist(); }
+      questPartTab=part; close(); showToast(`${n} を追加しました`); render();
+    };
+    box.appendChild(ok);
+    const cancel=el('button','ghost-btn','やめる'); cancel.type='button'; cancel.onclick=close;
+    box.appendChild(cancel);
+  }
+  draw();
+  ov.appendChild(box);
+  ov.addEventListener('click',e=>{ if(e.target===ov) close(); });
+  document.body.appendChild(ov);
+}
 function selectQuestExercise(e,idx,sess){
+  questPartTab=e.part;
   if(sess){ TD.updateSession(sess.id,{curEx:idx}); render(); }
   else {
     if(!exListOf(e.part).includes(e.ex)) (custom[e.part]=custom[e.part]||[]).push(e.ex);
@@ -1757,18 +1910,24 @@ function renderQuestDashboard(root,tpl,sess=null){
   card.innerHTML=`<p class="card-title">TODAY’S MAIN QUEST</p><div class="quest-heading">
     <h2 class="quest-count${view.complete?' cleared':''}">${esc(view.label)}</h2><span class="quest-count-sub">${view.done} / ${view.total} 種目</span></div>
     <div class="quest-steps" aria-hidden="true">${Array.from({length:view.total},(_,i)=>`<span class="${i<view.done?'hit':''}"></span>`).join('')}</div>`;
+  const tab=questTabOf(tpl,sess);
+  card.appendChild(questPartTabs(tpl,sets,tab));
   const list=el('div','quest-list');
   tpl.exercises.forEach((e,idx)=>{
     const count=sets.filter(s=>s.ex===e.ex).length;
     const selected=sess?idx===(sess.curEx||0):e.ex===sel.ex;
     const row=el('button','quest-exercise'+(count?' is-done':'')+(selected?' is-selected':''));
-    row.type='button'; row.dataset.exercise=e.ex;
+    row.type='button'; row.dataset.exercise=e.ex; row.dataset.part=e.part;
+    row.hidden=e.part!==tab;
     row.setAttribute('aria-label',`${e.ex}、${count?count+'セット記録済み':'未記録'}。記録する`);
     row.setAttribute('aria-pressed',String(selected));
     row.innerHTML=`<span class="quest-check" aria-hidden="true">${count?'✓':String(idx+1).padStart(2,'0')}</span><span class="quest-ex-name">${esc(e.ex.replace('インクラインダンベル','インクラインDB'))}</span><span class="quest-ex-meta">${count?count+' SETS':'記録 →'}</span>`;
-    row.onclick=()=>selectQuestExercise(e,idx,sess); list.appendChild(row);
+    row.onclick=()=>questOrganize? removeQuestExercise(e,sess) : selectQuestExercise(e,idx,sess);
+    list.appendChild(row);
   });
   card.appendChild(list);
+  card.appendChild(questPartFooter(tpl,tab,sess));
+  if(questOrganize) card.classList.add('is-organizing');
   card.appendChild(el('p','quest-note',esc(view.note)));
   if(view.fullAt>view.target+1) card.appendChild(el('div','quest-milestones',`${view.target} MAIN CLEAR　 /　 ${view.target+1}${view.fullAt-view.target>2?'+':''} BONUS　 /　 ${view.fullAt} FULL CLEAR`));
   root.appendChild(card);
