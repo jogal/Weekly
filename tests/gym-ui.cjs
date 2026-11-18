@@ -14,6 +14,12 @@ const server = http.createServer((req,res)=>{
   fs.readFile(file,(err,data)=>{if(err){res.writeHead(404).end();return;}
     res.setHeader('Content-Type',mime[path.extname(file)]||'application/octet-stream');res.end(data);});
 });
+// Main Questは部位タブで絞り込むため、隠れている行はタブを切り替えてから押す
+async function pickEx(page,ex){
+  const row=page.locator(`[data-exercise="${ex}"]`);
+  if(!(await row.isVisible())) await page.locator(`.quest-part-tab[data-part="${await row.getAttribute('data-part')}"]`).click();
+  await page.locator(`[data-exercise="${ex}"]`).click();
+}
 (async()=>{
   await new Promise(r=>server.listen(0,'127.0.0.1',r));
   const base=`http://127.0.0.1:${server.address().port}`;
@@ -44,7 +50,7 @@ const server = http.createServer((req,res)=>{
   const p=await pageAt();
   const label=()=>p.locator('#today-quest .quest-count').innerText();
   const names=['懸垂','ベンチプレス','リアデルト','インクラインダンベルプレス','ラットプルダウン','ショルダープレス','サイドレイズ'];
-  async function log(ex){await p.locator(`[data-exercise="${ex}"]`).click();await p.locator('#log-btn').click();}
+  async function log(ex){await pickEx(p,ex);await p.locator('#log-btn').click();}
   assert.equal(await label(),'0 / 3 CLEAR');
   assert.equal(await p.locator('.quest-exercise').count(),8);
   assert.match(await p.locator('.quest-milestones').innerText(),/3 MAIN CLEAR\s+\/\s+4 BONUS\s+\/\s+5 FULL CLEAR/);
@@ -104,7 +110,7 @@ const server = http.createServer((req,res)=>{
   await w.locator('[data-tab="workout"]').click();
   await w.getByRole('button',{name:'ワークアウトを始める'}).click();
   for(const ex of [names[4],names[1]]){
-    await w.locator(`[data-exercise="${ex}"]`).click();
+    await pickEx(w,ex);
     await w.getByLabel('重量 kg',{exact:true}).fill('42.5');
     await w.getByLabel('回数',{exact:true}).fill('8');
     await w.getByRole('button',{name:/^⚡ セット記録/}).click();
@@ -116,11 +122,11 @@ const server = http.createServer((req,res)=>{
   assert.deepEqual(await w.evaluate(()=>JSON.parse(localStorage.getItem('gym_logs')).map(l=>[l.kg,l.reps])),[[42.5,8],[42.5,8]]);
   // Mix free logging and Workout on the same day: third exercise clears immediately.
   const mixed=await pageAt();
-  await mixed.locator('[data-exercise="懸垂"]').click();await mixed.locator('#log-btn').click();
-  await mixed.locator('[data-exercise="リアデルト"]').click();await mixed.locator('#log-btn').click();
+  await pickEx(mixed,'懸垂');await mixed.locator('#log-btn').click();
+  await pickEx(mixed,'リアデルト');await mixed.locator('#log-btn').click();
   await mixed.locator('[data-tab="workout"]').click();
   await mixed.getByRole('button',{name:'ワークアウトを始める'}).click();
-  await mixed.locator('[data-exercise="ベンチプレス"]').click();
+  await pickEx(mixed,'ベンチプレス');
   await mixed.getByRole('button',{name:/^⚡ セット記録/}).click();
   assert.equal(await mixed.locator('#today-quest .quest-count').innerText(),'MAIN QUEST CLEAR');
   await mixed.getByRole('button',{name:'ワークアウト終了',exact:true}).click();
@@ -142,6 +148,67 @@ const server = http.createServer((req,res)=>{
   // Reduced motion turns off idle animation.
   await w.emulateMedia({reducedMotion:'reduce'});
   assert.equal(await w.locator('.monk-sprite').evaluate(el=>getComputedStyle(el).animationName),'none');
+  // Part tabs: only the current part's rows are shown; add/remove candidates per part.
+  const parts=await pageAt();
+  assert.equal(await parts.locator('.quest-part-tab').count(),6);
+  assert.equal(await parts.locator('.quest-part-tab[aria-selected="true"]').getAttribute('data-part'),'chest');
+  assert.deepEqual(await parts.locator('.quest-exercise:visible').evaluateAll(r=>r.map(x=>x.dataset.exercise)),['ベンチプレス','インクラインダンベルプレス']);
+  await parts.locator('.quest-part-tab[data-part="arm"]').click();
+  assert.equal(await parts.locator('.quest-exercise:visible').count(),0);
+  assert.match(await parts.locator('.quest-part-empty').innerText(),/腕の種目はまだありません/);
+  await parts.getByRole('button',{name:'＋ 腕の種目を追加'}).click();
+  await parts.locator('.quest-sheet-chip[data-name="ケーブルプレスダウン"]').click();
+  await parts.locator('.quest-sheet-chip',{hasText:'10–15'}).click();
+  await parts.getByRole('button',{name:'追加する'}).click();
+  const added=await parts.evaluate(()=>JSON.parse(localStorage.getItem('gym_program_v2')).templates[0]);
+  assert.equal(added.exercises.length,9);
+  assert.equal(added.focus,'胸＋背中＋肩＋脚 / 3 of 9');
+  const pd=added.exercises[8];
+  assert.deepEqual([pd.ex,pd.part,pd.sets,pd.repMin,pd.repMax],['ケーブルプレスダウン','arm',3,10,15]);
+  assert.ok(pd.slot && !added.exercises.slice(0,8).some(e=>e.slot===pd.slot));
+  assert.equal(await parts.locator('.quest-part-tab[aria-selected="true"]').getAttribute('data-part'),'arm');
+  assert.match(await parts.locator('.quest-count-sub').innerText(),/0 \/ 9/);
+  // The new exercise counts toward the clear like any candidate (across parts).
+  await pickEx(parts,'ケーブルプレスダウン');await parts.locator('#log-btn').click();
+  await pickEx(parts,'懸垂');await parts.locator('#log-btn').click();
+  await pickEx(parts,'スクワット');await parts.locator('#log-btn').click();
+  assert.equal(await parts.locator('#today-quest .quest-count').innerText(),'MAIN QUEST CLEAR');
+  assert.equal(await parts.locator('.quest-part-tab[data-part="arm"]').evaluate(b=>b.classList.contains('has-done')),true);
+  // Custom names typed by hand are added too; duplicates are refused.
+  await parts.locator('.quest-part-tab[data-part="arm"]').click();
+  await parts.getByRole('button',{name:'＋ 腕の種目を追加'}).click();
+  await parts.getByLabel('種目名',{exact:true}).fill('ケーブルプレスダウン');
+  await parts.getByRole('button',{name:'追加する'}).click();
+  assert.match(await parts.locator('#toast').innerText(),/もう候補に入っています/);
+  await parts.getByLabel('種目名',{exact:true}).fill('フレンチプレス');
+  await parts.getByRole('button',{name:'追加する'}).click();
+  assert.equal(await parts.evaluate(()=>JSON.parse(localStorage.getItem('gym_program_v2')).templates[0].exercises.length),10);
+  assert.ok(await parts.evaluate(()=>JSON.parse(localStorage.getItem('gym_custom')).arm.includes('フレンチプレス')));
+  // Organize mode removes a candidate but keeps its logs.
+  parts.once('dialog',d=>d.accept());
+  await parts.getByRole('button',{name:'候補を整理'}).click();
+  await parts.locator('[data-exercise="ケーブルプレスダウン"]').click();
+  const afterRemove=await parts.evaluate(()=>JSON.parse(localStorage.getItem('gym_program_v2')).templates[0]);
+  assert.deepEqual(afterRemove.exercises.map(e=>e.ex).slice(-1),['フレンチプレス']);
+  assert.equal(afterRemove.focus,'胸＋背中＋肩＋脚 / 3 of 9');
+  assert.ok(await parts.evaluate(()=>JSON.parse(localStorage.getItem('gym_logs')).some(l=>l.ex==='ケーブルプレスダウン')));
+  // During a workout: adding works (appended, current exercise unchanged), removing is blocked.
+  const wa=await pageAt();
+  await wa.locator('[data-tab="workout"]').click();
+  await wa.getByRole('button',{name:'ワークアウトを始める'}).click();
+  await pickEx(wa,'ベンチプレス');
+  const curBefore=await wa.evaluate(()=>JSON.parse(localStorage.getItem('gym_sessions_v2'))[0].curEx);
+  await wa.locator('.quest-part-tab[data-part="arm"]').click();
+  await wa.getByRole('button',{name:'＋ 腕の種目を追加'}).click();
+  await wa.locator('.quest-sheet-chip[data-name="ケーブルプレスダウン"]').click();
+  await wa.getByRole('button',{name:'追加する'}).click();
+  assert.equal(await wa.evaluate(()=>JSON.parse(localStorage.getItem('gym_sessions_v2'))[0].curEx),curBefore);
+  assert.equal(await wa.locator('#input-card h2').innerText(),'ベンチプレス');
+  await wa.getByRole('button',{name:'候補を整理'}).click();
+  assert.match(await wa.locator('#toast').innerText(),/ワークアウト中は外せません/);
+  assert.equal(await wa.locator('#today-quest.is-organizing').count(),0);
+  await pickEx(wa,'ケーブルプレスダウン');
+  assert.equal(await wa.locator('#input-card h2').innerText(),'ケーブルプレスダウン');
   // PWA assets (including all sprites) install and the page reloads offline.
   const offline=await pageAt();
   await offline.locator('#log-btn').click();

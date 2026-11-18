@@ -289,3 +289,43 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid
 .home-list { margin-top:8px; }
 .route-stop[data-state="home"] .route-node { border-color:var(--green); color:var(--green); font-size:11px; }
 .h-home .h-ex-name { color:var(--green); }
+
+/* Main Quest: 部位タブ + 種目の追加/整理 */
+.quest-exercise[hidden] { display:none; }
+.quest-part-tabs { display:flex; gap:5px; margin:0 0 10px; }
+.quest-part-tab { flex:1 1 0; min-width:0; min-height:40px; padding:4px 2px; border-radius:999px;
+  border:1px solid #2a2c33; background:none; color:#a2a5af; font-size:12px; cursor:pointer;
+  display:flex; align-items:center; justify-content:center; gap:3px; position:relative; white-space:nowrap; }
+.quest-part-tab small { font:500 10px var(--cond); color:#6c707b; }
+.quest-part-tab[aria-selected="true"] { border-color:var(--gold); color:var(--gold); background:#c8a55718; }
+.quest-part-tab[aria-selected="true"] small { color:var(--gold); }
+.quest-part-tab.has-done::after { content:""; position:absolute; top:4px; right:6px; width:5px; height:5px;
+  border-radius:50%; background:var(--gold); }
+.quest-part-foot { display:grid; gap:6px; margin-top:6px; }
+.quest-part-empty { margin:4px 0; font-size:11px; color:#a7a9b4; text-align:center; }
+.quest-add-btn { min-height:46px; border:1px dashed #ffffff30; border-radius:10px; background:none;
+  color:var(--gold); font-size:13px; letter-spacing:.06em; cursor:pointer; }
+.quest-organize-btn { justify-self:end; min-height:32px; padding:0 4px; border:0; background:none;
+  color:#858994; font-size:11px; cursor:pointer; text-decoration:underline; text-underline-offset:3px; }
+.quest-organize-btn[aria-pressed="true"] { color:var(--gold); }
+.quest-card.is-organizing .quest-exercise .quest-ex-meta { visibility:hidden; position:relative; }
+.quest-card.is-organizing .quest-exercise .quest-ex-meta::after { content:"外す ✕"; visibility:visible;
+  position:absolute; right:0; color:#EF5350; }
+.quest-sheet-overlay { align-items:flex-end; padding:0; }
+.quest-sheet { max-width:520px; border-radius:18px 18px 0 0; border-bottom:0; max-height:88vh; overflow-y:auto;
+  padding:18px 18px max(20px,env(safe-area-inset-bottom)); }
+.quest-sheet .modal-title { font-family:inherit; letter-spacing:.04em; font-size:15px; }
+.quest-sheet-label { font-size:10px; color:var(--dim); letter-spacing:.14em; margin:14px 0 6px; }
+.quest-sheet-input { width:100%; box-sizing:border-box; min-height:46px; padding:10px 12px; border-radius:10px;
+  border:1px solid #4e4637; background:#101115; color:var(--txt); font-size:16px; }
+.quest-sheet-chips { display:flex; flex-wrap:wrap; gap:6px; }
+.quest-sheet-chip { min-height:36px; padding:0 12px; border-radius:999px; border:1px solid #2f3139;
+  background:none; color:#b4b7c0; font-size:12px; cursor:pointer; }
+.quest-sheet-chip[aria-pressed="true"] { border-color:var(--gold); color:var(--gold); background:#c8a55718; }
+.quest-sheet-stepper { display:flex; align-items:center; justify-content:space-between; width:150px;
+  border:1px solid #2f3139; border-radius:10px; }
+.quest-sheet-stepper button { min-width:44px; min-height:44px; border:0; background:none; color:var(--dim); font-size:18px; cursor:pointer; }
+.quest-sheet-stepper b { font-size:17px; }
+.quest-sheet-note { font-size:11px; color:#a7a9b4; margin:14px 0 0; line-height:1.7; }
+.quest-sheet-ok { width:100%; min-height:48px; margin:14px 0 8px; border:0; border-radius:12px;
+  background:linear-gradient(120deg,#eed4a2,#d1aa6b); color:#19160f; font-weight:700; font-size:14px; cursor:pointer; }
