@@ -15,6 +15,13 @@ const server = http.createServer((req,res)=>{
     res.setHeader('Content-Type',mime[path.extname(file)]||'application/octet-stream');res.end(data);});
 });
 // Main Questは部位タブで絞り込むため、隠れている行はタブを切り替えてから押す
+// 週の冒険ルートはPLANタブだけに出す(きろくタブからは外した)
+async function routeText(page){
+  await page.locator('[data-tab="plan"]').click();
+  const text=await page.locator('#adventure-route').innerText();
+  await page.locator('[data-tab="today"]').click();
+  return text;
+}
 async function pickEx(page,ex){
   const row=page.locator(`[data-exercise="${ex}"]`);
   if(!(await row.isVisible())) await page.locator(`.quest-part-tab[data-part="${await row.getAttribute('data-part')}"]`).click();
@@ -53,7 +60,8 @@ async function pickEx(page,ex){
   async function log(ex){await pickEx(p,ex);await p.locator('#log-btn').click();}
   assert.equal(await label(),'0 / 3 CLEAR');
   assert.equal(await p.locator('.quest-exercise').count(),8);
-  assert.match(await p.locator('.quest-milestones').innerText(),/3 MAIN CLEAR\s+\/\s+4 BONUS\s+\/\s+5 FULL CLEAR/);
+  assert.match(await p.locator('.quest-milestones').innerText(),/3 CLEAR · 4 BONUS · 5\+ FULL\s+8種目から自由に/);
+  assert.equal(await p.locator('#adventure-route').count(),0);
   // Non-standard order, repeat sets, and 0..5 transitions.
   await log(names[2]); assert.equal(await label(),'1 / 3 CLEAR');
   await log(names[2]); assert.equal(await label(),'1 / 3 CLEAR');
@@ -66,7 +74,7 @@ async function pickEx(page,ex){
   await log(names[3]);assert.equal(await label(),'FULL CLEAR');
   await log(names[5]);assert.equal(await label(),'FULL CLEAR');
   await log(names[6]);assert.equal(await label(),'FULL CLEAR');
-  assert.match(await p.locator('#adventure-route').innerText(),/CLEAR/);
+  assert.match(await routeText(p),/CLEAR/);
   const stored=await p.evaluate(()=>localStorage.getItem('gym_logs'));
   await p.reload();assert.equal(await label(),'FULL CLEAR');
   assert.equal(await p.evaluate(()=>localStorage.getItem('gym_logs')),stored);
@@ -80,7 +88,7 @@ async function pickEx(page,ex){
     await p.locator('.set-del').first().click();assert.equal(await label(),expect);
   }
   assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('gym_sessions_v2')).filter(s=>s.status==='completed').length),0);
-  assert.match(await p.locator('#adventure-route').innerText(),/LOGGED/);
+  assert.match(await routeText(p),/LOGGED/);
   await log(names[0]);assert.equal(await label(),'MAIN QUEST CLEAR');
   assert.equal(await p.evaluate(()=>JSON.parse(localStorage.getItem('gym_sessions_v2')).length),1);
   // Screens and routing at iPhone widths + desktop.
@@ -138,9 +146,9 @@ async function pickEx(page,ex){
   await mixed.locator('[data-tab="today"]').click();mixed.on('dialog',d=>d.accept());
   await mixed.locator('.set-del').first().click();
   assert.equal(await mixed.locator('#today-quest .quest-count').innerText(),'2 / 3 CLEAR');
-  assert.match(await mixed.locator('#adventure-route').innerText(),/LOGGED/);
+  assert.match(await routeText(mixed),/LOGGED/);
   // Exercise picker remains usable after switching parts and rerendering.
-  await mixed.locator('.extra-exercises summary').click();
+  await mixed.getByRole('button',{name:'Main Quest以外',exact:true}).click();
   await mixed.getByRole('button',{name:'脚',exact:true}).click();
   assert.equal(await mixed.locator('.extra-exercises').getAttribute('open'),'');
   await mixed.getByRole('button',{name:'スクワット',exact:true}).click();
@@ -167,7 +175,7 @@ async function pickEx(page,ex){
   assert.deepEqual([pd.ex,pd.part,pd.sets,pd.repMin,pd.repMax],['ケーブルプレスダウン','arm',3,10,15]);
   assert.ok(pd.slot && !added.exercises.slice(0,8).some(e=>e.slot===pd.slot));
   assert.equal(await parts.locator('.quest-part-tab[aria-selected="true"]').getAttribute('data-part'),'arm');
-  assert.match(await parts.locator('.quest-count-sub').innerText(),/0 \/ 9/);
+  assert.match(await parts.locator('.quest-milestones').innerText(),/9種目から自由に/);
   // The new exercise counts toward the clear like any candidate (across parts).
   await pickEx(parts,'ケーブルプレスダウン');await parts.locator('#log-btn').click();
   await pickEx(parts,'懸垂');await parts.locator('#log-btn').click();
