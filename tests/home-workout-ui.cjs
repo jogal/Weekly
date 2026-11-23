@@ -28,47 +28,67 @@ const server = http.createServer((req,res)=>{
     logs:[{t:'2026-11-20T07:00:00+09:00',ex:'腕立て伏せ',n:15,unit:'reps'}]})); });
   await p.goto(base+'/gym.html');await p.waitForSelector('#quest-hero');
   const card=p.locator('#home-quest');
+  const sheet=p.locator('#rec-sheet');
   const store=()=>p.evaluate(()=>JSON.parse(localStorage.getItem('gym_home_v1')));
-  // Collapsed to one line until opened.
+  // No record today and never opened: collapsed to one line.
   assert.equal(await card.locator('.home-chip').count(),0);
   await card.locator('.home-head').click();
   assert.equal(await card.locator('.home-head').getAttribute('aria-expanded'),'true');
-  // Recently used first; the old bodyweight exercise stays 自重.
+  // Recently used first; every exercise is visible (chips wrap, no horizontal scroll).
   assert.match(await card.locator('.home-chip').first().innerText(),/腕立て伏せ/);
-  assert.equal(await card.getByRole('button',{name:'重量 自重'}).getAttribute('aria-pressed'),'true');
-  await card.getByRole('button',{name:'宅トレを記録'}).click();
-  assert.deepEqual((await store()).logs.at(-1).kg,undefined);
-  // Dumbbell exercise defaults to 5kg×2 and stores the weight.
-  await card.getByRole('button',{name:/宅トレ ダンベルカール/}).click();
-  assert.equal(await card.getByRole('button',{name:'重量 5kg×2'}).getAttribute('aria-pressed'),'true');
-  await card.getByRole('button',{name:'1回増やす'}).click();
-  await card.getByRole('button',{name:'宅トレを記録'}).click();
+  assert.ok(await card.locator('.home-chips').evaluate(e=>e.scrollWidth<=e.clientWidth));
+  // Tapping a chip opens the shared record sheet. Bodyweight-only exercise: no weight row.
+  await card.getByRole('button',{name:/宅トレ 腕立て伏せ/}).click();
+  assert.match(await sheet.locator('#sheet-title').innerText(),/腕立て伏せ/);
+  assert.equal(await sheet.getByRole('button',{name:'重量 自重'}).count(),0);
+  await sheet.getByRole('button',{name:'宅トレを記録'}).click();
+  assert.equal((await store()).logs.at(-1).kg,undefined);
+  assert.match(await p.locator('#toast').innerText(),/HOME CLEAR/);
+  // Undo from the toast.
+  await p.locator('#toast .toast-action').click();
+  assert.equal((await store()).logs.length,1);
+  await sheet.getByRole('button',{name:'宅トレを記録'}).click();
+  // ‹ › switches exercises inside the sheet; dumbbell exercise defaults to 5kg×2.
+  for(let i=0;i<12&&!/ダンベルカール/.test(await sheet.locator('#sheet-title').innerText());i++)
+    await sheet.getByRole('button',{name:'次の種目'}).click();
+  assert.equal(await sheet.getByRole('button',{name:'重量 5kg×2'}).getAttribute('aria-pressed'),'true');
+  await sheet.getByRole('button',{name:'回数を1回増やす'}).click();
+  await sheet.getByRole('button',{name:'宅トレを記録'}).click();
   await p.clock.runFor(60000);
-  await card.getByRole('button',{name:'重量 5kg×1'}).click();
-  await card.getByRole('button',{name:'宅トレを記録'}).click();
+  await sheet.getByRole('button',{name:'重量 5kg×1'}).click();
+  // Keypad entry instead of a browser prompt.
+  await sheet.getByLabel('回数を入力').click();
+  await sheet.getByRole('button',{name:'1',exact:true}).click();
+  await sheet.getByRole('button',{name:'5',exact:true}).click();
+  await sheet.getByRole('button',{name:'決定'}).click();
+  await sheet.getByRole('button',{name:'宅トレを記録'}).click();
   const logs=(await store()).logs.filter(l=>l.ex==='ダンベルカール');
-  assert.deepEqual(logs.map(l=>[l.kg,l.x,l.n]),[[5,2,11],[5,1,11]]);
-  // After a reload the exercise and its last weight (5kg×1) are remembered.
+  assert.deepEqual(logs.map(l=>[l.kg,l.x,l.n]),[[5,2,11],[5,1,15]]);
+  assert.equal(await sheet.locator('.sheet-set').count(),2);
+  // Swipe-free close; the card remembers it was open, and the last weight is remembered.
+  await sheet.locator('.sheet-close').click();
+  assert.equal(await p.locator('#rec-sheet').count(),0);
   await p.reload();await p.waitForSelector('#quest-hero');
-  await card.locator('.home-head').click();
-  assert.match(await card.locator('.home-chip.active').innerText(),/ダンベルカール/);
-  assert.equal(await card.getByRole('button',{name:'重量 5kg×1'}).getAttribute('aria-pressed'),'true');
-  // Today's sets: one line per exercise + weight; tap a number to undo.
+  assert.equal(await card.locator('.home-head').getAttribute('aria-expanded'),'true');
   const rows=card.locator('.home-sum');
   assert.equal(await rows.count(),3);
+  assert.match(await rows.first().innerText(),/腕立て伏せ\s*15/);
   assert.match(await rows.nth(1).innerText(),/ダンベルカール\s*5kg×2\s*11/);
+  await card.getByRole('button',{name:/宅トレ ダンベルカール/}).click();
+  assert.equal(await sheet.getByRole('button',{name:'重量 5kg×1'}).getAttribute('aria-pressed'),'true');
+  // Undo a set from the sheet.
   p.once('dialog',d=>d.accept());
-  await card.getByRole('button',{name:'腕立て伏せ 15回の記録を取り消す'}).click();
-  assert.equal(await rows.count(),2);
+  await sheet.getByRole('button',{name:'ダンベルカール 5kg×1 15回の記録を取り消す'}).click();
   assert.equal((await store()).logs.length,3);
+  await sheet.locator('.sheet-close').click();
   // History lists the weight.
   await p.locator('[data-tab="history"]').click();
-  assert.match(await p.locator('.h-home').first().innerText(),/5kg×2 11回/);
+  assert.match(await p.locator('.h-home',{hasText:'ダンベルカール'}).innerText(),/5kg×2 11回/);
   for(const width of [320,430]){
     await p.setViewportSize({width,height:844});
     assert.ok(await p.evaluate(()=>document.body.scrollWidth<=innerWidth),`overflow ${width}`);
   }
   assert.equal(errors.length,0,errors.join('\n'));
-  console.log('Home workout UI passed: collapse, recency, bodyweight legacy, dumbbell weights, memory, grouped undo, history.');
+  console.log('Home workout UI passed: collapse memory, wrapped chips, record sheet, toast undo, sheet nav, dumbbell weights, keypad, set undo, history.');
   await browser.close();server.close();
 })().catch(e=>{console.error(e);server.close();process.exit(1);});

@@ -17,12 +17,15 @@ const server = http.createServer((req,res)=>{
 // Main Questは部位タブで絞り込むため、隠れている行はタブを切り替えてから押す
 // 週の冒険ルートはPLANタブだけに出す(きろくタブからは外した)
 async function routeText(page){
+  if(await page.locator('#rec-sheet').count()) await page.locator('#rec-sheet .sheet-close').click();
   await page.locator('[data-tab="plan"]').click();
   const text=await page.locator('#adventure-route').innerText();
   await page.locator('[data-tab="today"]').click();
   return text;
 }
 async function pickEx(page,ex){
+  // 記録シートが開いていれば閉じてから(シートの裏の行は押せない)
+  if(await page.locator('#rec-sheet').count()) await page.locator('#rec-sheet .sheet-close').click();
   const row=page.locator(`[data-exercise="${ex}"]`);
   if(!(await row.isVisible())) await page.locator(`.quest-part-tab[data-part="${await row.getAttribute('data-part')}"]`).click();
   await page.locator(`[data-exercise="${ex}"]`).click();
@@ -60,12 +63,13 @@ async function pickEx(page,ex){
   async function log(ex){await pickEx(p,ex);await p.locator('#log-btn').click();}
   assert.equal(await label(),'0 / 3 CLEAR');
   assert.equal(await p.locator('.quest-exercise').count(),8);
-  assert.match(await p.locator('.quest-milestones').innerText(),/3 CLEAR · 4 BONUS · 5\+ FULL\s+8種目から自由に/);
+  assert.match(await p.locator('.quest-next').innerText(),/あと3種目でクリア\s+·\s+4でBONUS\s+·\s+5でFULL（8種目から自由に）/);
   assert.equal(await p.locator('#adventure-route').count(),0);
   // Non-standard order, repeat sets, and 0..5 transitions.
   await log(names[2]); assert.equal(await label(),'1 / 3 CLEAR');
   await log(names[2]); assert.equal(await label(),'1 / 3 CLEAR');
   await log(names[4]); assert.equal(await label(),'2 / 3 CLEAR');
+  await p.locator('#rec-sheet .sheet-close').click();
   await p.getByRole('button',{name:'今日はここまで・記録を確認'}).click();
   assert.match(await p.locator('#toast').innerText(),/今日は2\/8。記録は残っています/);
   await log(names[0]); assert.equal(await label(),'MAIN QUEST CLEAR');
@@ -107,7 +111,7 @@ async function pickEx(page,ex){
   const oldLogs=Array.from({length:4},(_,i)=>({t:`2026-09-26T10:0${i}:00+09:00`,ex:names[1],part:'chest',kg:50,reps:10,slot:'A1',sessionId:'old'}));
   const oldRecords={'2026-09-21':{sat:{medicine:{done:true,note:'手書きのメモ',duration:'30'}}}};
   const seed={gym_logs:oldLogs,gym_last:{[names[1]]:{kg:50,reps:10}},gym_sessions_v2:[{id:'old',date:'2026-09-26',templateId:'MAIN',status:'completed',pain:{A1:true}}],wt_records:oldRecords};
-  const pain=await pageAt(390,seed);
+  const pain=await pageAt(390,seed);await pickEx(pain,'ベンチプレス');
   assert.match(await pain.locator('#input-card').innerText(),/目標提案を休止/);
   assert.equal(await pain.evaluate(()=>window.TrainingUI.quickTarget('ベンチプレス').target.weight),null);
   await pain.locator('#log-btn').click();
@@ -132,6 +136,7 @@ async function pickEx(page,ex){
   const mixed=await pageAt();
   await pickEx(mixed,'懸垂');await mixed.locator('#log-btn').click();
   await pickEx(mixed,'リアデルト');await mixed.locator('#log-btn').click();
+  await mixed.locator('#rec-sheet .sheet-close').click();
   await mixed.locator('[data-tab="workout"]').click();
   await mixed.getByRole('button',{name:'ワークアウトを始める'}).click();
   await pickEx(mixed,'ベンチプレス');
@@ -148,9 +153,10 @@ async function pickEx(page,ex){
   assert.equal(await mixed.locator('#today-quest .quest-count').innerText(),'2 / 3 CLEAR');
   assert.match(await routeText(mixed),/LOGGED/);
   // Exercise picker remains usable after switching parts and rerendering.
-  await mixed.getByRole('button',{name:'Main Quest以外',exact:true}).click();
+  await mixed.locator('.quest-more summary').click();
+  await mixed.getByRole('button',{name:'Main Quest以外の種目',exact:true}).click();
   await mixed.getByRole('button',{name:'脚',exact:true}).click();
-  assert.equal(await mixed.locator('.extra-exercises').getAttribute('open'),'');
+  assert.match(await mixed.locator('#sheet-title').innerText(),/Main Quest以外の種目/);
   await mixed.getByRole('button',{name:'スクワット',exact:true}).click();
   assert.match(await mixed.locator('#sel-ex-name').innerText(),/スクワット/);
   // Reduced motion turns off idle animation.
@@ -183,6 +189,7 @@ async function pickEx(page,ex){
   assert.equal(await parts.locator('#today-quest .quest-count').innerText(),'MAIN QUEST CLEAR');
   assert.equal(await parts.locator('.quest-part-tab[data-part="arm"]').evaluate(b=>b.classList.contains('has-done')),true);
   // Custom names typed by hand are added too; duplicates are refused.
+  await parts.locator('#rec-sheet .sheet-close').click();
   await parts.locator('.quest-part-tab[data-part="arm"]').click();
   await parts.getByRole('button',{name:'＋ 腕の種目を追加'}).click();
   await parts.getByLabel('種目名',{exact:true}).fill('ケーブルプレスダウン');
@@ -194,6 +201,7 @@ async function pickEx(page,ex){
   assert.ok(await parts.evaluate(()=>JSON.parse(localStorage.getItem('gym_custom')).arm.includes('フレンチプレス')));
   // Organize mode removes a candidate but keeps its logs.
   parts.once('dialog',d=>d.accept());
+  await parts.locator('.quest-more summary').click();
   await parts.getByRole('button',{name:'候補を整理'}).click();
   await parts.locator('[data-exercise="ケーブルプレスダウン"]').click();
   const afterRemove=await parts.evaluate(()=>JSON.parse(localStorage.getItem('gym_program_v2')).templates[0]);
@@ -212,6 +220,7 @@ async function pickEx(page,ex){
   await wa.getByRole('button',{name:'追加する'}).click();
   assert.equal(await wa.evaluate(()=>JSON.parse(localStorage.getItem('gym_sessions_v2'))[0].curEx),curBefore);
   assert.equal(await wa.locator('#input-card h2').innerText(),'ベンチプレス');
+  await wa.locator('.quest-more summary').click();
   await wa.getByRole('button',{name:'候補を整理'}).click();
   assert.match(await wa.locator('#toast').innerText(),/ワークアウト中は外せません/);
   assert.equal(await wa.locator('#today-quest.is-organizing').count(),0);
@@ -219,7 +228,7 @@ async function pickEx(page,ex){
   assert.equal(await wa.locator('#input-card h2').innerText(),'ケーブルプレスダウン');
   // PWA assets (including all sprites) install and the page reloads offline.
   const offline=await pageAt();
-  await offline.locator('#log-btn').click();
+  await pickEx(offline,'ベンチプレス');await offline.locator('#log-btn').click();
   const offlineLogs=await offline.evaluate(()=>localStorage.getItem('gym_logs'));
   await offline.evaluate(async()=>{
     const old=await caches.open('weekly-quest-v44');await old.put('./gym.html',new Response('old page'));

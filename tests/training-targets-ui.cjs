@@ -16,6 +16,8 @@ const server = http.createServer((req,res)=>{
 });
 // Main Questは部位タブで絞り込むため、隠れている行はタブを切り替えてから押す
 async function pickEx(page,ex){
+  // 記録シートが開いていれば閉じてから(シートの裏の行は押せない)
+  if(await page.locator('#rec-sheet').count()) await page.locator('#rec-sheet .sheet-close').click();
   const row=page.locator(`[data-exercise="${ex}"]`);
   if(!(await row.isVisible())) await page.locator(`.quest-part-tab[data-part="${await row.getAttribute('data-part')}"]`).click();
   await page.locator(`[data-exercise="${ex}"]`).click();
@@ -69,14 +71,18 @@ async function pickEx(page,ex){
     await p.locator('.target-challenge summary').click();
     assert.match(await p.locator('.target-challenge').innerText(),/60kg×9回/);
     // Feedback is reversible and bound to the recorded exercise; reload persists it.
-    await p.reload();await p.waitForSelector('#quest-hero');
+    await p.reload();await p.waitForSelector('#quest-hero');await pickEx(p,bench);
     assert.equal(await p.getByRole('button',{name:'余裕あり',exact:true}).getAttribute('aria-pressed'),'true');
     await p.getByRole('button',{name:'きつい',exact:true}).click();
     assert.equal(await p.locator('.target-challenge').count(),0);
+    // 痛みあり は記録シートの … メニューの中
+    await p.locator('.sheet-menu summary').click();
     await p.getByRole('button',{name:'痛みあり',exact:true}).click();
     assert.equal(await p.locator('.target-set').count(),0);
+    assert.equal(await p.locator('.pain-badge').count(),1);
     assert.match(await p.locator('.training-target').innerText(),/目標提案を休止/);
     assert.equal(await p.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    await p.locator('.sheet-menu summary').click();
     await p.getByRole('button',{name:'痛みあり',exact:true}).click();
     assert.equal(await p.locator('.target-set').count(),3);
     await p.context().close();
@@ -126,9 +132,9 @@ async function pickEx(page,ex){
   await pickEx(pull,'懸垂');
   await pull.locator('.recording-options summary').click();
   await pull.getByLabel('懸垂の重量方式').selectOption('assisted');
-  // ±10 は ±ボタンの長押し(タップは刻み、長押しは10kgずつ)
-  const plus=pull.getByRole('button',{name:/増やす（長押しで10kgずつ）/});
-  await plus.dispatchEvent('pointerdown');await pull.clock.runFor(500);await plus.dispatchEvent('pointerup');
+  await pull.locator('.sheet-menu summary').click();   // … メニューを閉じる
+  // ±10 は重量の下の小ボタン
+  await pull.getByRole('button',{name:'重量 +10kg',exact:true}).click();
   await pull.locator('#log-btn').click();
   const assisted=await pull.evaluate(()=>JSON.parse(localStorage.getItem('gym_logs')).at(-1));
   assert.equal(assisted.loadMode,'assisted');assert.equal(assisted.kg,10);
@@ -143,6 +149,7 @@ async function pickEx(page,ex){
     await navigator.serviceWorker.register('./sw.js');await navigator.serviceWorker.ready;
   });
   await offline.reload();await offline.context().setOffline(true);await offline.reload();
+  await pickEx(offline,bench);
   assert.equal(await offline.locator('.target-set').count(),3);
   assert.equal(await offline.evaluate(()=>localStorage.getItem('gym_logs')),before);
   assert.equal(await offline.evaluate(async()=>(await caches.keys()).includes('weekly-quest-v48')),false);
