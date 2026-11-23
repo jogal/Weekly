@@ -16,6 +16,8 @@ const server = http.createServer((req,res)=>{
 });
 // Main Questは部位タブで絞り込むため、隠れている行はタブを切り替えてから押す
 async function pickEx(page,ex){
+  // 記録シートが開いていれば閉じてから(シートの裏の行は押せない)
+  if(await page.locator('#rec-sheet').count()) await page.locator('#rec-sheet .sheet-close').click();
   const row=page.locator(`[data-exercise="${ex}"]`);
   if(!(await row.isVisible())) await page.locator(`.quest-part-tab[data-part="${await row.getAttribute('data-part')}"]`).click();
   await page.locator(`[data-exercise="${ex}"]`).click();
@@ -137,9 +139,12 @@ async function pickEx(page,ex){
   assert.equal(await actor.getAttribute('data-paused'),'true');
   await p.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pageshow')));
   await p.clock.runFor(100);assert.equal(await pose(),'idle');
-  await p.locator('#input-card').scrollIntoViewIfNeeded();
+  // 下までスクロールしてヒーローを画面外へ(入力は下から出るシートになったので、画面を低くして確実に外す)
+  const size=p.viewportSize();await p.setViewportSize({width:size.width,height:420});
+  await p.evaluate(()=>{const c=document.getElementById('content');c.scrollTop=c.scrollHeight;});
   await new Promise(r=>setTimeout(r,100));await p.clock.runFor(45000);
   assert.equal(await actor.getAttribute('data-paused'),'true');assert.equal(await pose(),'idle');
+  await p.setViewportSize(size);
   // A detached hero never keeps animating when another tab is open.
   await p.locator('[data-tab="history"]').click();await p.clock.runFor(45000);
   assert.equal(await p.locator('.monk-actor').count(),0);
@@ -178,7 +183,7 @@ async function pickEx(page,ex){
   assert.equal(await missing.locator('.monk-actor').isDisabled(),true);
   assert.equal(await missing.locator('.monk-sprite').evaluate(e=>getComputedStyle(e).animationPlayState),'running');
   assert.equal(await missing.locator('.monk-sprite').evaluate(e=>e.naturalWidth>0),true);
-  await missing.locator('#log-btn').click();assert.equal(await missing.evaluate(()=>JSON.parse(localStorage.getItem('gym_logs')).length),1);
+  await pickEx(missing,'ベンチプレス');await missing.locator('#log-btn').click();assert.equal(await missing.evaluate(()=>JSON.parse(localStorage.getItem('gym_logs')).length),1);
   await missing.context().close();
   const missingIdle=await pageAt(390,{},false,true);
   assert.match(await missingIdle.locator('.monk-sprite').getAttribute('src'),/monk-actions/);

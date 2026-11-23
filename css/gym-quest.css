@@ -279,9 +279,7 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid
 .home-status { font:600 12px var(--cond); letter-spacing:.12em; color:var(--dim); white-space:nowrap; }
 .home-status i { font-style:normal; margin-left:8px; color:var(--faint); }
 .home-status.cleared { color:var(--green); }
-.home-chips { display:flex; flex-wrap:nowrap; gap:6px; margin:4px -14px 10px; padding:0 14px 2px;
-  overflow-x:auto; scrollbar-width:none; -webkit-overflow-scrolling:touch; }
-.home-chips::-webkit-scrollbar { display:none; }
+.home-chips { display:flex; flex-wrap:wrap; gap:6px; margin:6px 0 10px; }
 .home-chip { flex:0 0 auto; white-space:nowrap; min-height:38px; padding:0 12px; border:1px solid var(--line); border-radius:10px;
   background:none; color:var(--dim); font-size:12px; cursor:pointer; }
 .home-chip.active { border-color:var(--green); color:var(--txt); background:#9fe5a812; }
@@ -296,16 +294,12 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid
 .home-log-btn { width:100%; min-height:50px; margin-top:4px; border:1px solid var(--green); border-radius:12px;
   background:none; color:var(--green); font:700 15px var(--cond); letter-spacing:.12em; cursor:pointer; }
 .home-log-btn:active { background:#9fe5a81a; }
-.home-list { margin-top:10px; border-top:1px solid var(--line); padding-top:2px; }
-.home-sum { display:flex; align-items:center; gap:10px; padding:4px 2px; font-size:13px; }
+.home-list { margin-top:4px; border-top:1px solid var(--line); padding-top:4px; }
+.home-sum { display:flex; align-items:center; gap:10px; padding:6px 2px; font-size:13px; }
 .home-sum-name { flex:1; min-width:0; }
 .home-sum-w { margin-left:6px; font:600 12px var(--cond); color:var(--gold); letter-spacing:.06em; }
 .home-sum-sets { display:flex; align-items:center; flex-wrap:wrap; justify-content:flex-end; }
-.home-sum-sets i { font-style:normal; color:var(--faint); }
 .home-sum-sets small { font-size:11px; color:var(--dim); margin-left:3px; }
-.home-sum-n { min-width:30px; min-height:36px; padding:0 4px; border:0; background:none; color:var(--txt);
-  font:700 15px var(--cond); letter-spacing:.04em; cursor:pointer; }
-.home-hint { margin:2px 0 0; font-size:10px; color:var(--faint); text-align:right; }
 .route-stop[data-state="home"] .route-node { border-color:var(--green); color:var(--green); font-size:11px; }
 .h-home .h-ex-name { color:var(--green); }
 
@@ -325,37 +319,9 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid
 .quest-part-empty { margin:4px 0; font-size:11px; color:#a7a9b4; text-align:center; }
 .quest-add-btn { flex:1 1 auto; min-height:44px; padding:0 8px; border:1px dashed #ffffff30; border-radius:10px; background:none;
   color:var(--gold); font-size:12px; letter-spacing:.04em; cursor:pointer; }
-.quest-other-btn,.quest-organize-btn { flex:0 1 auto; min-height:44px; padding:0 10px; border:1px solid #ffffff14; border-radius:10px;
+.quest-organize-btn { flex:0 1 auto; min-height:44px; padding:0 10px; border:1px solid #ffffff14; border-radius:10px;
   background:none; color:#a2a5af; font-size:12px; cursor:pointer; }
-.quest-other-btn[aria-expanded="true"],.quest-organize-btn[aria-pressed="true"] { color:var(--gold); border-color:#665b43; }
-/* ルール表記(見出し右) */
-.quest-heading .quest-milestones { display:flex; flex-direction:column; align-items:flex-end; gap:1px; background:none; border:0; padding:0;
-  font:500 10px var(--cond); color:#858994; letter-spacing:.08em; white-space:nowrap; text-align:right; }
-.quest-heading .quest-milestones b { color:var(--gold); font-weight:600; }
-.quest-heading .quest-milestones small { font:400 10px "Noto Sans JP",sans-serif; letter-spacing:.02em; color:#6c707b; }
-/* 種目の行の下に開く入力パネル */
-#input-card.inline { margin:0 0 6px !important; padding:12px; border:1px solid #665b43; border-radius:12px;
-  background:#dfbd7c08; box-shadow:none; }
-#input-card.inline { padding-top:2px; }
-#input-card.inline #sel-ex-name { font-size:15px; margin:0 0 4px; min-height:0; }
-#input-card.inline #sel-ex-part { display:none; }
-#input-card.inline .quest-pain { min-height:30px; }
-#input-card.inline .mini-btn { padding:5px 8px; }
-#input-card.inline .training-target { margin:8px 0 12px; }
-/* 説明文は、痛み・久しぶり・回復優先・きつい のような注意のときだけ出す */
-#input-card.inline .training-target:not([data-status="hold_pain"]):not([data-status="returning"]):not([data-status="recovery"]):not([data-status="hold_effort"]) .target-reason { display:none; }
-#input-card.inline .training-target[data-status="first_time"] { display:none; }
-.prev-range { display:none; }
-#input-card.inline .prev-range { display:inline; margin-left:10px; font-size:12px; color:var(--dim); }
-#input-card.inline .stepper-row { margin-bottom:8px; }
-#input-card.inline .step-btn { min-height:46px; }
-#input-card.inline .step-val { font-size:30px; }
-#input-card.inline #log-btn { min-height:50px; }
-.input-hint { margin:6px 0 0; font-size:10px; color:#6c707b; text-align:right; }
-#input-card.inline { grid-column:1/-1; border-top:0; border-radius:0 0 12px 12px; }
-#input-card.inline .sel-ex-text { display:none; }
-.quest-exercise.is-selected:has(+ #input-card.inline) { border-color:#665b43; border-bottom-color:transparent;
-  border-radius:12px 12px 0 0; background:#dfbd7c08; margin-bottom:-6px; }
+.quest-organize-btn[aria-pressed="true"] { color:var(--gold); border-color:#665b43; }
 .quest-card.is-organizing .quest-exercise .quest-ex-meta { visibility:hidden; position:relative; }
 .quest-card.is-organizing .quest-exercise .quest-ex-meta::after { content:"外す ✕"; visibility:visible;
   position:absolute; right:0; color:#EF5350; }
@@ -377,3 +343,114 @@ button:focus-visible, a:focus-visible, summary:focus-visible { outline:2px solid
 .quest-sheet-note { font-size:11px; color:#a7a9b4; margin:14px 0 0; line-height:1.7; }
 .quest-sheet-ok { width:100%; min-height:48px; margin:14px 0 8px; border:0; border-radius:12px;
   background:linear-gradient(120deg,#eed4a2,#d1aa6b); color:#19160f; font-weight:700; font-size:14px; cursor:pointer; }
+
+/* ── 次の目標 / 行 / …メニュー ── */
+.quest-next { margin:-4px 0 12px; font-size:12px; color:#a7a9b4; line-height:1.6; }
+.quest-next b { color:var(--gold); font-weight:600; }
+.quest-next small { margin-left:4px; font-size:10px; color:#6c707b; }
+.quest-exercise.is-done .quest-ex-meta { color:#e5c98f; }
+.quest-part-tab small { margin-left:2px; }
+.quest-part-tab.has-done { box-shadow:inset 0 -2px 0 var(--gold); }
+.quest-part-tab.has-done::after { display:none; }
+.quest-more { position:relative; flex:0 0 48px; }
+.quest-more>summary { list-style:none; min-height:44px; display:flex; align-items:center; justify-content:center;
+  border:1px solid #ffffff14; border-radius:10px; color:#a2a5af; font-size:16px; cursor:pointer; }
+.quest-more>summary::-webkit-details-marker { display:none; }
+.quest-more[open]>summary { border-color:#665b43; color:var(--gold); }
+.quest-more-items { position:absolute; right:0; bottom:calc(100% + 6px); z-index:5; width:200px; display:grid;
+  background:#1d1f25; border:1px solid #3a3c44; border-radius:12px; box-shadow:0 10px 30px #000a; overflow:hidden; }
+.quest-more-items button { min-height:46px; padding:0 14px; border:0; border-bottom:1px solid var(--line); background:none;
+  color:var(--txt); font-size:13px; text-align:left; cursor:pointer; }
+.quest-more-items button:last-child { border-bottom:0; }
+.quest-finish { width:100%; margin-top:10px; }
+
+/* ── 記録シート ── */
+.sheet-overlay { position:fixed; inset:0; z-index:40; }
+.sheet-back { position:absolute; inset:0; background:#000a; animation:sheetFade .18s ease-out; }
+.sheet-box { position:absolute; left:0; right:0; bottom:0; max-height:calc(100dvh - 48px); overflow-y:auto; overscroll-behavior:contain;
+  margin:0 auto; max-width:560px; background:#15171c; border-top:1px solid #4e4637; border-radius:22px 22px 0 0;
+  padding:6px 16px max(18px,env(safe-area-inset-bottom)); box-shadow:0 -12px 40px #000a; transition:transform .2s ease-out; }
+.sheet-box.enter { animation:sheetUp .22s ease-out; }
+.sheet-box.home { border-top-color:#2f4a36; }
+@keyframes sheetUp { from { transform:translateY(40%); opacity:.4; } }
+@keyframes sheetFade { from { opacity:0; } }
+@media (prefers-reduced-motion: reduce) { .sheet-box.enter,.sheet-back { animation:none; } }
+.sheet-grab { width:40px; height:4px; border-radius:3px; background:#3a3c44; margin:4px auto 10px; touch-action:none; }
+.sheet-head { display:flex; align-items:center; gap:6px; touch-action:none; position:relative; }
+.sheet-nav,.sheet-close,.sheet-menu>summary { flex:0 0 40px; height:40px; display:flex; align-items:center; justify-content:center;
+  border:1px solid var(--line); border-radius:10px; background:none; color:var(--dim); font-size:17px; cursor:pointer; }
+.sheet-close { border-color:transparent; }
+.sheet-nav.off { visibility:hidden; }
+.sheet-title { flex:1; min-width:0; text-align:center; }
+.sheet-title b { display:block; font-size:17px; font-weight:700; overflow-wrap:anywhere; }
+.sheet-title small { font:500 11px var(--cond); color:#7d808a; letter-spacing:.08em; }
+.pain-badge { display:inline-block; margin-left:6px; padding:1px 6px; border:1px solid #b66059; border-radius:6px;
+  font-size:10px; color:#ffb0aa; vertical-align:3px; }
+.sheet-menu { position:static; }
+.sheet-menu>summary { list-style:none; }
+.sheet-menu>summary::-webkit-details-marker { display:none; }
+.sheet-menu[open]>summary { color:var(--gold); border-color:#665b43; }
+.sheet-menu-items { position:absolute; right:0; top:calc(100% + 6px); z-index:5; width:min(260px,86vw); display:grid; gap:8px;
+  padding:12px; background:#1d1f25; border:1px solid #3a3c44; border-radius:12px; box-shadow:0 10px 30px #000a; }
+.sheet-menu-items .mini-btn { margin:0; min-height:44px; text-align:left; padding:0 12px; font-size:12px; border-radius:10px; }
+.sheet-menu-items .wo-chip { min-height:44px; }
+.sheet-menu-items label { display:grid; gap:6px; }
+.sheet-card { padding-top:8px; }
+.sheet-prev { display:flex; flex-wrap:wrap; justify-content:space-between; gap:4px 12px; margin:4px 0 8px; font-size:12px; }
+.sheet-prev b { font-size:14px; }
+.sheet-card .training-target { margin:0 0 10px; }
+.sheet-card .training-target>.card-title { display:none; }
+.sheet-card .target-sets { display:flex; flex-wrap:wrap; gap:6px; margin-bottom:4px; }
+.sheet-card .target-sets::before { content:"今日の目安"; align-self:center; font-size:11px; color:var(--dim); margin-right:2px; }
+.sheet-card .target-set { padding:4px 8px; border:1px solid #ffffff12; border-radius:8px; font-size:11px; color:#7d808a; }
+.sheet-card .target-set b { margin-left:4px; font:600 13px var(--cond); color:var(--txt); }
+.sheet-card .training-target:not([data-status="hold_pain"]):not([data-status="returning"]):not([data-status="recovery"]):not([data-status="hold_effort"]) .target-reason { display:none; }
+.sheet-card .training-target .quest-note { margin:0 0 4px; }
+/* 数字フィールド */
+.nf { margin-bottom:8px; }
+.nf-row { display:flex; align-items:center; gap:8px; }
+.nf-label { flex:0 0 30px; font-size:11px; color:var(--dim); }
+.nf .step-btn { width:54px; min-height:54px; font-size:22px; }
+.nf-val { flex:1; min-width:0; font-size:40px; line-height:1; padding:6px 0; border-radius:10px; }
+.nf.reps .nf-val { font-size:34px; }
+.nf-val.editing { outline:2px solid var(--gold); background:#c8a5570d; }
+.nf-quick { display:flex; gap:6px; margin:6px 0 4px 38px; }
+.nf-quick[hidden] { display:none; }
+.nf-quick button { flex:1; min-height:36px; border:1px solid var(--line); border-radius:8px; background:none; color:var(--dim);
+  font:600 13px var(--cond); cursor:pointer; }
+.nf-kp { display:grid; grid-template-columns:repeat(3,1fr); gap:6px; margin:8px 0 4px 38px; }
+.nf-kp button { min-height:46px; border-radius:10px; background:#ffffff08; border:1px solid #ffffff10; color:var(--txt);
+  font:600 20px var(--cond); cursor:pointer; }
+.nf-kp .nf-alt { font:500 13px "Noto Sans JP",sans-serif; color:var(--dim); }
+.nf-kp .nf-ok { grid-column:span 2; background:linear-gradient(120deg,#eed4a2,#d1aa6b); color:#19160f; font-size:15px; }
+.sheet-card #log-btn { min-height:54px; margin-top:6px; }
+.sheet-card #log-btn small { margin-left:8px; font:500 12px "Noto Sans JP",sans-serif; letter-spacing:0; opacity:.75; }
+.sheet-sets { display:flex; flex-wrap:wrap; gap:6px; margin:12px 0 6px; min-height:34px; align-items:center; }
+.sheet-set { min-height:34px; padding:0 10px; border:1px solid #ffffff14; border-radius:8px; background:none; color:#e5c98f;
+  font:600 13px var(--cond); letter-spacing:.03em; cursor:pointer; }
+.sheet-set i { font-style:normal; color:#6c707b; font-size:11px; margin-right:4px; }
+.sheet-empty { font-size:11px; color:#6c707b; }
+.sheet-effort { min-height:58px; }
+.sheet-effort .exercise-effort { margin:0; }
+.sheet-effort .quest-note { margin:0 0 4px; }
+.sheet-next { width:100%; display:flex; justify-content:space-between; align-items:center; min-height:48px; margin-top:6px;
+  padding:0 2px; border:0; border-top:1px solid var(--line); background:none; color:var(--dim); font-size:12px; cursor:pointer; }
+.sheet-next b { color:var(--txt); font-weight:500; }
+.sheet-card.extra-exercises { border:0; background:none; padding:10px 0 4px; }
+body.sheet-open #content { overflow:hidden; }
+/* 取り消しボタン付きトースト。シートを開いているときは上に出す */
+#toast { z-index:60; }
+#toast.has-action { align-items:center; gap:12px; }
+.toast-action { flex:0 0 auto; min-height:34px; padding:0 12px; border:1px solid #65583e; border-radius:8px; background:none;
+  color:var(--gold); font-size:12px; cursor:pointer; }
+body.sheet-open #toast { bottom:auto; top:calc(12px + env(safe-area-inset-top)); }
+.home-sum-sets { font:700 14px var(--cond); letter-spacing:.04em; }
+.home-add-weight { width:100%; min-height:40px; margin-bottom:10px; border:1px dashed var(--line); border-radius:10px; background:none;
+  color:var(--dim); font-size:12px; cursor:pointer; }
+.home-sheet .home-weights { margin-top:2px; }
+.home-sheet .home-log-btn { min-height:54px; margin-top:6px; }
+.sheet-set.home { color:var(--green); }
+.sheet-title #sel-ex-name { display:inline; margin:0; font-size:inherit; letter-spacing:0; color:inherit; }
+.sheet-card#input-card { border:0; border-radius:0; background:none; box-shadow:none; padding:8px 0 0; margin:0; }
+.sheet-menu { flex:0 0 40px; }
+.sheet-effort:empty { min-height:0; }
