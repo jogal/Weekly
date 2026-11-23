@@ -463,16 +463,20 @@ function showToast(msg){
   showToast._tm=setTimeout(()=>t.style.display="none",2000);
 }
 // 長押しで連打できるステッパーボタン
-function stepBtn(label, cls, fn){
+function stepBtn(label, cls, fn, holdFn){
   const b=el("button","step-btn"+(cls?" "+cls:""),label);
-  let tm=null, iv=null;
-  const start=e=>{ e.preventDefault(); fn(); tm=setTimeout(()=>{ iv=setInterval(fn,110); },450); };
-  const stop=()=>{ clearTimeout(tm); clearInterval(iv); tm=iv=null; };
+  // holdFn あり: タップ(離したとき)で fn、長押しで holdFn。なし: 押した瞬間に fn、長押しで連打
+  let tm=null, iv=null, held=false;
+  const start=e=>{ e.preventDefault(); held=false;
+    if(!holdFn) fn();
+    tm=setTimeout(()=>{ held=true; if(holdFn){ holdFn(); iv=setInterval(holdFn,350); } else iv=setInterval(fn,110); },450); };
+  const stop=e=>{ if(holdFn&&tm&&!held&&e.type==="pointerup") fn(); clearTimeout(tm); clearInterval(iv); tm=iv=null; };
   b.addEventListener("pointerdown",start);
   ["pointerup","pointerleave","pointercancel"].forEach(ev=>b.addEventListener(ev,stop));
   return b;
 }
 
+function gymTab(){ return tab; }
 // ── 画面: きろく ──────────────────────────────────────────────────────────────
 function renderToday(root){
   const tl=todayLogs();
@@ -482,7 +486,7 @@ function renderToday(root){
   const extras=el("details","extra-exercises");
   extras.open=extrasOpen;
   extras.ontoggle=()=>{ extrasOpen=extras.open; };
-  extras.appendChild(el("summary","","ほかの種目を選ぶ・追加する"));
+  extras.appendChild(el("summary","","Main Quest以外の種目"));
 
   // 部位タブ
   const tabs=el("div"); tabs.id="part-tabs";
@@ -528,7 +532,7 @@ function renderToday(root){
   const part=PART_MAP[sel.part];
   const step=stepOf(sel.ex);
   const card=el("div","card"); card.id="input-card"; card.style.marginTop="12px";
-  const title=el("p","", `${esc(sel.ex)} <span id="sel-ex-part" style="color:${part.color}">${part.label}</span>`);
+  const title=el("p","", `<span class="sel-ex-text">${esc(sel.ex)}</span> <span id="sel-ex-part" style="color:${part.color}">${part.label}</span>`);
   title.id="sel-ex-name";
   // 刻み切替(2.5kg⇔1kg): マシンのプレート単位に合わせる
   const stepTgl=el("button","mini-btn",`刻み ${step}kg`);
@@ -547,22 +551,28 @@ function renderToday(root){
       const pain=el("button","mini-btn quest-pain","痛みあり");
       pain.setAttribute("aria-pressed",String(q.painToday));
       pain.onclick=()=>{ window.TrainingUI.toggleQuickPain(sel.ex); loadDefaults(); render(); };
-      card.appendChild(pain);
-      card.appendChild(el("div","wo-prev-line",`前回　<b>${q.prevText}</b>`));
+      pain.style.marginLeft="auto"; stepTgl.style.marginLeft="6px";
+      title.insertBefore(pain, stepTgl);
+      const range=q.def?.repMin&&q.def?.repMax?`<span class="prev-range">目安 ${q.def.repMin}〜${q.def.repMax}回</span>`:"";
+      card.appendChild(el("div","wo-prev-line",`前回　<b>${q.prevText}</b>${range}`));
       window.TrainingUI.renderTarget(card,q.target);
     }
   }
 
-  // 重量: −10 / −刻み / 値 / +刻み / +10 (0で自重)
+  // 重量: −刻み / 値 / +刻み (0で自重)。±ボタンの長押しで ±10
   const wRow=el("div","stepper-row");
   const wVal=el("button","step-val");
   wVal.setAttribute("aria-label","重量を入力");
   const updW=()=>{ wVal.innerHTML=(kg===0?"自重":kg)+" <small>kg</small>"; };
-  wRow.appendChild(stepBtn("-10","small",()=>{kg=Math.max(0,kg-10);updW();}));
-  wRow.appendChild(stepBtn("-"+step,"",()=>{kg=Math.max(0,Math.round((kg-step)*10)/10);updW();}));
+  const wMinus=stepBtn("-"+step,"",()=>{kg=Math.max(0,Math.round((kg-step)*10)/10);updW();},
+    ()=>{kg=Math.max(0,Math.round((kg-10)*10)/10);updW();});
+  const wPlus=stepBtn("+"+step,"",()=>{kg=Math.round((kg+step)*10)/10;updW();},
+    ()=>{kg=Math.round((kg+10)*10)/10;updW();});
+  wMinus.setAttribute("aria-label",`${step}kg減らす（長押しで10kgずつ）`);
+  wPlus.setAttribute("aria-label",`${step}kg増やす（長押しで10kgずつ）`);
+  wRow.appendChild(wMinus);
   wRow.appendChild(wVal);
-  wRow.appendChild(stepBtn("+"+step,"",()=>{kg=Math.round((kg+step)*10)/10;updW();}));
-  wRow.appendChild(stepBtn("+10","small",()=>{kg+=10;updW();}));
+  wRow.appendChild(wPlus);
   wVal.onclick=()=>{
     const v=prompt("重量(kg) ※自重は0",String(kg));
     if(v===null)return;
@@ -590,18 +600,21 @@ function renderToday(root){
   updR();
   card.appendChild(rRow);
 
-  if(window.TrainingUI) window.TrainingUI.renderInputProgress(card);
   const logB=el("button","", "⚡ 記録する");
   logB.id="log-btn";
   logB.onclick=addSet;
   card.appendChild(logB);
+  card.appendChild(el("p","input-hint","重量の ± は長押しで 10kg ずつ"));
   if(window.TrainingUI) window.TrainingUI.renderEffort(card,sel.ex);
-  root.appendChild(card);
+  // Main Questの種目なら、その行のすぐ下に入力パネルを開く(別カードまでスクロールしない)
+  const row=[...document.querySelectorAll("#today-quest .quest-exercise.is-selected")].find(r=>!r.hidden);
+  if(row){ card.classList.add("inline"); row.after(card); }
+  else root.appendChild(card);
 
-  root.appendChild(extras);
-  // 宅トレ(サイドクエスト)。Main Questのクリア判定には入らない
+  // Main Quest以外の種目(クエストの「Main Quest以外」ボタンで開く)
+  if(extrasOpen) root.appendChild(extras);
+  // 宅トレ(サイドクエスト)。Main Questのクリア判定には入らない。週の冒険ルートはPLANタブ
   if(window.HomeWorkoutUI) window.HomeWorkoutUI.renderCard(root);
-  if(window.TrainingUI) window.TrainingUI.renderRoute(root);
 
   // 今日のセット一覧
   const list=el("div","card");
@@ -1592,7 +1605,7 @@ function currentPain(ex){
 }
 function targetContext(ex){return {exercise:ex,todayKey:core.localDayKey(new Date()),effort:currentEffort(ex),pain:currentPain(ex)};}
 function renderTarget(root,t){
-  const box=el('div','training-target');
+  const box=el('div','training-target'); box.dataset.status=t.status;
   if(t.suggestedSets.length){
     box.appendChild(el('p','card-title',t.status==='returning'?'前回の参考':'基本：前回の再現'));
     const list=el('div','target-sets');
@@ -1747,6 +1760,13 @@ function questPartFooter(tpl,tab,sess){
   const add=el('button','quest-add-btn',`＋ ${esc(label)}の種目を追加`);
   add.type='button'; add.onclick=()=>openQuestAddSheet(tab);
   foot.appendChild(add);
+  if(!sess&&gymTab()==='today'){
+    const other=el('button','quest-other-btn','Main Quest以外');
+    other.type='button'; other.setAttribute('aria-expanded',String(extrasOpen));
+    other.onclick=()=>{ extrasOpen=!extrasOpen; render();
+      if(extrasOpen) document.querySelector('.extra-exercises')?.scrollIntoView({block:'nearest'}); };
+    foot.appendChild(other);
+  }
   const org=el('button','quest-organize-btn',questOrganize?'整理を終える':'候補を整理');
   org.type='button'; org.setAttribute('aria-pressed',String(questOrganize));
   org.onclick=()=>{
@@ -1908,7 +1928,7 @@ function renderQuestDashboard(root,tpl,sess=null){
   const card=el('section','card quest-card'); card.id='today-quest';
   card.setAttribute('aria-label',"Today's Main Quest");
   card.innerHTML=`<p class="card-title">TODAY’S MAIN QUEST</p><div class="quest-heading">
-    <h2 class="quest-count${view.complete?' cleared':''}">${esc(view.label)}</h2><span class="quest-count-sub">${view.done} / ${view.total} 種目</span></div>
+    <h2 class="quest-count${view.complete?' cleared':''}">${esc(view.label)}</h2>${questRule(view)}</div>
     <div class="quest-steps" aria-hidden="true">${Array.from({length:view.total},(_,i)=>`<span class="${i<view.done?'hit':''}"></span>`).join('')}</div>`;
   const tab=questTabOf(tpl,sess);
   card.appendChild(questPartTabs(tpl,sets,tab));
@@ -1928,11 +1948,16 @@ function renderQuestDashboard(root,tpl,sess=null){
   card.appendChild(list);
   card.appendChild(questPartFooter(tpl,tab,sess));
   if(questOrganize) card.classList.add('is-organizing');
-  card.appendChild(el('p','quest-note',esc(view.note)));
-  if(view.fullAt>view.target+1) card.appendChild(el('div','quest-milestones',`${view.target} MAIN CLEAR　 /　 ${view.target+1}${view.fullAt-view.target>2?'+':''} BONUS　 /　 ${view.fullAt} FULL CLEAR`));
   root.appendChild(card);
   if(questEvent){ questEvent=false; setTimeout(()=>hero.classList.remove('quest-event'),700); }
   lastQuestCount={day:today,done:view.done};
+}
+// 見出し右の小さいルール表記(説明文の代わり)。例: 3 CLEAR · 4 BONUS · 5+ FULL / 8種目から自由に
+function questRule(view){
+  const stages=[`<b>${view.target}</b> CLEAR`];
+  if(view.fullAt>view.target+1) stages.push(`${view.target+1}${view.fullAt-view.target>2?'+':''} BONUS`);
+  if(view.fullAt>view.target) stages.push(`${view.fullAt}${view.fullAt<view.total?'+':''} FULL`);
+  return `<span class="quest-milestones" aria-label="${view.total}種目のうち${view.target}種目でクリア"><span>${stages.join(' · ')}</span><small>${view.total}種目から自由に</small></span>`;
 }
 function renderInputProgress(root){
   const view=questView(dashboardTemplate(),todayLogs());
@@ -1967,7 +1992,14 @@ function refreshQuestPanels(){
     monkCompanion.detach();
     const fragment=document.createDocumentFragment();
     renderQuestDashboard(fragment,dashboardTemplate(),tab==='workout'?TD.activeSession():null);
-    const [hero,quest]=[...fragment.children]; oldHero.replaceWith(hero); oldQuest.replaceWith(quest);
+    const [hero,quest]=[...fragment.children];
+    // 行の下に開いている入力パネルは、新しいクエストカードの同じ行の下へ移す
+    const input=document.getElementById('input-card');
+    if(input&&oldQuest.contains(input)){
+      const row=[...quest.querySelectorAll('.quest-exercise.is-selected')].find(r=>!r.hidden);
+      if(row) row.after(input); else { input.classList.remove('inline'); oldQuest.after(input); }
+    }
+    oldHero.replaceWith(hero); oldQuest.replaceWith(quest);
   }
   const oldRoute=document.getElementById('adventure-route');
   if(oldRoute){ const fragment=document.createDocumentFragment(); renderRoute(fragment); oldRoute.replaceWith(fragment); }

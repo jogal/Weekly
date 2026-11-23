@@ -44,3 +44,38 @@ test("route shows HOME only when there is no gym record", () => {
   assert.equal(routeDay({ status: "done" }, false, true).state, "done");
   assert.equal(routeDay({ status: "open", recommended: true }, false, false).state, "quest");
 });
+
+test("dumbbell weight: stored per set, remembered per exercise, old logs stay bodyweight", () => {
+  let s = HW.normalize({ logs: [{ t: at("2026-11-10"), ex: "腕立て伏せ", n: 10, unit: "reps" }], custom: [] });
+  assert.deepEqual(s.logs[0], { t: at("2026-11-10"), ex: "腕立て伏せ", n: 10, unit: "reps" });
+  assert.deepEqual(HW.lastWeight(s, "腕立て伏せ"), { kg: 0, x: 0 });
+  // dumbbell exercises start with the home dumbbells
+  assert.deepEqual(HW.lastWeight(s, "ダンベルカール"), { kg: 5, x: 2 });
+  assert.deepEqual(HW.lastWeight(s, "ゴブレットスクワット"), { kg: 5, x: 1 });
+  s = HW.addLog(s, "スクワット", 15, "reps", at("2026-11-11"), { kg: 5, x: 2 });
+  s = HW.addLog(s, "ダンベルカール", 12, "reps", at("2026-11-11", "08:01"), { kg: 0, x: 0 });
+  assert.deepEqual(HW.lastWeight(s, "スクワット"), { kg: 5, x: 2 });
+  assert.deepEqual(HW.lastWeight(s, "ダンベルカール"), { kg: 0, x: 0 });
+  assert.equal(HW.formatLog(s.logs[1]), "5kg×2 15回");
+  assert.equal(HW.formatLog(s.logs[2]), "12回");
+  // broken weights are dropped, valid ones survive a round trip
+  const n = HW.normalize({ logs: [{ t: at("2026-11-12"), ex: "a", n: 1, kg: 5, x: 3 }, { t: at("2026-11-12", "09:00"), ex: "b", n: 1, kg: -1, x: 1 }, { t: at("2026-11-12", "10:00"), ex: "c", n: 1, kg: "5", x: 1 }] });
+  assert.deepEqual(n.logs.map(l => l.kg ?? null), [null, null, 5]);
+  assert.deepEqual(HW.normalize(JSON.parse(JSON.stringify(s))), s);
+});
+
+test("today summary groups by exercise and weight; chips put recent first", () => {
+  let s = HW.normalize(null);
+  s = HW.addLog(s, "腕立て伏せ", 10, "reps", at("2026-11-10", "07:00"));
+  s = HW.addLog(s, "ダンベルカール", 12, "reps", at("2026-11-10", "07:01"), { kg: 5, x: 2 });
+  s = HW.addLog(s, "腕立て伏せ", 12, "reps", at("2026-11-10", "07:02"));
+  s = HW.addLog(s, "ダンベルカール", 15, "reps", at("2026-11-10", "07:03"), { kg: 5, x: 1 });
+  const rows = HW.groupLogs(HW.logsOn(s, "2026-11-10"));
+  assert.deepEqual(rows.map(r => [r.ex, r.w, r.sets.map(x => x.n)]),
+    [["腕立て伏せ", "", [10, 12]], ["ダンベルカール", "5kg×2", [12]], ["ダンベルカール", "5kg×1", [15]]]);
+  const order = HW.exercisesByRecent(s).map(e => e.name);
+  assert.deepEqual(order.slice(0, 3), ["ダンベルカール", "腕立て伏せ", "スクワット"]);
+  assert.equal(order.length, HW.exercises(s).length);
+  // a custom exercise with a new default's name is not duplicated
+  assert.equal(HW.normalize({ custom: [{ name: "ダンベルカール", unit: "reps" }] }).custom.length, 0);
+});

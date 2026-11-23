@@ -126,7 +126,9 @@ async function pickEx(page,ex){
   await pickEx(pull,'懸垂');
   await pull.locator('.recording-options summary').click();
   await pull.getByLabel('懸垂の重量方式').selectOption('assisted');
-  await pull.getByRole('button',{name:'+10',exact:true}).click();
+  // ±10 は ±ボタンの長押し(タップは刻み、長押しは10kgずつ)
+  const plus=pull.getByRole('button',{name:/増やす（長押しで10kgずつ）/});
+  await plus.dispatchEvent('pointerdown');await pull.clock.runFor(500);await plus.dispatchEvent('pointerup');
   await pull.locator('#log-btn').click();
   const assisted=await pull.evaluate(()=>JSON.parse(localStorage.getItem('gym_logs')).at(-1));
   assert.equal(assisted.loadMode,'assisted');assert.equal(assisted.kg,10);
